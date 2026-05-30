@@ -1,7 +1,7 @@
 name: Build and Release (Open Source)
 
-# При пуше тега v* собирает Open-версию (CheezyClash).
-# libclash.so берётся из кеша.
+# When pushing a v* tag, builds the Open version (CheezyClash).
+# libclash.so is taken from the cache.
 
 on:
   push:
@@ -54,9 +54,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Собираем только Open-вариант. Подпись в открытом репо может отсутствовать
-      # или быть настроена через другие секреты. Для сборки без подписи (unsigned)
-      # можно просто не передавать переменные окружения.
+      - name: Decode Keystore
+        run: echo "${{ secrets.SIGNING_KEY }}" | base64 --decode > release.jks
+
+      # Build only the Open variant. Signing in an open repo can be missing
+      # or configured via other secrets.
       - name: Build Direct Open Release APK
         run: |
           ./gradlew --no-daemon assembleDirectOpenRelease \
@@ -81,3 +83,17 @@ jobs:
         with:
           files: app/build/outputs/apk/directOpen/release/*.apk
           generate_release_notes: true
+
+      - name: Send Telegram Notification
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            🚀 *New Release: CheezyClash ${{ github.ref_name }}*
+
+            The new version is ready! You can download the signed APKs from the release page below:
+
+            📦 [Download Release ${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
