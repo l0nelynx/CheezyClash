@@ -1,6 +1,7 @@
 # CheezyClash
 
-[![Download](https://img.shields.io/badge/Download-Blue?style=for-the-badge&logo=github&link=https%3A%2F%2Fgithub.com%2Fl0nelynx%2FCheezyClash%2Freleases)](https://github.com/l0nelynx%2FCheezyClash/releases)
+![GitHub Downloads)](https://img.shields.io/github/downloads/l0nelynx/CheezyClash/total)
+
 [![Stars](https://img.shields.io/github/stars/l0nelynx/CheezyClash?style=for-the-badge)](https://github.com/l0nelynx/CheezyClash/stargazers)
 
 [![Channel](https://img.shields.io/badge/Telegram-Chat-blue?style=flat-square&logo=telegram)](https://t.me/CheezyClash)
