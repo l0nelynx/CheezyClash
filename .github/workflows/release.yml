@@ -18,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Compute Go sources hash
         id: hash
@@ -77,11 +79,27 @@ jobs:
           name: CheezyClash-APKs
           path: app/build/outputs/apk/directOpen/release/*.apk
 
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref_name }}^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"• %s")
+          else
+            CHANGES=$(git log --pretty=format:"• %s" $PREV_TAG..${{ github.ref_name }})
+          fi
+          echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/directOpen/release/*.apk
+          body: |
+            ## What's New
+            ${{ steps.changelog.outputs.CHANGES }}
           generate_release_notes: true
 
       - name: Send Telegram Notification
@@ -94,6 +112,7 @@ jobs:
           message: |
             🚀 *New Release: CheezyClash ${{ github.ref_name }}*
 
-            The new version is ready! You can download the signed APKs from the release page below:
+            *Changes:*
+            ${{ steps.changelog.outputs.CHANGES }}
 
             📦 [Download Release ${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
