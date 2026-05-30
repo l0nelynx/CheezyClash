@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-overlay для строковых ресурсов. AGP мерджит src/debug/res поверх
+    src/main/res в debug-сборке, в release не попадает. Сюда кладём только
+    те строки, которые ХОТИМ различать визуально между debug и release.
+-->
+<resources>
+    <string name="app_name">CheezyVPN Debug</string>
+</resources>

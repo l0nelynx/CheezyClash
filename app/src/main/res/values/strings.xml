@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">CheezyVPN</string>
+    <string name="title_logs">Logs</string>
+    <string name="title_proxies">Proxies</string>
+</resources>

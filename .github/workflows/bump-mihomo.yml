@@ -1,0 +1,216 @@
+name: Bump Mihomo
+
+# Запускается вручную. Обновляет go.mod / go.sum под свежий ref
+# нужного Go-пакета (по умолчанию mihomo@Alpha), пытается собрать
+# libclash.so локально в этом ране, и открывает PR в master.
+# Сам merge — за человеком.
+#
+# Пуш в feature-ветку триггерит build-core.yml (на pull_request), который
+# отдельно проверит реальную сборку под кеш-ключом нового хеша.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "ref (ветка / коммит / тег). По умолчанию — Alpha HEAD."
+        type: string
+        default: "Alpha"
+      replace_with:
+        description: |
+          Опционально: путь к форку, на который сделать replace.
+          Используй если форк сохраняет `module github.com/metacubex/mihomo`
+          в своём go.mod — тогда обычный `go get github.com/<форк>` падает с
+          "module declares its path as ... but was required as ...".
+          Пример: github.com/vernesong/mihomo
+
+permissions:
+  contents: write       # создать ветку и закоммитить в неё
+  pull-requests: write  # открыть PR
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 нужен, если будем сравнивать с историей; для
+          # простого создания PR-ветки это не обязательно, но не повредит.
+          fetch-depth: 0
+
+      - name: Set up Go 1.23
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: core/src/main/golang/go.sum
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Record old version
+        id: old
+        run: |
+          chmod +x gradlew
+          OLD=$(./gradlew --no-daemon -q :core:printMihomoVersion | sed -n 's/^mihomo: //p')
+          echo "old_version=$OLD" >> "$GITHUB_OUTPUT"
+          echo "Old: $OLD"
+
+      - name: Apply dependency update (via :core:bumpMihomo)
+        env:
+          REF:     ${{ inputs.ref }}
+          REPLACE: ${{ inputs.replace_with }}
+        run: |
+          chmod +x gradlew
+          # Делегируем работу Gradle-таске :core:bumpMihomo. Это единственный
+          # источник правды для логики bump'а (резолв ref-форка → pseudo-version,
+          # обработка replace, фолбек на require). Workflow сверху только
+          # оркестрирует: чекаут, ветка, PR.
+          if [ -n "$REPLACE" ]; then
+            ./gradlew --no-daemon :core:bumpMihomo "-Pref=$REF" "-PreplaceWith=$REPLACE"
+          else
+            ./gradlew --no-daemon :core:bumpMihomo "-Pref=$REF"
+          fi
+
+      # go mod tidy уже выполнен внутри :core:bumpMihomo — отдельный шаг не нужен.
+
+      - name: Record new version
+        id: new
+        run: |
+          NEW=$(./gradlew --no-daemon -q :core:printMihomoVersion | sed -n 's/^mihomo: //p')
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "New: $NEW"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet core/src/main/golang/go.mod core/src/main/golang/go.sum; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "go.mod / go.sum не изменились — нечего обновлять."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "=== Diff: ==="
+            git --no-pager diff --stat core/src/main/golang/go.mod core/src/main/golang/go.sum
+          fi
+
+      - name: Stop if nothing changed
+        if: steps.diff.outputs.changed == 'false'
+        run: |
+          echo "::notice::Уже на последней версии mihomo@${{ inputs.ref }}: ${{ steps.old.outputs.old_version }}"
+          exit 0
+
+      # Smoke-сборка arm64 libclash прямо здесь, чтобы PR не открывался,
+      # если код вообще не компилируется. Для трёх ABI используем
+      # отдельный build-core workflow (он триггерится PR'ом).
+      - name: Install Android SDK + NDK
+        if: steps.diff.outputs.changed == 'true'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;28.2.13676358 cmake;3.22.1"
+
+      - name: Smoke-build arm64 libclash
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :core:buildGoClashArm64V8a
+
+      - name: Compute branch and PR metadata
+        if: steps.diff.outputs.changed == 'true'
+        id: meta
+        env:
+          PKG:     github.com/metacubex/mihomo
+          REF:     ${{ inputs.ref }}
+          REPLACE: ${{ inputs.replace_with }}
+        run: |
+          # В заголовке и имени ветки отражаем РЕАЛЬНЫЙ источник кода:
+          # если есть replace, то имя форка; иначе require-имя.
+          SOURCE="${REPLACE:-$PKG}"
+          SHORT=$(basename "$SOURCE")
+          DATE=$(date -u +%Y%m%d-%H%M)
+          BRANCH="bump/${SHORT}-${DATE}"
+          if [ -n "$REPLACE" ]; then
+            TITLE="deps: bump $PKG via $REPLACE ($REF)"
+          else
+            TITLE="deps: bump $PKG ($REF)"
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE"   >> "$GITHUB_OUTPUT"
+
+      - name: Commit + push branch
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          PR_TITLE:    ${{ steps.meta.outputs.title }}
+          OLD_VERSION: ${{ steps.old.outputs.old_version }}
+          NEW_VERSION: ${{ steps.new.outputs.new_version }}
+          RUN_ID:      ${{ github.run_id }}
+          BRANCH:      ${{ steps.meta.outputs.branch }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add core/src/main/golang/go.mod core/src/main/golang/go.sum
+          {
+            echo "$PR_TITLE"
+            echo
+            echo "Old: $OLD_VERSION"
+            echo "New: $NEW_VERSION"
+            echo
+            echo "Triggered by Bump Mihomo workflow (run $RUN_ID)."
+            echo "Smoke-build of :core:buildGoClashArm64V8a succeeded in this run;"
+            echo "full three-ABI build will run via build-core.yml on the PR."
+          } > /tmp/commit_msg.txt
+          git commit -F /tmp/commit_msg.txt
+          git push origin "$BRANCH"
+
+      - name: Write PR body
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          PKG:         github.com/metacubex/mihomo
+          REF:         ${{ inputs.ref }}
+          REPLACE:     ${{ inputs.replace_with }}
+          OLD_VERSION: ${{ steps.old.outputs.old_version }}
+          NEW_VERSION: ${{ steps.new.outputs.new_version }}
+          RUN_ID:      ${{ github.run_id }}
+          REPO:        ${{ github.repository }}
+        run: |
+          {
+            echo "Автоматическое обновление зависимости через workflow **Bump Mihomo**."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Package | \`$PKG\` |"
+            if [ -n "$REPLACE" ]; then
+              echo "| Replace with | \`$REPLACE\` |"
+            fi
+            echo "| Ref     | \`$REF\` |"
+            echo "| Old     | \`$OLD_VERSION\` |"
+            echo "| New     | \`$NEW_VERSION\` |"
+            echo "| Run     | [$RUN_ID](https://github.com/$REPO/actions/runs/$RUN_ID) |"
+            echo
+            echo "## Чек перед merge"
+            echo
+            echo "- [ ] Build Clash Core зелёный на этой ветке (запустится на PR"
+            echo "      автоматически и провалидирует сборку для всех 3 ABI)."
+            echo "- [ ] Если ABI или API mihomo сломались — поправить"
+            echo "      \`core/src/main/golang/native/**\` руками и push в эту ветку."
+            echo "- [ ] После merge build-core запустится ещё раз на master"
+            echo "      (push-триггер), заполнит кеш в default-scope — и тег"
+            echo "      \`v*\` соберёт релиз обычным быстрым путём."
+            echo
+            echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+          } > /tmp/pr_body.md
+
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --base master \
+            --head "${{ steps.meta.outputs.branch }}" \
+            --title "${{ steps.meta.outputs.title }}" \
+            --body-file /tmp/pr_body.md

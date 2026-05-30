@@ -1,0 +1,83 @@
+name: Build and Release (Open Source)
+
+# При пуше тега v* собирает Open-версию (CheezyClash).
+# libclash.so берётся из кеша.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute Go sources hash
+        id: hash
+        run: |
+          HASH=$(find core/src/main/golang \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
+                 | sort | xargs sha256sum | sha256sum | cut -c1-16)
+          echo "go_hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore libclash from cache
+        id: cache-libclash
+        uses: actions/cache/restore@v4
+        with:
+          path: core/build/generatedJniLibs
+          key: libclash-${{ steps.hash.outputs.go_hash }}
+
+      - name: Require pre-built libclash
+        if: steps.cache-libclash.outputs.cache-hit != 'true'
+        run: |
+          echo "ERROR: libclash.so not found in cache. Run 'Build Clash Core' workflow first."
+          exit 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Install Android SDK + NDK 28.2.13676358
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;28.2.13676358 cmake;3.22.1"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Собираем только Open-вариант. Подпись в открытом репо может отсутствовать
+      # или быть настроена через другие секреты. Для сборки без подписи (unsigned)
+      # можно просто не передавать переменные окружения.
+      - name: Build Direct Open Release APK
+        run: |
+          ./gradlew --no-daemon assembleDirectOpenRelease \
+            -x :core:buildGoClashArm64V8a \
+            -x :core:buildGoClashArmeabiV7a \
+            -x :core:buildGoClashX86_64 \
+            -x :core:assembleGoJniLibs
+        env:
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheezyClash-APKs
+          path: app/build/outputs/apk/directOpen/release/*.apk
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/directOpen/release/*.apk
+          generate_release_notes: true

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+        Local Network access for inbound connections on the proxy listener (mixed-port, http-port, socks-port).
+        Required since Android 16 (API 36) opt-in / Android 17 (API 37) mandatory enforcement.
+
+        Without these, the kernel blocks SYN-ACK reply packets sent by the in-process mihomo listener to
+        LAN clients (192.168/16, 10/8, 172.16/12, 169.254/16, 100.64/10). Loopback (127.0.0.1) stays unaffected.
+
+        - NEARBY_WIFI_DEVICES is the Android 16 fallback (opt-in phase used this group).
+        - ACCESS_LOCAL_NETWORK is the dedicated runtime permission introduced in Android 17 (API 37).
+        Both are runtime-requestable and share the NEARBY_DEVICES UI group, so the user is prompted once.
+
+        usesPermissionFlags="neverForLocation" — we don't derive physical location from LAN traffic.
+    -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        android:maxSdkVersion="36" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
+    <application
+        android:name=".CheezyApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.CheezyVPN">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CheezyVPN">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".LogsActivity"
+            android:exported="false"
+            android:label="@string/title_logs"
+            android:theme="@style/Theme.CheezyVPN" />
+
+        <!--
+            AuthActivity / DevicesActivity / SubscriptionActivity объявлены в
+            src/proprietaryMain/AndroidManifest.xml — в open-сборке их нет.
+        -->
+
+
+        <service
+            android:name=".clash.ClashVpnService"
+            android:exported="false"
+            android:process=":vpn"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+                <action android:name="com.cheezy.freedom.clash.IClashInterface" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="VPN tunnel via Clash core" />
+        </service>
+
+        <service
+            android:name=".VpnTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
+            androidx.startup InitializationProvider per-flavor:
+              - src/openMain/AndroidManifest.xml регистрирует OpenAppDepsInitializer.
+              - src/proprietaryMain/AndroidManifest.xml регистрирует CheezyAppDepsInitializer,
+                который зависит от OpenAppDepsInitializer и перетирает его в AppDeps.
+            В main здесь нет meta-data — провайдер всё равно появится через flavor merge.
+        -->
+    </application>
+
+</manifest>
