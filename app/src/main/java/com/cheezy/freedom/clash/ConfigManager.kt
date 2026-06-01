@@ -78,7 +78,10 @@ object ConfigManager {
             val intervalHours = conn.getHeaderField("profile-update-interval")?.toIntOrNull() ?: 0
 
             val home = context.filesDir.resolve("clash").apply { mkdirs() }
-            val target = home.resolve(FILE_NAME)
+            // Download lands in base.yaml; the effective config.yaml is then
+            // produced by ConfigOverrideManager.rebuild(...) after we've
+            // persisted prefs/subscription state below.
+            val target = home.resolve(ConfigOverrideManager.BASE_FILE_NAME)
             conn.inputStream.use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             }
@@ -92,6 +95,10 @@ object ConfigManager {
                 .apply()
             
             ClashState.setLastUpdateTime(System.currentTimeMillis())
+
+            // base.yaml is fresh on disk — produce config.yaml from it (applying
+            // any currently-enabled overrides) so the core sees a complete file.
+            ConfigOverrideManager.rebuild(context)
 
             // Ask the core to load the new config so the UI (ProxiesTab) and service are up to date
             reloadAndReapplySelections(context)
@@ -220,6 +227,7 @@ object ConfigManager {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         clearSavedSelections(context)
         clearProxyGroupsCache(context)
+        ConfigOverrideManager.clearPrefs(context)
         runCatching { context.filesDir.resolve("clash").deleteRecursively() }
         cancelUpdate(context)
         ClashState.setSubscription(null)
