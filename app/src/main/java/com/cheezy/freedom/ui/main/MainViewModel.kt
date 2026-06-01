@@ -236,8 +236,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         // Delete only cache files (cache.db etc.) but keep config.yaml
         // so the app can work offline after an update.
+        val keep = setOf("config.yaml", "base.yaml")
         context.filesDir.resolve("clash").listFiles()?.forEach { file ->
-            if (file.name != "config.yaml") {
+            if (file.name !in keep) {
                 file.deleteRecursively()
             }
         }
