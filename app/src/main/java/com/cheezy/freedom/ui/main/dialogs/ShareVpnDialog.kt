@@ -6,14 +6,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -22,8 +33,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.cheezy.freedom.util.QrCodeUtils
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareVpnDialog(
     tunAddress: String,
@@ -39,72 +53,101 @@ fun ShareVpnDialog(
         } else null
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Раздать VPN") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Используйте QR-код для быстрого импорта подписки или локальный IP для настройки прокси.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
-                )
-
-                if (qrBitmap != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "Subscription QR Code",
-                        modifier = Modifier
-                            .size(200.dp)
-                            .aspectRatio(1f)
-                    )
-                    Text(
-                        "QR-код подписки",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Share VPN") },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        }
                     )
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("IP-адрес TUN:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            ) { padding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        if (tunAddress.isNotBlank()) tunAddress else "VPN не запущен",
-                        style = MaterialTheme.typography.bodyLarge
+                        "Use the QR code for quick subscription import or the local IP for proxy settings.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    if (qrBitmap != null) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "Subscription QR Code",
+                            modifier = Modifier
+                                .size(240.dp)
+                                .aspectRatio(1f)
+                        )
+                        Text(
+                            "Subscription QR Code",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                    Text("Локальный IP:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        localIp.ifBlank { "Неизвестно" },
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        InfoSection(
+                            label = "TUN IP Address:",
+                            value = tunAddress.ifBlank { "VPN not running" }
+                        )
 
-                    LocalProxySection(
-                        info = info,
-                        onToggle = onToggleLocalProxy,
-                    )
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        InfoSection(
+                            label = "Local IP Address:",
+                            value = localIp.ifBlank { "Unknown" }
+                        )
 
-                    PortsSection(info = info)
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        LocalProxySection(
+                            info = info,
+                            onToggle = onToggleLocalProxy,
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        PortsSection(info = info)
+                    }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Закрыть")
             }
         }
-    )
+    }
+}
+
+@Composable
+private fun InfoSection(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
 }
 
 @Composable
@@ -118,7 +161,7 @@ private fun LocalProxySection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            "Включить локальный прокси",
+            "Enable Local Proxy",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -130,7 +173,7 @@ private fun LocalProxySection(
     }
     if (info.localProxyForcedByBase) {
         Text(
-            "Параметрами локального прокси управляет ваш провайдер.",
+            "Local proxy parameters are managed by your provider.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -139,16 +182,15 @@ private fun LocalProxySection(
 
 @Composable
 private fun PortsSection(info: ShareVpnInfo) {
-    val color = MaterialTheme.colorScheme.primary
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
     val style = MaterialTheme.typography.bodySmall
     when {
         info.mixedPort != null -> {
-            Text("Порт (HTTP/SOCKS): ${info.mixedPort}", style = style, color = color)
+            Text("Port (HTTP/SOCKS): ${info.mixedPort}", style = style, color = color)
         }
         info.httpPort != null || info.socksPort != null -> {
             info.httpPort?.let { Text("HTTP: $it", style = style, color = color) }
             info.socksPort?.let { Text("SOCKS: $it", style = style, color = color) }
         }
-        // else: no port info to show
     }
 }
