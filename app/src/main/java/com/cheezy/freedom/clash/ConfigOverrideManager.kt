@@ -24,6 +24,20 @@ object ConfigOverrideManager {
     }
 
     /**
+     * Persist the new state, rebuild config.yaml, then ask the core to reload
+     * and reapply user selections. A call with an unknown id is a no-op.
+     */
+    suspend fun setEnabled(context: Context, id: String, value: Boolean) {
+        if (registry.none { it.id == id }) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(id, value)
+            .apply()
+        rebuild(context)
+        ConfigManager.reloadAndReapplySelections(context)
+    }
+
+    /**
      * Reads base.yaml, applies every enabled override, writes the result to
      * config.yaml. No-op when base.yaml does not exist. Errors are caught and
      * logged so a malformed config never crashes the caller; in that case
