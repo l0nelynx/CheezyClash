@@ -1,6 +1,7 @@
 package com.cheezy.freedom.clash
 
 import android.content.Context
+import com.cheezy.freedom.ui.main.dialogs.ShareVpnInfo
 import org.yaml.snakeyaml.DumperOptions
 import org.yaml.snakeyaml.Yaml
 import java.io.File
@@ -95,4 +96,46 @@ object ConfigOverrideManager {
         val loaded = runCatching { Yaml().load<Any?>(file.readText()) }.getOrNull()
         return loaded as? Map<String, Any?>
     }
+
+    /**
+     * Reads the effective config.yaml for ports and computes UI flags for the
+     * share dialog. Tolerates missing files and parse failures — always returns
+     * a valid (possibly EMPTY) instance.
+     */
+    fun readShareInfo(context: Context): ShareVpnInfo {
+        ensureBaseExists(context)
+        val config = readMap(File(clashDir(context), CONFIG_FILE_NAME))
+        val ports = if (config == null) Ports.EMPTY else extractPorts(config)
+        return ShareVpnInfo(
+            mixedPort = ports.mixedPort,
+            httpPort = ports.httpPort,
+            socksPort = ports.socksPort,
+            localProxyEnabled = isEnabled(context, LocalProxyOverride.id),
+            localProxyForcedByBase = isForcedByBase(context, LocalProxyOverride.id),
+        )
+    }
+
+    /** Public-by-test entry point used by ShareVpnInfoParserTest. */
+    internal fun parsePortsForTest(yamlText: String): Ports {
+        val loaded = runCatching { Yaml().load<Any?>(yamlText) }.getOrNull()
+        @Suppress("UNCHECKED_CAST")
+        val map = loaded as? Map<String, Any?> ?: return Ports.EMPTY
+        return extractPorts(map)
+    }
+
+    internal data class Ports(
+        val mixedPort: Int?,
+        val httpPort: Int?,
+        val socksPort: Int?,
+    ) {
+        companion object {
+            val EMPTY = Ports(null, null, null)
+        }
+    }
+
+    private fun extractPorts(map: Map<String, Any?>): Ports = Ports(
+        mixedPort = (map["mixed-port"] as? Number)?.toInt(),
+        httpPort = (map["port"] as? Number)?.toInt(),
+        socksPort = (map["socks-port"] as? Number)?.toInt(),
+    )
 }
