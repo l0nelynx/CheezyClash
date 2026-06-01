@@ -259,7 +259,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     UpdateDialog(updateInfo, onDismiss = { viewModel.dismissUpdateDialog() })
 
     if (showShareDialog) {
-        LaunchedEffect(Unit) { viewModel.refreshShareInfo() }
+        LaunchedEffect(showShareDialog) { viewModel.refreshShareInfo() }
         val shareInfo by viewModel.shareInfo.collectAsState()
         ShareVpnDialog(
             tunAddress = tunAddress ?: "",

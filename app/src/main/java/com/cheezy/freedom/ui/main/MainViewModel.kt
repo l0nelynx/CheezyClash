@@ -240,8 +240,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val currentVer = BuildConfig.VERSION_NAME
         if (lastVer == currentVer) return
 
-        // Delete only cache files (cache.db etc.) but keep config.yaml
-        // so the app can work offline after an update.
+        // Delete cache files (cache.db etc.) but keep config.yaml and base.yaml:
+        // base.yaml is the source of truth for the override layer (see ConfigOverrideManager),
+        // and config.yaml lets the app keep working offline after an update.
         val keep = setOf("config.yaml", "base.yaml")
         context.filesDir.resolve("clash").listFiles()?.forEach { file ->
             if (file.name !in keep) {
