@@ -259,10 +259,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     UpdateDialog(updateInfo, onDismiss = { viewModel.dismissUpdateDialog() })
 
     if (showShareDialog) {
+        LaunchedEffect(Unit) { viewModel.refreshShareInfo() }
+        val shareInfo by viewModel.shareInfo.collectAsState()
         ShareVpnDialog(
             tunAddress = tunAddress ?: "",
             localIp = localIp ?: "",
             subscriptionUrl = ConfigManager.lastUrl(context).orEmpty(),
+            info = shareInfo,
+            onToggleLocalProxy = viewModel::toggleLocalProxy,
             onDismiss = { showShareDialog = false }
         )
     }

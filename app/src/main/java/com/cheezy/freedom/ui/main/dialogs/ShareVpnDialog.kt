@@ -1,15 +1,17 @@
 package com.cheezy.freedom.ui.main.dialogs
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,7 +29,9 @@ fun ShareVpnDialog(
     tunAddress: String,
     localIp: String,
     subscriptionUrl: String,
-    onDismiss: () -> Unit
+    info: ShareVpnInfo,
+    onToggleLocalProxy: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val qrBitmap = remember(subscriptionUrl) {
         if (subscriptionUrl.isNotBlank()) {
@@ -48,7 +52,7 @@ fun ShareVpnDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
                 )
-                
+
                 if (qrBitmap != null) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Image(
@@ -66,28 +70,32 @@ fun ShareVpnDialog(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("IP-адрес TUN:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text(
                         if (tunAddress.isNotBlank()) tunAddress else "VPN не запущен",
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     Text("Локальный IP:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text(
                         localIp.ifBlank { "Неизвестно" },
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "Порт: 2080 (HTTP/SOCKS)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+
+                    LocalProxySection(
+                        info = info,
+                        onToggle = onToggleLocalProxy,
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    PortsSection(info = info)
                 }
             }
         },
@@ -97,4 +105,50 @@ fun ShareVpnDialog(
             }
         }
     )
+}
+
+@Composable
+private fun LocalProxySection(
+    info: ShareVpnInfo,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            "Включить локальный прокси",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Switch(
+            checked = info.localProxyEnabled || info.localProxyForcedByBase,
+            onCheckedChange = onToggle,
+            enabled = !info.localProxyForcedByBase,
+        )
+    }
+    if (info.localProxyForcedByBase) {
+        Text(
+            "Параметрами локального прокси управляет ваш провайдер.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun PortsSection(info: ShareVpnInfo) {
+    val color = MaterialTheme.colorScheme.primary
+    val style = MaterialTheme.typography.bodySmall
+    when {
+        info.mixedPort != null -> {
+            Text("Порт (HTTP/SOCKS): ${info.mixedPort}", style = style, color = color)
+        }
+        info.httpPort != null || info.socksPort != null -> {
+            info.httpPort?.let { Text("HTTP: $it", style = style, color = color) }
+            info.socksPort?.let { Text("SOCKS: $it", style = style, color = color) }
+        }
+        // else: no port info to show
+    }
 }
