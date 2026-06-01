@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# SnakeYAML uses reflection to instantiate constructors during YAML parsing.
+# Keep the whole package; the library is small enough that this is not a size concern.
+-keep class org.yaml.snakeyaml.** { *; }
+-dontwarn org.yaml.snakeyaml.**
