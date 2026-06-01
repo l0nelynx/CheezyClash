@@ -53,7 +53,7 @@ object ConfigManager {
             setRequestProperty("x-device-os", "Android")
             setRequestProperty("x-ver-os", Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString())
             setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
-            setRequestProperty("user-agent", "CheezyVPN")
+            setRequestProperty("user-agent", "CheezyVPN/${com.cheezy.freedom.BuildConfig.EDITION}")
             instanceFollowRedirects = true
         }
         try {
