@@ -94,27 +94,7 @@ object ConfigManager {
             ClashState.setLastUpdateTime(System.currentTimeMillis())
 
             // Ask the core to load the new config so the UI (ProxiesTab) and service are up to date
-            runCatching {
-                val clashHome = context.filesDir.resolve("clash")
-                ClashRemoteManager.loadConfig(clashHome.absolutePath)
-                
-                // Give the core time to load the config before patching selectors
-                kotlinx.coroutines.delay(200)
-
-                val currentGroups = ClashRemoteManager.queryGroupNames(false).toSet()
-                // Reapply user selections, as reload resets them to values from YAML
-                getSavedSelections(context).forEach { (group, proxy) ->
-                    if (group !in currentGroups) return@forEach
-                    runCatching {
-                        if (!ClashRemoteManager.patchSelector(group, proxy)) {
-                            // If the proxy is no longer in the config, remember the one Clash chose (first in the list)
-                            ClashRemoteManager.queryGroup(group)?.now?.let { fallback ->
-                                saveSelectedProxy(context, group, fallback)
-                            }
-                        }
-                    }
-                }
-            }
+            reloadAndReapplySelections(context)
 
             if (intervalHours > 0) {
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -189,6 +169,32 @@ object ConfigManager {
         workManager.enqueueUniquePeriodicWork(WORK_NAME, policy, request)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putLong(KEY_INTERVAL_KEEP, hours).apply()
+    }
+
+    /**
+     * Tells the core to reload config.yaml from the standard `clash/` directory,
+     * waits briefly for the load to complete, then replays user-saved selector
+     * choices on top of the freshly loaded groups. Shared between `importFromUrl`
+     * and `ConfigOverrideManager.setEnabled`.
+     */
+    suspend fun reloadAndReapplySelections(context: Context) {
+        val clashHome = context.filesDir.resolve("clash")
+        runCatching {
+            ClashRemoteManager.loadConfig(clashHome.absolutePath)
+            kotlinx.coroutines.delay(200)
+
+            val currentGroups = ClashRemoteManager.queryGroupNames(false).toSet()
+            getSavedSelections(context).forEach { (group, proxy) ->
+                if (group !in currentGroups) return@forEach
+                runCatching {
+                    if (!ClashRemoteManager.patchSelector(group, proxy)) {
+                        ClashRemoteManager.queryGroup(group)?.now?.let { fallback ->
+                            saveSelectedProxy(context, group, fallback)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
