@@ -15,7 +15,10 @@ import com.cheezy.freedom.clash.ClashRemoteManager
 import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
+import com.cheezy.freedom.clash.ConfigOverrideManager
+import com.cheezy.freedom.clash.LocalProxyOverride
 import com.cheezy.freedom.clash.SubscriptionInfo
+import com.cheezy.freedom.ui.main.dialogs.ShareVpnInfo
 import com.cheezy.freedom.ui.main.proxies.ProxyUiData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -83,6 +86,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _isPinging = MutableStateFlow(false)
     val isPinging: StateFlow<Boolean> = _isPinging.asStateFlow()
+
+    private val _shareInfo = MutableStateFlow(ShareVpnInfo.EMPTY)
+    val shareInfo: StateFlow<ShareVpnInfo> = _shareInfo.asStateFlow()
 
     /** true if the current flavor can show AuthActivity when needsAuth is true. */
     val supportsAuthFlow: Boolean get() = AppDeps.accountProvider.supportsAuthFlow
@@ -552,6 +558,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 _isPinging.value = false
             }
+        }
+    }
+
+    fun refreshShareInfo() {
+        viewModelScope.launch {
+            val info = withContext(Dispatchers.IO) {
+                ConfigOverrideManager.readShareInfo(context)
+            }
+            _shareInfo.value = info
+        }
+    }
+
+    fun toggleLocalProxy(enabled: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                ConfigOverrideManager.setEnabled(context, LocalProxyOverride.id, enabled)
+            }
+            refreshShareInfo()
         }
     }
 }
