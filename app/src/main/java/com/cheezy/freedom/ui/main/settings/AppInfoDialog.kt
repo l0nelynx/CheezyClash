@@ -57,7 +57,7 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
             Column {
                 ListItem(
                     headlineContent = { Text("Разработчик") },
-                    supportingContent = { Text("CheezyVPN Team") }
+                    supportingContent = { Text("l0nelynx") }
                 )
                 ListItem(
                     headlineContent = { Text("Версия ядра (Mihomo)") },
