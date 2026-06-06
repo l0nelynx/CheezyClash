@@ -17,8 +17,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object UpdateManager {
-    private const val REPO = "l0nelynx/CheezyClash"
-    private const val API_URL = "https://api.github.com/repos/$REPO/releases/latest"
+    private val REPO = if (BuildConfig.EDITION == "OPEN") {
+        "l0nelynx/CheezyClash"
+    } else {
+        "l0nelynx/CheezyVPN-Releases"
+    }
+    private val API_URL = "https://api.github.com/repos/$REPO/releases/latest"
     private const val PREFS = "cheezy.updates"
     private const val KEY_ID = "download_id"
     private const val KEY_VER = "download_ver"
