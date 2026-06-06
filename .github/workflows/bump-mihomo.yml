@@ -1,31 +1,31 @@
 name: Bump Mihomo
 
-# Запускается вручную. Обновляет go.mod / go.sum под свежий ref
-# нужного Go-пакета (по умолчанию mihomo@Alpha), пытается собрать
-# libclash.so локально в этом ране, и открывает PR в master.
-# Сам merge — за человеком.
+# Runs manually. Updates go.mod / go.sum to a fresh ref of the
+# required Go package (default: mihomo@Alpha), attempts to build
+# libclash.so locally in this run, and opens a PR into master.
+# The merge itself is done by a human.
 #
-# Пуш в feature-ветку триггерит build-core.yml (на pull_request), который
-# отдельно проверит реальную сборку под кеш-ключом нового хеша.
+# Pushing to the feature branch triggers build-core.yml (on pull_request),
+# which will separately verify the real build with the cache key of the new hash.
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "ref (ветка / коммит / тег). По умолчанию — Alpha HEAD."
+        description: "ref (branch / commit / tag). Default: Alpha HEAD."
         type: string
         default: "Alpha"
       replace_with:
         description: |
-          Опционально: путь к форку, на который сделать replace.
-          Используй если форк сохраняет `module github.com/metacubex/mihomo`
-          в своём go.mod — тогда обычный `go get github.com/<форк>` падает с
+          Optional: path to the fork for the replace directive.
+          Use if the fork retains `module github.com/metacubex/mihomo`
+          in its go.mod — otherwise a normal `go get github.com/<fork>` fails with
           "module declares its path as ... but was required as ...".
-          Пример: github.com/vernesong/mihomo
+          Example: github.com/vernesong/mihomo
 
 permissions:
-  contents: write       # создать ветку и закоммитить в неё
-  pull-requests: write  # открыть PR
+  contents: write       # to create a branch and commit to it
+  pull-requests: write  # to open a PR
 
 jobs:
   bump:
@@ -35,8 +35,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # fetch-depth: 0 нужен, если будем сравнивать с историей; для
-          # простого создания PR-ветки это не обязательно, но не повредит.
+          # fetch-depth: 0 is needed if comparing with history; for
+          # simple PR branch creation it's not mandatory, but won't hurt.
           fetch-depth: 0
 
       - name: Set up Go 1.23
@@ -66,17 +66,17 @@ jobs:
           REPLACE: ${{ inputs.replace_with }}
         run: |
           chmod +x gradlew
-          # Делегируем работу Gradle-таске :core:bumpMihomo. Это единственный
-          # источник правды для логики bump'а (резолв ref-форка → pseudo-version,
-          # обработка replace, фолбек на require). Workflow сверху только
-          # оркестрирует: чекаут, ветка, PR.
+          # Delegate work to the Gradle task :core:bumpMihomo. This is the single
+          # source of truth for the bump logic (resolving fork ref -> pseudo-version,
+          # handling replace, fallback to require). The workflow only
+          # orchestrates: checkout, branch, PR.
           if [ -n "$REPLACE" ]; then
             ./gradlew --no-daemon :core:bumpMihomo "-Pref=$REF" "-PreplaceWith=$REPLACE"
           else
             ./gradlew --no-daemon :core:bumpMihomo "-Pref=$REF"
           fi
 
-      # go mod tidy уже выполнен внутри :core:bumpMihomo — отдельный шаг не нужен.
+      # go mod tidy is already executed inside :core:bumpMihomo — separate step not needed.
 
       - name: Record new version
         id: new
@@ -90,7 +90,7 @@ jobs:
         run: |
           if git diff --quiet core/src/main/golang/go.mod core/src/main/golang/go.sum; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "go.mod / go.sum не изменились — нечего обновлять."
+            echo "go.mod / go.sum haven't changed — nothing to update."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "=== Diff: ==="
@@ -100,12 +100,11 @@ jobs:
       - name: Stop if nothing changed
         if: steps.diff.outputs.changed == 'false'
         run: |
-          echo "::notice::Уже на последней версии mihomo@${{ inputs.ref }}: ${{ steps.old.outputs.old_version }}"
+          echo "::notice::Already at the latest version mihomo@${{ inputs.ref }}: ${{ steps.old.outputs.old_version }}"
           exit 0
 
-      # Smoke-сборка arm64 libclash прямо здесь, чтобы PR не открывался,
-      # если код вообще не компилируется. Для трёх ABI используем
-      # отдельный build-core workflow (он триггерится PR'ом).
+      # Smoke-build arm64 libclash here so that a PR is not opened if the code doesn't compile.
+      # For three ABIs we use a separate build-core workflow (triggered by the PR).
       - name: Install Android SDK + NDK
         if: steps.diff.outputs.changed == 'true'
         uses: android-actions/setup-android@v3
@@ -126,8 +125,8 @@ jobs:
           REF:     ${{ inputs.ref }}
           REPLACE: ${{ inputs.replace_with }}
         run: |
-          # В заголовке и имени ветки отражаем РЕАЛЬНЫЙ источник кода:
-          # если есть replace, то имя форка; иначе require-имя.
+          # Reflect the REAL code source in the title and branch name:
+          # the fork name if there's a replace; otherwise the require name.
           SOURCE="${REPLACE:-$PKG}"
           SHORT=$(basename "$SOURCE")
           DATE=$(date -u +%Y%m%d-%H%M)
@@ -178,7 +177,7 @@ jobs:
           REPO:        ${{ github.repository }}
         run: |
           {
-            echo "Автоматическое обновление зависимости через workflow **Bump Mihomo**."
+            echo "Automated dependency update via **Bump Mihomo** workflow."
             echo
             echo "| | |"
             echo "|---|---|"
@@ -191,15 +190,15 @@ jobs:
             echo "| New     | \`$NEW_VERSION\` |"
             echo "| Run     | [$RUN_ID](https://github.com/$REPO/actions/runs/$RUN_ID) |"
             echo
-            echo "## Чек перед merge"
+            echo "## Checks before merge"
             echo
-            echo "- [ ] Build Clash Core зелёный на этой ветке (запустится на PR"
-            echo "      автоматически и провалидирует сборку для всех 3 ABI)."
-            echo "- [ ] Если ABI или API mihomo сломались — поправить"
-            echo "      \`core/src/main/golang/native/**\` руками и push в эту ветку."
-            echo "- [ ] После merge build-core запустится ещё раз на master"
-            echo "      (push-триггер), заполнит кеш в default-scope — и тег"
-            echo "      \`v*\` соберёт релиз обычным быстрым путём."
+            echo "- [ ] Build Clash Core is green on this branch (runs automatically on PR"
+            echo "      and validates build for all 3 ABIs)."
+            echo "- [ ] If mihomo ABI or API broke — fix \`core/src/main/golang/native/**\`"
+            echo "      manually and push to this branch."
+            echo "- [ ] After merge, build-core will run again on master (push trigger),"
+            echo "      filling the cache in default scope — and the \`v*\` tag will"
+            echo "      build release the usual fast way."
             echo
             echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
           } > /tmp/pr_body.md
