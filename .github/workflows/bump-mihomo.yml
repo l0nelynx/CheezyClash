@@ -200,7 +200,6 @@ jobs:
             echo "      filling the cache in default scope — and the \`v*\` tag will"
             echo "      build release the usual fast way."
             echo
-            echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
           } > /tmp/pr_body.md
 
       - name: Open PR
