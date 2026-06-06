@@ -2,7 +2,7 @@ name: Bump Mihomo
 
 # Runs manually. Updates go.mod / go.sum to a fresh ref of the
 # required Go package (default: mihomo@Alpha), attempts to build
-# libclash.so locally in this run, and opens a PR into master.
+# libclash.so locally in this run, and opens a PR into main.
 # The merge itself is done by a human.
 #
 # Pushing to the feature branch triggers build-core.yml (on pull_request),
@@ -196,7 +196,7 @@ jobs:
             echo "      and validates build for all 3 ABIs)."
             echo "- [ ] If mihomo ABI or API broke — fix \`core/src/main/golang/native/**\`"
             echo "      manually and push to this branch."
-            echo "- [ ] After merge, build-core will run again on master (push trigger),"
+            echo "- [ ] After merge, build-core will run again on main (push trigger),"
             echo "      filling the cache in default scope — and the \`v*\` tag will"
             echo "      build release the usual fast way."
             echo
@@ -209,7 +209,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr create \
-            --base master \
+            --base main \
             --head "${{ steps.meta.outputs.branch }}" \
             --title "${{ steps.meta.outputs.title }}" \
             --body-file /tmp/pr_body.md
