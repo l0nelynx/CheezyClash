@@ -9,6 +9,7 @@ import com.cheezy.freedom.ui.main.proxies.ProxyUiData
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.yaml.snakeyaml.Yaml
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -290,158 +291,65 @@ object ConfigManager {
 
     private fun configFile(context: Context) = context.filesDir.resolve("clash/$FILE_NAME")
 
-    fun readTunStack(context: Context): String? {
-        val file = configFile(context)
-        if (!file.exists()) return null
-        return runCatching { extractTunField(file.readText(), "stack") }.getOrNull()
-    }
-
-    fun readFakeIpRange(context: Context): String? {
+    private fun loadConfigMap(context: Context): Map<String, Any?>? {
         val file = configFile(context)
         if (!file.exists()) return null
         return runCatching {
-            val text = file.readText()
-            val dnsBlock = extractTopBlock(text, "dns") ?: return@runCatching null
-            Regex("""^\s*fake-ip-range\s*:\s*(\S+)\s*$""", RegexOption.MULTILINE)
-                .find(dnsBlock)?.groupValues?.get(1)?.trim('"', '\'')
+            Yaml().load<Any>(file.readText()) as? Map<String, Any?>
         }.getOrNull()
+    }
+
+    fun readTunStack(context: Context): String? {
+        val config = loadConfigMap(context) ?: return null
+        val tun = config["tun"] as? Map<String, Any?> ?: return null
+        return tun["stack"]?.toString()?.trim('"', '\'')
+    }
+
+    fun readFakeIpRange(context: Context): String? {
+        val config = loadConfigMap(context) ?: return null
+        val dns = config["dns"] as? Map<String, Any?> ?: return null
+        return dns["fake-ip-range"]?.toString()?.trim('"', '\'')
     }
 
     /**
      * Parses the `proxy-groups` block and returns a map: group name -> drawable resource name
-     * from the `icon-cheezy` field (format `@drawable/foo` or just `foo`). The `icon`
-     * field (URL to PNG) is currently ignored.
+     * from the `icon-cheezy` field (format `@drawable/foo` or just `foo`).
      */
     fun readGroupIcons(context: Context): Map<String, String> {
         val file = configFile(context)
-        if (!file.exists()) {
-            android.util.Log.w("GroupIcons", "Config file not found: ${file.absolutePath}")
-            return emptyMap()
-        }
+        if (!file.exists()) return emptyMap()
+        
         return runCatching {
             val text = file.readText()
-            android.util.Log.d("GroupIcons", "Config size: ${text.length} chars")
-            val block = extractTopBlock(text, "proxy-groups")
-            if (block == null) {
-                android.util.Log.w("GroupIcons", "proxy-groups block not found in YAML")
-                return@runCatching emptyMap()
+            android.util.Log.d("GroupIcons", "Reading icons, config size: ${text.length} chars")
+            
+            val yaml = Yaml().load<Any>(text) as? Map<String, Any?> ?: return emptyMap()
+            val groups = yaml["proxy-groups"] as? List<Any?> ?: return emptyMap()
+            
+            val result = LinkedHashMap<String, String>()
+            for (item in groups) {
+                val map = item as? Map<String, Any?> ?: continue
+                val name = map["name"]?.toString() ?: continue
+                val icon = map["icon-cheezy"]?.toString() ?: continue
+                
+                val resName = icon.removePrefix("@drawable/").trim()
+                if (resName.isNotBlank()) {
+                    result[name] = resName
+                    android.util.Log.d("GroupIcons", "Group '$name': icon-cheezy='$icon' → resName='$resName'")
+                }
             }
-            android.util.Log.d("GroupIcons", "proxy-groups block size: ${block.length} chars, first 200 chars: ${block.take(200)}")
-            val parsed = parseProxyGroupIcons(block)
-            android.util.Log.d("GroupIcons", "Parsed ${parsed.size} group→icon entries: $parsed")
-            parsed
+            android.util.Log.d("GroupIcons", "Total groups with icons: ${result.size}")
+            result
         }.onFailure {
             android.util.Log.e("GroupIcons", "Failed to read group icons", it)
         }.getOrDefault(emptyMap())
     }
 
-    /**
-     * Inside the `proxy-groups` block, finds each `- name: X` and looks for
-     * `icon-cheezy: Y` below it within the same element (until the next `- name:`
-     * with the same indentation). The resource name is cleaned of the `@drawable/` prefix.
-     */
-    private fun parseProxyGroupIcons(block: String): Map<String, String> {
-        val result = LinkedHashMap<String, String>()
-        val lines = block.lines()
-        var groupsSeen = 0
-        var idx = 0
-        while (idx < lines.size) {
-            val line = lines[idx]
-            val nameMatch = Regex("""^(\s*)-\s*name\s*:\s*(.+)$""").find(line)
-            if (nameMatch == null) { idx++; continue }
-            groupsSeen++
-            val itemIndent = nameMatch.groupValues[1].length
-            val name = nameMatch.groupValues[2].trim().trim('"', '\'')
-            var icon: String? = null
-            var j = idx + 1
-            while (j < lines.size) {
-                val l = lines[j]
-                if (l.isBlank()) { j++; continue }
-                val nextItem = Regex("""^(\s*)-\s*name\s*:""").find(l)
-                if (nextItem != null && nextItem.groupValues[1].length <= itemIndent) break
-                val iconMatch = Regex("""^\s*icon-cheezy\s*:\s*(.+)$""").find(l)
-                if (iconMatch != null) {
-                    val raw = iconMatch.groupValues[1].trim().trim('"', '\'')
-                    icon = raw.removePrefix("@drawable/").takeIf { it.isNotBlank() }
-                    android.util.Log.d("GroupIcons", "Group '$name': icon-cheezy raw='$raw' → resName='$icon'")
-                    break
-                }
-                j++
-            }
-            if (icon == null) android.util.Log.d("GroupIcons", "Group '$name': no icon-cheezy field found")
-            if (icon != null && name.isNotEmpty()) result[name] = icon
-            idx++
-        }
-        android.util.Log.d("GroupIcons", "Total groups seen=$groupsSeen, with icon=${result.size}")
-        return result
-    }
-
     fun readExcludePackages(context: Context): List<String> {
-        val file = configFile(context)
-        if (!file.exists()) return emptyList()
-        return runCatching {
-            val tun = extractTopBlock(file.readText(), "tun") ?: return@runCatching emptyList()
-            parseStringList(tun, "exclude-package")
-        }.getOrDefault(emptyList())
-    }
-
-    private fun extractTunField(yaml: String, field: String): String? {
-        val tun = extractTopBlock(yaml, "tun") ?: return null
-        return Regex("""^\s*$field\s*:\s*(\S+)\s*$""", RegexOption.MULTILINE)
-            .find(tun)?.groupValues?.get(1)?.trim('"', '\'')
-    }
-
-    /** Returns the text of the top-level block (by indentation) for the key `key:`. */
-    private fun extractTopBlock(yaml: String, key: String): String? {
-        val lines = yaml.lines()
-        val headerIdx = lines.indexOfFirst { Regex("""^$key\s*:\s*$""").matches(it) }
-        if (headerIdx < 0) return null
-        val sb = StringBuilder()
-        for (i in (headerIdx + 1) until lines.size) {
-            val line = lines[i]
-            if (line.isBlank()) { sb.appendLine(line); continue }
-            // End of block - line without indentation
-            if (!line.startsWith(" ") && !line.startsWith("\t")) break
-            sb.appendLine(line)
-        }
-        return sb.toString()
-    }
-
-    /** Parses a YAML string list in both formats: flow [a, b] and block - a / - b. */
-    private fun parseStringList(block: String, key: String): List<String> {
-        val keyLine = Regex("""^(\s*)$key\s*:\s*(.*)$""", RegexOption.MULTILINE).find(block) ?: return emptyList()
-        val baseIndent = keyLine.groupValues[1].length
-        val rest = keyLine.groupValues[2].trim()
-
-        // Inline flow format: [a, b, c] (possibly multi-line)
-        if (rest.startsWith("[")) {
-            val sb = StringBuilder(rest)
-            val keyEnd = keyLine.range.last + 1
-            if (!rest.contains(']')) {
-                val tail = block.substring(keyEnd)
-                val closeIdx = tail.indexOf(']')
-                if (closeIdx >= 0) sb.append(tail.substring(0, closeIdx + 1))
-            }
-            val flow = sb.toString().substringAfter('[').substringBeforeLast(']')
-            return flow.split(',')
-                .map { it.trim().trim('"', '\'') }
-                .filter { it.isNotEmpty() }
-        }
-
-        // Block format: next lines with indentation > baseIndent and starting with "- "
-        val keyEnd = keyLine.range.last + 1
-        val tail = block.substring(keyEnd).lines()
-        val items = mutableListOf<String>()
-        for (line in tail) {
-            if (line.isBlank()) continue
-            val indent = line.takeWhile { it == ' ' || it == '\t' }.length
-            if (indent <= baseIndent) break
-            val trimmed = line.trimStart()
-            if (!trimmed.startsWith("-")) break
-            val v = trimmed.removePrefix("-").trim().trim('"', '\'')
-            if (v.isNotEmpty()) items.add(v)
-        }
-        return items
+        val config = loadConfigMap(context) ?: return emptyList()
+        val tun = config["tun"] as? Map<String, Any?> ?: return emptyList()
+        val list = tun["exclude-package"] as? List<*> ?: return emptyList()
+        return list.mapNotNull { it?.toString()?.trim('"', '\'') }
     }
 
     private fun decodeMaybeBase64(value: String?): String? {
