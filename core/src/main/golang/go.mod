@@ -73,7 +73,7 @@ require (
 	github.com/metacubex/mlkem v0.1.0 // indirect
 	github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb // indirect
 	github.com/metacubex/qpack v0.6.0 // indirect
-	github.com/metacubex/quic-go v0.59.1-0.20260520020949-fcd18c7b6ace // indirect
+	github.com/metacubex/quic-go v0.59.1-0.20260606115121-0662b57ad5bf // indirect
 	github.com/metacubex/randv2 v0.2.0 // indirect
 	github.com/metacubex/restls-client-go v0.1.7 // indirect
 	github.com/metacubex/sevenzip v1.6.4 // indirect
@@ -144,6 +144,6 @@ require (
 
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
 
-replace github.com/metacubex/mihomo => github.com/vernesong/mihomo v0.0.0-20260606020152-485fe07d65ac
-
 replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260312170409-baeb46d2f908
+
+replace github.com/metacubex/mihomo => github.com/vernesong/mihomo v0.0.0-20260612032952-1933f2962b78
