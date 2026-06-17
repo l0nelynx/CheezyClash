@@ -351,6 +351,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onAuthCompleted() {
         _needsAuth.value = false
         viewModelScope.launch {
+            // Re-evaluate account state: after URL import (unregistered mode) the provider
+            // was last bootstrapped as Anonymous (no config existed yet); now a config is on
+            // disk, so re-bootstrap to pick up Unregistered/Authenticated.
+            AppDeps.accountProvider.bootstrap(context)
+            // Refresh the config name directly from disk so the connect button enables.
+            // In unregistered mode syncFromBackend fails ("No access token") and never
+            // reaches handleSyncSuccess, so configName would otherwise stay null.
+            _configName.value = ConfigManager.currentName(context)
+            syncSubscriptionState()
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
                 .onFailure { Log.e("Auth", "Failed to sync sub", it) }
         }
