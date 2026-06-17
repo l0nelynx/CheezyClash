@@ -94,15 +94,25 @@ object ConfigManager {
                 .putLong(KEY_UPDATE_TIME, System.currentTimeMillis())
                 .putInt(KEY_INTERVAL, intervalHours)
                 .apply()
-            
+
             ClashState.setLastUpdateTime(System.currentTimeMillis())
 
             // base.yaml is fresh on disk — produce config.yaml from it (applying
             // any currently-enabled overrides) so the core sees a complete file.
             ConfigOverrideManager.rebuild(context)
 
-            // Ask the core to load the new config so the UI (ProxiesTab) and service are up to date
-            reloadAndReapplySelections(context)
+            // Only hot-reload the core while the VPN is actually running, so a live
+            // tunnel picks up the new config. When the VPN is stopped, loading here would
+            // needlessly spin up the whole mihomo engine (inbound listeners, providers,
+            // health-checks) — and on a fresh import that blocks for tens of seconds on
+            // geodata downloads. In the unregistered-URL entry flow this ran inside
+            // AuthActivity on the bound-only :vpn process, churning/killing it before the
+            // user ever reached the main screen and leaving the Start button dead. When
+            // stopped, the config is picked up lazily: by reloadProxyGroups (Proxies tab)
+            // or by startClash when the user starts the VPN.
+            if (ClashRemoteManager.isRunning()) {
+                reloadAndReapplySelections(context)
+            }
 
             if (intervalHours > 0) {
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -318,20 +328,20 @@ object ConfigManager {
     fun readGroupIcons(context: Context): Map<String, String> {
         val file = configFile(context)
         if (!file.exists()) return emptyMap()
-        
+
         return runCatching {
             val text = file.readText()
             android.util.Log.d("GroupIcons", "Reading icons, config size: ${text.length} chars")
-            
+
             val yaml = Yaml().load<Any>(text) as? Map<String, Any?> ?: return emptyMap()
             val groups = yaml["proxy-groups"] as? List<Any?> ?: return emptyMap()
-            
+
             val result = LinkedHashMap<String, String>()
             for (item in groups) {
                 val map = item as? Map<String, Any?> ?: continue
                 val name = map["name"]?.toString() ?: continue
                 val icon = map["icon-cheezy"]?.toString() ?: continue
-                
+
                 val resName = icon.removePrefix("@drawable/").trim()
                 if (resName.isNotBlank()) {
                     result[name] = resName
