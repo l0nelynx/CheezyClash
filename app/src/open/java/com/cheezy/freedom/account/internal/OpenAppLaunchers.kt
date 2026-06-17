@@ -2,6 +2,11 @@ package com.cheezy.freedom.account.internal
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import com.cheezy.freedom.account.AppLaunchers
 
 /**
@@ -17,4 +22,17 @@ class OpenAppLaunchers : AppLaunchers {
 
     // In the open version, there is no subscription transfer; the dialog does not exist.
     override val TransferSubscriptionDialog = null
+
+    override val ExtraSettingsItems: @Composable (onAddConfig: () -> Unit) -> Unit = { onAddConfig ->
+        androidx.compose.material3.ListItem(
+            headlineContent = { androidx.compose.material3.Text("Add configuration") },
+            leadingContent = {
+                androidx.compose.material3.Icon(
+                    androidx.compose.material.icons.Icons.Default.Add,
+                    null
+                )
+            },
+            modifier = Modifier.clickable(onClick = onAddConfig)
+        )
+    }
 }

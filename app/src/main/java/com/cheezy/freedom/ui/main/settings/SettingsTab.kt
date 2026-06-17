@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.cheezy.freedom.BuildConfig
 import com.cheezy.freedom.LogsActivity
 import com.cheezy.freedom.UpdateManager
+import com.cheezy.freedom.account.AppDeps
 
 @Composable
 fun SettingsTab(
@@ -90,9 +91,12 @@ fun SettingsTab(
             )
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Logged in as:", style = MaterialTheme.typography.labelSmall)
                     Text(
-                        userEmail ?: "Unknown",
+                        if (userEmail != null) "Logged in as:" else "Account Status:",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Text(
+                        userEmail ?: "Unregistered",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -131,14 +135,8 @@ fun SettingsTab(
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // "Add configuration" — the only way to set a URL in the open variant;
-        // in proprietary, it duplicates UrlDialog from the main screen but
-        // doesn't interfere. Show always.
-        ListItem(
-            headlineContent = { Text("Add configuration") },
-            leadingContent = { Icon(Icons.Default.Add, null) },
-            modifier = Modifier.clickable(onClick = onAddConfig)
-        )
+        AppDeps.launchers.ExtraSettingsItems(onAddConfig)
+
         ListItem(
             headlineContent = { Text("Раздать VPN") },
             leadingContent = { Icon(Icons.Default.Share, null) },
@@ -203,7 +201,10 @@ fun SettingsTab(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(onClick = onLogout) {
-                    Text("Выйти из аккаунта", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        if (userEmail != null) "Выйти из аккаунта" else "Зарегистрироваться / Сброс",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }

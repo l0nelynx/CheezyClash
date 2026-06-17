@@ -20,4 +20,10 @@ interface AppLaunchers {
         onLinkTelegram: () -> Unit,
         onLinkByUrl: (String, String) -> Unit,
     ) -> Unit)?
+
+    /**
+     * Composable-слот для дополнительных пунктов в настройках.
+     * Позволяет флаворам добавлять свои ListItem (например, "Add configuration").
+     */
+    val ExtraSettingsItems: @Composable (onAddConfig: () -> Unit) -> Unit
 }

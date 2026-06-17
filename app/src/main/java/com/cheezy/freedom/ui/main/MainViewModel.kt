@@ -120,6 +120,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         state.email?.takeIf { it.isNotBlank() }?.let { _userEmail.value = it }
                         _tgId.value = state.telegramId
                     }
+                    is AccountState.Unregistered -> {
+                        _userEmail.value = null
+                        _tgId.value = null
+                    }
                     AccountState.Anonymous -> {
                         _userEmail.value = null
                         _tgId.value = null
@@ -411,7 +415,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
                     // If the core in another process is already running, no need to reinitialize it
                     val didReload = ConfigManager.hasConfig(context) &&
-                        (!isClashLoaded && !isAlreadyLoaded || forceLoad)
+                            (!isClashLoaded && !isAlreadyLoaded || forceLoad)
                     if (didReload) {
                         ClashRemoteManager.loadConfig(clashHome.absolutePath)
                         isClashLoaded = true
@@ -446,8 +450,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         name to group.proxies.map { p ->
                             val typeName = p.type.name
                             val isSubgroup = typeName == "URLTest" || typeName == "Fallback" ||
-                                             typeName == "LoadBalance" || typeName == "Selector" ||
-                                             typeName == "Smart"
+                                    typeName == "LoadBalance" || typeName == "Selector" ||
+                                    typeName == "Smart"
 
                             var activeChild: String? = null
                             if (isSubgroup) {

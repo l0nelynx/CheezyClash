@@ -21,6 +21,7 @@ data class SubscriptionSnapshot(
 sealed interface AccountState {
     object Unknown : AccountState
     object Anonymous : AccountState
+    data class Unregistered(val snapshot: SubscriptionSnapshot?) : AccountState
     data class Authenticated(
         val email: String?,
         val telegramId: Long?,
