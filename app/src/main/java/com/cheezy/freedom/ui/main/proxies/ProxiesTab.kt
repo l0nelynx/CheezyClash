@@ -59,6 +59,8 @@ fun ProxiesTab(
     // recompose affects only that header and its child rows —
     // instead of recreating the entire collection (as `expandedGroups +/- groupName` did).
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val pingingGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val pingingProxies = remember { mutableStateMapOf<String, Boolean>() }
     val pings by ClashState.pings.collectAsState()
     val loading by viewModel.isPinging.collectAsState()
     var error by remember { mutableStateOf<String?>(null) }
@@ -101,7 +103,32 @@ fun ProxiesTab(
                                 item = headerItem,
                                 onToggle = {
                                     expandedGroups[groupName] = !isExpanded
-                                }
+                                },
+                                isPinging = pingingGroups[groupName] == true,
+                                onPing = if (vpnRunning) {
+                                    {
+                                        scope.launch {
+                                            pingingGroups[groupName] = true
+                                            try {
+                                                withContext(Dispatchers.IO) {
+                                                    withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
+                                                        runCatching { ClashRemoteManager.healthCheck(groupName) }
+                                                    }
+                                                    kotlinx.coroutines.delay(2000)
+                                                    val existing = HashMap(ClashState.pings.value)
+                                                    ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                                                        group.proxies.forEach { p ->
+                                                            existing[p.name] = if (p.delay in 1 until PING_TIMEOUT_VALUE) p.delay else -1
+                                                        }
+                                                    }
+                                                    ClashState.setPings(existing)
+                                                }
+                                            } finally {
+                                                pingingGroups[groupName] = false
+                                            }
+                                        }
+                                    }
+                                } else null
                             )
                         }
 
@@ -130,6 +157,32 @@ fun ProxiesTab(
                                             if (ok) viewModel.reloadProxyGroups()
                                         }
                                     },
+                                    isPinging = pingingProxies[proxy.name] == true,
+                                    onPing = if (vpnRunning) {
+                                        {
+                                            scope.launch {
+                                                pingingProxies[proxy.name] = true
+                                                try {
+                                                    withContext(Dispatchers.IO) {
+                                                        withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
+                                                            runCatching { ClashRemoteManager.healthCheck(proxy.name) }
+                                                        }
+                                                        kotlinx.coroutines.delay(2000)
+                                                        ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                                                            val found = group.proxies.firstOrNull { it.name == proxy.name }
+                                                            if (found != null) {
+                                                                val existing = HashMap(ClashState.pings.value)
+                                                                existing[found.name] = if (found.delay in 1 until PING_TIMEOUT_VALUE) found.delay else -1
+                                                                ClashState.setPings(existing)
+                                                            }
+                                                        }
+                                                    }
+                                                } finally {
+                                                    pingingProxies[proxy.name] = false
+                                                }
+                                            }
+                                        }
+                                    } else null,
                                     modifier = Modifier.animateItem()
                                 )
                             }

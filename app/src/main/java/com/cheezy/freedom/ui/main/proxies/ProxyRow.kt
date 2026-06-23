@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.cheezy.freedom.ui.main.proxies
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,7 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -32,9 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun GroupHeader(item: ProxyListItem.Header, onToggle: () -> Unit) {
+fun GroupHeader(
+    item: ProxyListItem.Header,
+    onToggle: () -> Unit,
+    onPing: (() -> Unit)? = null,
+    isPinging: Boolean = false,
+) {
     val rotation by animateFloatAsState(if (item.isExpanded) 180f else 0f, label = "arrowRotation")
-    
+
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
@@ -43,7 +55,7 @@ fun GroupHeader(item: ProxyListItem.Header, onToggle: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             GroupIcon(item.iconResId)
@@ -59,6 +71,28 @@ fun GroupHeader(item: ProxyListItem.Header, onToggle: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
+            }
+            if (onPing != null) {
+                FilledTonalIconButton(
+                    onClick = onPing,
+                    enabled = !isPinging,
+                    modifier = Modifier.size(36.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                ) {
+                    if (isPinging) {
+                        CircularWavyProgressIndicator(modifier = Modifier.size(16.dp))
+                    } else {
+                        Icon(
+                            Icons.Default.Speed,
+                            contentDescription = "Ping group",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(4.dp))
             }
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
@@ -86,18 +120,20 @@ private fun GroupIcon(resId: Int) {
 fun ProxyRow(
     item: ProxyListItem.ProxyItem,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onPing: (() -> Unit)? = null,
+    isPinging: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val pingColor = when {
         item.pingMs == null -> MaterialTheme.colorScheme.onSurfaceVariant
         item.pingMs <= 0 -> MaterialTheme.colorScheme.error
-        item.pingMs < 500 -> Color(0xFF4CAF50) // Green
-        item.pingMs < 700 -> Color(0xFFFFA000) // Amber
+        item.pingMs < 500 -> Color(0xFF4CAF50)
+        item.pingMs < 700 -> Color(0xFFFFA000)
         else -> MaterialTheme.colorScheme.error
     }
 
     Surface(
-        color = if (item.isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) 
+        color = if (item.isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                 else Color.Transparent,
         modifier = modifier
     ) {
@@ -128,12 +164,32 @@ fun ProxyRow(
                     item.pingMs <= 0 -> "timeout"
                     else -> "${item.pingMs} ms"
                 }
-                Text(
-                    text = delayText,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = pingColor
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = delayText,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = pingColor
+                    )
+                    if (onPing != null) {
+                        IconButton(
+                            onClick = onPing,
+                            enabled = !isPinging,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            if (isPinging) {
+                                CircularWavyProgressIndicator(modifier = Modifier.size(14.dp))
+                            } else {
+                                Icon(
+                                    Icons.Default.Speed,
+                                    contentDescription = "Ping proxy",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             },
             modifier = Modifier.clickable(onClick = onClick)
         )
