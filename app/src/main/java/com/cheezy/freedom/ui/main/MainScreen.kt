@@ -173,6 +173,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     fun startVpnAfterPermissions() {
+        ClashState.setError(null)
         val prep = VpnService.prepare(context)
         if (prep != null) prepareVpn.launch(prep)
         else ClashVpnService.start(context)

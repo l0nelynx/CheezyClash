@@ -124,6 +124,7 @@ fun HomeTab(
                 trafficNowFlow = trafficNowFlow,
                 subscription = subscription,
                 enabled = configName != null,
+                lastError = lastError,
                 onClick = onVpnToggle
             )
 
