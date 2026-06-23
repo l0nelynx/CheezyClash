@@ -9,33 +9,48 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -47,12 +62,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cheezy.freedom.account.AppDeps
@@ -285,122 +302,190 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         )
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    val title = if (selectedTab == MainTab.HOME) (subscription?.title ?: "CheezyVPN") else selectedTab.title
-                    AnimatedContent(
-                        targetState = title,
-                        transitionSpec = {
-                            if (pagerState.targetPage > pagerState.currentPage) {
-                                (slideInVertically { height -> height } + fadeIn() togetherWith
-                                        slideOutVertically { height -> -height } + fadeOut())
-                            } else {
-                                (slideInVertically { height -> -height } + fadeIn() togetherWith
-                                        slideOutVertically { height -> height } + fadeOut())
-                            }.using(SizeTransform(clip = false))
-                        },
-                        contentAlignment = androidx.compose.ui.Alignment.Center,
-                        label = "topBarTitle"
-                    ) { targetTitle ->
-                        Text(
-                            text = targetTitle,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                actions = {
-                    if (selectedTab == MainTab.PROXIES) {
-                        IconButton(onClick = { viewModel.measurePings() }, enabled = !proxiesPinging) {
-                            if (proxiesPinging) {
-                                CircularWavyProgressIndicator(
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            } else {
-                                Icon(Icons.Default.Speed, contentDescription = "Проверить ping")
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        val title = if (selectedTab == MainTab.HOME) (subscription?.title ?: "CheezyVPN") else selectedTab.title
+                        AnimatedContent(
+                            targetState = title,
+                            transitionSpec = {
+                                if (pagerState.targetPage > pagerState.currentPage) {
+                                    (slideInVertically { height -> height } + fadeIn() togetherWith
+                                            slideOutVertically { height -> -height } + fadeOut())
+                                } else {
+                                    (slideInVertically { height -> -height } + fadeIn() togetherWith
+                                            slideOutVertically { height -> height } + fadeOut())
+                                }.using(SizeTransform(clip = false))
+                            },
+                            contentAlignment = androidx.compose.ui.Alignment.Center,
+                            label = "topBarTitle"
+                        ) { targetTitle ->
+                            Text(
+                                text = targetTitle,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    actions = {
+                        if (selectedTab == MainTab.PROXIES) {
+                            IconButton(onClick = { viewModel.measurePings() }, enabled = !proxiesPinging) {
+                                if (proxiesPinging) {
+                                    CircularWavyProgressIndicator(
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Speed, contentDescription = "Проверить ping")
+                                }
                             }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
-            )
-        },
-        bottomBar = {
-            NavigationBar {
-                MainTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        icon = { Icon(tab.icon, contentDescription = tab.title) },
-                        label = { Text(tab.title) },
-                        selected = selectedTab == tab,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(tab.ordinal)
+            }
+        ) { padding ->
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(bottom = 80.dp),
+                beyondViewportPageCount = 2
+            ) { page ->
+                when (MainTab.entries[page]) {
+                    MainTab.HOME -> HomeTab(
+                        running = running,
+                        proxyname = proxyname ?: "",
+                        trafficNowFlow = trafficNowFlow,
+                        subscription = subscription,
+                        lastUpdateTime = lastUpdateTime,
+                        lastError = lastError,
+                        configName = configName,
+                        loading = loading,
+                        onRefresh = { viewModel.refresh() },
+                        onVpnToggle = {
+                            if (running) {
+                                ClashVpnService.stop(context)
+                            } else if (!ConfigManager.hasConfig(context)) {
+                                ClashState.setError("First load the configuration")
+                            } else if (localNetworkPermName != null && !localNetworkGranted()) {
+                                // Request local network access (Android 16+/17+).
+                                // After user response, VPN starts — refusal doesn't block operation through loopback.
+                                localNetworkPermissionLauncher.launch(localNetworkPermName)
+                            } else {
+                                startVpnAfterPermissions()
                             }
                         }
+                    )
+                    MainTab.PROXIES -> ProxiesTab(running)
+                    MainTab.SETTINGS -> SettingsTab(
+                        userEmail = userEmail,
+                        tgId = tgId,
+                        isCheckingUpdate = isCheckingUpdate,
+                        showAccountCard = AppDeps.accountProvider.supportsAuthFlow,
+                        showDevices = AppDeps.accountProvider.supportsDeviceManagement,
+                        showSubscription = AppDeps.accountProvider.supportsBilling,
+                        showTelegramLink = AppDeps.accountProvider.supportsTelegramLink,
+                        showLogout = AppDeps.accountProvider.supportsAuthFlow,
+                        onAddConfig = { viewModel.openUrlDialog() },
+                        onCheckUpdate = { viewModel.checkUpdate() },
+                        onLogout = { viewModel.logout() },
+                        onOpenSubscription = {
+                            viewModel.subscriptionIntent()?.let { subscriptionLauncher.launch(it) }
+                        },
+                        onOpenDevices = {
+                            viewModel.devicesIntent()?.let { context.startActivity(it) }
+                        },
+                        onShareVpn = { showShareDialog = true },
+                        onUnlinkTelegram = { viewModel.unlinkTelegram() },
+                        onRequestTransfer = { showTransferDialog = true },
                     )
                 }
             }
         }
-    ) { padding ->
-        HorizontalPager(
-            state = pagerState,
+
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            beyondViewportPageCount = 2
-        ) { page ->
-            when (MainTab.entries[page]) {
-                MainTab.HOME -> HomeTab(
-                    running = running,
-                    proxyname = proxyname ?: "",
-                    trafficNowFlow = trafficNowFlow,
-                    subscription = subscription,
-                    lastUpdateTime = lastUpdateTime,
-                    lastError = lastError,
-                    configName = configName,
-                    loading = loading,
-                    onRefresh = { viewModel.refresh() },
-                    onVpnToggle = {
-                        if (running) {
-                            ClashVpnService.stop(context)
-                        } else if (!ConfigManager.hasConfig(context)) {
-                            ClashState.setError("First load the configuration")
-                        } else if (localNetworkPermName != null && !localNetworkGranted()) {
-                            // Request local network access (Android 16+/17+).
-                            // After user response, VPN starts — refusal doesn't block operation through loopback.
-                            localNetworkPermissionLauncher.launch(localNetworkPermName)
-                        } else {
-                            startVpnAfterPermissions()
-                        }
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ElevatedCard(
+                modifier = Modifier.width(280.dp),
+                shape = RoundedCornerShape(32.dp),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .height(64.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MainTab.entries.forEach { tab ->
+                        FloatingNavItem(
+                            tab = tab,
+                            selected = selectedTab == tab,
+                            onClick = {
+                                scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+                            }
+                        )
                     }
-                )
-                MainTab.PROXIES -> ProxiesTab(running)
-                MainTab.SETTINGS -> SettingsTab(
-                    userEmail = userEmail,
-                    tgId = tgId,
-                    isCheckingUpdate = isCheckingUpdate,
-                    showAccountCard = AppDeps.accountProvider.supportsAuthFlow,
-                    showDevices = AppDeps.accountProvider.supportsDeviceManagement,
-                    showSubscription = AppDeps.accountProvider.supportsBilling,
-                    showTelegramLink = AppDeps.accountProvider.supportsTelegramLink,
-                    showLogout = AppDeps.accountProvider.supportsAuthFlow,
-                    onAddConfig = { viewModel.openUrlDialog() },
-                    onCheckUpdate = { viewModel.checkUpdate() },
-                    onLogout = { viewModel.logout() },
-                    onOpenSubscription = {
-                        viewModel.subscriptionIntent()?.let { subscriptionLauncher.launch(it) }
-                    },
-                    onOpenDevices = {
-                        viewModel.devicesIntent()?.let { context.startActivity(it) }
-                    },
-                    onShareVpn = { showShareDialog = true },
-                    onUnlinkTelegram = { viewModel.unlinkTelegram() },
-                    onRequestTransfer = { showTransferDialog = true },
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+                      else Color.Transparent,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navBg_${tab.name}"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navFg_${tab.name}"
+    )
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(24.dp),
+        color = backgroundColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = tab.icon,
+                contentDescription = tab.title,
+                tint = contentColor,
+                modifier = Modifier.size(22.dp)
+            )
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally()
+            ) {
+                Text(
+                    text = tab.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
                 )
             }
         }
