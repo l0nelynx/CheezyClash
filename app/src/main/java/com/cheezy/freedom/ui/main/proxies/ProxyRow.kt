@@ -5,6 +5,7 @@ package com.cheezy.freedom.ui.main.proxies
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,13 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -73,26 +73,22 @@ fun GroupHeader(
                 )
             }
             if (onPing != null) {
-                FilledTonalIconButton(
+                IconButton(
                     onClick = onPing,
                     enabled = !isPinging,
-                    modifier = Modifier.size(36.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+                    modifier = Modifier.size(40.dp)
                 ) {
                     if (isPinging) {
-                        CircularWavyProgressIndicator(modifier = Modifier.size(16.dp))
+                        CircularWavyProgressIndicator(modifier = Modifier.size(18.dp))
                     } else {
                         Icon(
                             Icons.Default.Speed,
                             contentDescription = "Ping group",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(22.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(Modifier.width(4.dp))
             }
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
@@ -159,34 +155,47 @@ fun ProxyRow(
                 RadioButton(selected = item.isSelected, onClick = onClick)
             },
             trailingContent = {
-                val delayText = when {
-                    item.pingMs == null -> "—"
-                    item.pingMs <= 0 -> "timeout"
-                    else -> "${item.pingMs} ms"
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = delayText,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = pingColor
-                    )
-                    if (onPing != null) {
-                        IconButton(
-                            onClick = onPing,
-                            enabled = !isPinging,
-                            modifier = Modifier.size(32.dp)
+                when {
+                    isPinging -> {
+                        CircularWavyProgressIndicator(modifier = Modifier.size(16.dp))
+                    }
+                    onPing != null && item.pingMs == null -> {
+                        Box(
+                            modifier = Modifier
+                                .clickable(onClick = onPing)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            if (isPinging) {
-                                CircularWavyProgressIndicator(modifier = Modifier.size(14.dp))
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "Ping proxy",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                            )
+                        }
+                    }
+                    else -> {
+                        val delayText = when {
+                            item.pingMs == null -> "—"
+                            item.pingMs <= 0 -> "timeout"
+                            else -> "${item.pingMs} ms"
+                        }
+                        Box(
+                            modifier = if (onPing != null) {
+                                Modifier
+                                    .clickable(onClick = onPing)
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
                             } else {
-                                Icon(
-                                    Icons.Default.Speed,
-                                    contentDescription = "Ping proxy",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                                Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = delayText,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = pingColor
+                            )
                         }
                     }
                 }
