@@ -26,6 +26,11 @@ object ConfigManager {
     private const val KEY_PROXY_GROUPS_JSON = "proxy_groups_json"
     private const val FILE_NAME = "config.yaml"
 
+    private const val PREFS_ACCESS_CONTROL = "cheezy.access_control"
+    private const val KEY_AC_ENABLED = "enabled"
+    private const val KEY_AC_FORCE_INCLUDED = "force_included"
+    private const val KEY_AC_FORCE_EXCLUDED = "force_excluded"
+
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
@@ -360,6 +365,41 @@ object ConfigManager {
         val tun = config["tun"] as? Map<String, Any?> ?: return emptyList()
         val list = tun["exclude-package"] as? List<*> ?: return emptyList()
         return list.mapNotNull { it?.toString()?.trim('"', '\'') }
+    }
+
+    fun isAccessControlEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AC_ENABLED, false)
+
+    fun setAccessControlEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AC_ENABLED, enabled).apply()
+    }
+
+    fun getUserForceIncluded(context: Context): Set<String> =
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .getStringSet(KEY_AC_FORCE_INCLUDED, emptySet()) ?: emptySet()
+
+    fun saveUserForceIncluded(context: Context, packages: Set<String>) {
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .edit().putStringSet(KEY_AC_FORCE_INCLUDED, packages).apply()
+    }
+
+    fun getUserForceExcluded(context: Context): Set<String> =
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .getStringSet(KEY_AC_FORCE_EXCLUDED, emptySet()) ?: emptySet()
+
+    fun saveUserForceExcluded(context: Context, packages: Set<String>) {
+        context.getSharedPreferences(PREFS_ACCESS_CONTROL, Context.MODE_PRIVATE)
+            .edit().putStringSet(KEY_AC_FORCE_EXCLUDED, packages).apply()
+    }
+
+    fun computeEffectiveExcludePackages(context: Context): List<String> {
+        val base = readExcludePackages(context).toMutableSet()
+        if (!isAccessControlEnabled(context)) return base.toList()
+        base -= getUserForceIncluded(context)
+        base += getUserForceExcluded(context)
+        return base.toList()
     }
 
     private fun decodeMaybeBase64(value: String?): String? {

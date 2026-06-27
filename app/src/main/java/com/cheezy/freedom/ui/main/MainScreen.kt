@@ -77,6 +77,7 @@ import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnDialog
+import com.cheezy.freedom.ui.main.settings.AccessControlScreen
 import com.cheezy.freedom.ui.main.dialogs.UpdateDialog
 import com.cheezy.freedom.ui.main.dialogs.UrlDialog
 import com.cheezy.freedom.ui.main.home.HomeTab
@@ -129,6 +130,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     var showShareDialog by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
+    var showAccessControlDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -276,6 +278,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     UpdateDialog(updateInfo, onDismiss = { viewModel.dismissUpdateDialog() })
 
+    if (showAccessControlDialog) {
+        AccessControlScreen(onDismiss = { showAccessControlDialog = false })
+    }
+
     if (showShareDialog) {
         LaunchedEffect(showShareDialog) { viewModel.refreshShareInfo() }
         val shareInfo by viewModel.shareInfo.collectAsState()
@@ -404,6 +410,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         onShareVpn = { showShareDialog = true },
                         onUnlinkTelegram = { viewModel.unlinkTelegram() },
                         onRequestTransfer = { showTransferDialog = true },
+                        onOpenAccessControl = { showAccessControlDialog = true },
                     )
                 }
             }

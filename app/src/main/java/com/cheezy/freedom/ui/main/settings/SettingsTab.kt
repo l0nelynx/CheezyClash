@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Card
@@ -66,6 +67,7 @@ fun SettingsTab(
     onShareVpn: () -> Unit,
     onUnlinkTelegram: () -> Unit,
     onRequestTransfer: () -> Unit,
+    onOpenAccessControl: () -> Unit,
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -137,6 +139,12 @@ fun SettingsTab(
 
         AppDeps.launchers.ExtraSettingsItems(onAddConfig)
 
+        ListItem(
+            headlineContent = { Text("Контроль доступа") },
+            supportingContent = { Text("Управление доступом приложений к туннелю") },
+            leadingContent = { Icon(Icons.Default.Security, null) },
+            modifier = Modifier.clickable(onClick = onOpenAccessControl)
+        )
         ListItem(
             headlineContent = { Text("Раздать VPN") },
             leadingContent = { Icon(Icons.Default.Share, null) },

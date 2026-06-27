@@ -35,6 +35,13 @@ class ClashVpnService : VpnService() {
     private var trafficJob: Job? = null
     private var logJob: Job? = null
 
+    // AC settings captured from the start Intent (written by the main process).
+    // SharedPreferences cannot be relied on across processes — the :vpn process
+    // has its own stale cache. The main process passes fresh values via extras.
+    private var acEnabled = false
+    private var acForceIncluded: Set<String> = emptySet()
+    private var acForceExcluded: Set<String> = emptySet()
+
     private val callbacks = RemoteCallbackList<IClashCallback>()
     private val logCallbacks = RemoteCallbackList<ILogcatCallback>()
 
@@ -182,6 +189,19 @@ class ClashVpnService : VpnService() {
                 return START_NOT_STICKY
             }
         }
+        // Read AC settings from Intent extras (provided by the main process in start()).
+        // Falls back to SharedPreferences only when intent is null (OS restart after OOM kill),
+        // in which case the :vpn process is fresh and reads the correct values from disk.
+        if (intent != null && intent.hasExtra(EXTRA_AC_ENABLED)) {
+            acEnabled = intent.getBooleanExtra(EXTRA_AC_ENABLED, false)
+            acForceIncluded = intent.getStringArrayExtra(EXTRA_AC_FORCE_INCLUDED)?.toSet() ?: emptySet()
+            acForceExcluded = intent.getStringArrayExtra(EXTRA_AC_FORCE_EXCLUDED)?.toSet() ?: emptySet()
+        } else {
+            val ctx = this
+            acEnabled = ConfigManager.isAccessControlEnabled(ctx)
+            acForceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(ctx) else emptySet()
+            acForceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(ctx) else emptySet()
+        }
         startForegroundCompat()
         startClash()
         return START_STICKY
@@ -216,7 +236,12 @@ class ClashVpnService : VpnService() {
                 val tunPortal = neighborAddress(tunAddress)
                 val dnsServer = VPN_DNS
                 val stack = ConfigManager.readTunStack(ctx) ?: "gvisor"
-                val excludePackages = ConfigManager.readExcludePackages(ctx)
+                val base = ConfigManager.readExcludePackages(ctx).toMutableSet()
+                val excludePackages = if (acEnabled) {
+                    (base - acForceIncluded + acForceExcluded).toList()
+                } else {
+                    base.toList()
+                }
 
                 val builder = Builder()
                     .setSession(getString(R.string.app_name))
@@ -418,8 +443,22 @@ class ClashVpnService : VpnService() {
         private const val VPN_ADDRESS_V6 = "fdfe:dcba:9876::1"
         private const val VPN_DNS = "1.1.1.1"
 
+        private const val EXTRA_AC_ENABLED = "extra.ac_enabled"
+        private const val EXTRA_AC_FORCE_INCLUDED = "extra.ac_force_included"
+        private const val EXTRA_AC_FORCE_EXCLUDED = "extra.ac_force_excluded"
+
         fun start(context: Context) {
-            val intent = Intent(context, ClashVpnService::class.java)
+            // Read AC settings in the calling (main) process — its SharedPreferences cache
+            // is always up-to-date. The :vpn process has a separate cache that may be stale.
+            val acEnabled = ConfigManager.isAccessControlEnabled(context)
+            val forceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(context) else emptySet()
+            val forceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(context) else emptySet()
+
+            val intent = Intent(context, ClashVpnService::class.java).apply {
+                putExtra(EXTRA_AC_ENABLED, acEnabled)
+                putExtra(EXTRA_AC_FORCE_INCLUDED, forceIncluded.toTypedArray())
+                putExtra(EXTRA_AC_FORCE_EXCLUDED, forceExcluded.toTypedArray())
+            }
             if (Build.VERSION.SDK_INT >= 26) {
                 context.startForegroundService(intent)
             } else {

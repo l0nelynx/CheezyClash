@@ -27,6 +27,15 @@
         android:maxSdkVersion="36" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
+    <queries>
+        <!-- Required on API 30+ (Android 11) for package visibility:
+             makes all apps with a launcher icon visible to PackageManager queries. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".CheezyApp"
         android:allowBackup="true"
