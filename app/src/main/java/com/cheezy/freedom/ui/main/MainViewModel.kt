@@ -270,12 +270,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val currentVer = BuildConfig.VERSION_NAME
         if (lastVer == currentVer) return
 
-        // Delete cache files (cache.db etc.) but keep config.yaml and base.yaml:
-        // base.yaml is the source of truth for the override layer (see ConfigOverrideManager),
-        // and config.yaml lets the app keep working offline after an update.
-        val keep = setOf("config.yaml", "base.yaml")
+        // On a core/app version change only the core's own runtime cache may be
+        // format-incompatible between mihomo builds, so clear just that. Everything
+        // else — config.yaml/base.yaml AND the rule-provider caches (rule-sets/,
+        // ruleset/, ru-bundle/, *.mrs, *.yaml) — is preserved, so a cold start after
+        // an update doesn't have to re-download ~25 rule sets through the proxy.
+        val volatile = setOf("cache.db")
         context.filesDir.resolve("clash").listFiles()?.forEach { file ->
-            if (file.name !in keep) {
+            if (file.name in volatile) {
                 file.deleteRecursively()
             }
         }
