@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -48,7 +49,7 @@ fun GroupHeader(
     val rotation by animateFloatAsState(if (item.isExpanded) 180f else 0f, label = "arrowRotation")
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
+        color = Color.Transparent,
         tonalElevation = 0.dp
     ) {
         Row(
@@ -200,6 +201,7 @@ fun ProxyRow(
                     }
                 }
             },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier.clickable(onClick = onClick)
         )
     }

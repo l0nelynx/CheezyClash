@@ -453,7 +453,7 @@ private fun TabCard(
     Surface(
         modifier = modifier.fillMaxSize(),
         shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
+        color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
             Row(

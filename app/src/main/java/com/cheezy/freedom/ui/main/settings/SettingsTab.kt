@@ -21,8 +21,10 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -72,6 +75,9 @@ fun SettingsTab(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showInfoDialog by remember { mutableStateOf(false) }
+    // ListItems default to an opaque `surface` container; on the tab card that
+    // reads as white strips. Make them transparent so they take the card colour.
+    val transparentList = ListItemDefaults.colors(containerColor = Color.Transparent)
 
     if (showInfoDialog) AppInfoDialog { showInfoDialog = false }
     // TransferSubscriptionDialog is rendered from MainScreen — it lives in
@@ -91,7 +97,12 @@ fun SettingsTab(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         if (userEmail != null) "Logged in as:" else "Account Status:",
@@ -109,6 +120,7 @@ fun SettingsTab(
             ListItem(
                 headlineContent = { Text("Устройства") },
                 leadingContent = { Icon(Icons.Default.Computer, null) },
+                colors = transparentList,
                 modifier = Modifier.clickable(onClick = onOpenDevices)
             )
         }
@@ -116,6 +128,7 @@ fun SettingsTab(
             ListItem(
                 headlineContent = { Text("Подписка") },
                 leadingContent = { Icon(Icons.Default.ShoppingCart, null) },
+                colors = transparentList,
                 modifier = Modifier.clickable(onClick = onOpenSubscription)
             )
         }
@@ -124,6 +137,7 @@ fun SettingsTab(
                 headlineContent = { Text(if (tgId == null) "Перенести подписку" else "Telegram привязан") },
                 supportingContent = if (tgId != null) { { Text("ID: $tgId (Нажмите, чтобы отвязать)") } } else null,
                 leadingContent = { Icon(Icons.Default.Link, null) },
+                colors = transparentList,
                 modifier = Modifier.clickable {
                     if (tgId == null) onRequestTransfer() else onUnlinkTelegram()
                 }
@@ -143,16 +157,19 @@ fun SettingsTab(
             headlineContent = { Text("Контроль доступа") },
             supportingContent = { Text("Управление доступом приложений к туннелю") },
             leadingContent = { Icon(Icons.Default.Security, null) },
+            colors = transparentList,
             modifier = Modifier.clickable(onClick = onOpenAccessControl)
         )
         ListItem(
             headlineContent = { Text("Раздать VPN") },
             leadingContent = { Icon(Icons.Default.Share, null) },
+            colors = transparentList,
             modifier = Modifier.clickable(onClick = onShareVpn)
         )
         ListItem(
             headlineContent = { Text("Логи") },
             leadingContent = { Icon(Icons.Default.List, null) },
+            colors = transparentList,
             modifier = Modifier.clickable {
                 context.startActivity(Intent(context, LogsActivity::class.java))
             }
@@ -160,6 +177,7 @@ fun SettingsTab(
         ListItem(
             headlineContent = { Text("Информация") },
             leadingContent = { Icon(Icons.Default.Info, null) },
+            colors = transparentList,
             modifier = Modifier.clickable { showInfoDialog = true }
         )
 

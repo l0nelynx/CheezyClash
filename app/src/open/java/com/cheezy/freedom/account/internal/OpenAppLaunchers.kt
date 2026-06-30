@@ -32,6 +32,9 @@ class OpenAppLaunchers : AppLaunchers {
                     null
                 )
             },
+            colors = androidx.compose.material3.ListItemDefaults.colors(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent
+            ),
             modifier = Modifier.clickable(onClick = onAddConfig)
         )
     }

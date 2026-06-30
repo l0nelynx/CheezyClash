@@ -201,7 +201,7 @@ private fun AnnounceCard(text: String) {
                 )
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         ),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -444,7 +444,7 @@ private fun ConnectButton(
     )
     val contentColorinverse by animateColorAsState(
         targetValue = if (running) MaterialTheme.colorScheme.inversePrimary
-        else MaterialTheme.colorScheme.surfaceVariant,
+        else MaterialTheme.colorScheme.surfaceContainerHighest,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "contentColorinverse"
     )
