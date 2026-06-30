@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CardDefaults
@@ -30,7 +33,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.circle
@@ -83,8 +93,13 @@ fun ProxiesTab(
             }
             else -> {
                 val groups = rawGroups ?: emptyList()
+                val listState = rememberLazyListState()
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalFadingEdges(listState),
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -222,3 +237,40 @@ fun ProxiesTab(
         }
     }
 }
+
+/**
+ * Softly fades the list content into transparency near the top and bottom
+ * edges instead of cutting rows off with a hard line. Each edge fade only
+ * appears when there's actually content to scroll past it, so the first and
+ * last items aren't dimmed at rest. Uses an off-screen layer + DstIn so the
+ * fade reveals whatever surface sits behind the list.
+ */
+private fun Modifier.verticalFadingEdges(
+    state: LazyListState,
+    edge: Dp = 28.dp,
+): Modifier = this
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithContent {
+        drawContent()
+        val edgePx = edge.toPx()
+        if (state.canScrollBackward) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Color.Black),
+                    startY = 0f,
+                    endY = edgePx
+                ),
+                blendMode = BlendMode.DstIn
+            )
+        }
+        if (state.canScrollForward) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Black, Color.Transparent),
+                    startY = size.height - edgePx,
+                    endY = size.height
+                ),
+                blendMode = BlendMode.DstIn
+            )
+        }
+    }

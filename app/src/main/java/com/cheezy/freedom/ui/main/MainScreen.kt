@@ -11,7 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -22,9 +22,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,20 +59,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.boundsInParent
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -93,6 +90,7 @@ import com.cheezy.freedom.ui.main.home.HomeTab
 import com.cheezy.freedom.ui.main.proxies.ProxiesTab
 import com.cheezy.freedom.ui.main.settings.SettingsTab
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private enum class MainTab(@StringRes val titleRes: Int, val icon: ImageVector) {
     HOME(R.string.tab_home, Icons.Default.Home),
@@ -106,13 +104,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
-    var selectedTab by remember { mutableStateOf(MainTab.HOME) }
 
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect { page ->
-            selectedTab = MainTab.entries[page]
-        }
-    }
     val proxyname by ClashState.activeProxy.collectAsState()
     val running by ClashState.running.collectAsState()
     val tunAddress by ClashState.tunAddress.collectAsState()
@@ -428,62 +420,20 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
             ) {
-                val density = LocalDensity.current
-                val itemX = remember { mutableStateMapOf<Int, Float>() }
-                val itemW = remember { mutableStateMapOf<Int, Float>() }
-                val selectedOrdinal = selectedTab.ordinal
-                // A single highlight that slides between tabs by animating its
-                // x-offset and width to the selected item's measured bounds, so
-                // the selection flows instead of snapping on/off per item.
-                val indicatorX by animateDpAsState(
-                    targetValue = with(density) { (itemX[selectedOrdinal] ?: 0f).toDp() },
-                    animationSpec = tween(durationMillis = 280),
-                    label = "navIndicatorX"
-                )
-                val indicatorW by animateDpAsState(
-                    targetValue = with(density) { (itemW[selectedOrdinal] ?: 0f).toDp() },
-                    animationSpec = tween(durationMillis = 280),
-                    label = "navIndicatorW"
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                ) {
-                    if ((itemW[selectedOrdinal] ?: 0f) > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .offset(x = indicatorX)
-                                .width(indicatorW)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                        )
+                // Selected tab follows the pager (flips at the midpoint of a swipe).
+                // Everything else — cell widths and the indicator — is derived from
+                // one shared set of animated weights, so they stay perfectly in sync.
+                val lastIndex = MainTab.entries.lastIndex
+                val currentIndex =
+                    (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                        .coerceIn(0f, lastIndex.toFloat())
+                        .roundToInt()
+                FloatingNavBar(
+                    selectedIndex = currentIndex,
+                    onSelect = { index ->
+                        scope.launch { pagerState.animateScrollToPage(index) }
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp)
-                            .selectableGroup(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        MainTab.entries.forEach { tab ->
-                            FloatingNavItem(
-                                tab = tab,
-                                selected = selectedTab == tab,
-                                onClick = {
-                                    scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
-                                },
-                                onBounds = { x, w ->
-                                    itemX[tab.ordinal] = x
-                                    itemW[tab.ordinal] = w
-                                }
-                            )
-                        }
-                    }
-                }
+                )
             }
         }
     }
@@ -534,12 +484,71 @@ private fun TabCard(
     }
 }
 
+/**
+ * Bottom navigation: the active tab widens to reveal its label, the others
+ * collapse to an icon. Cell widths come from one set of animated weights, and
+ * the sliding highlight is computed from those same weights — so the pill and
+ * the cells move together with no measuring and no chasing (the old source of
+ * jank). The label crossfades in over the same duration.
+ */
+@Composable
+private fun FloatingNavBar(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val tabs = MainTab.entries
+    val weights = tabs.mapIndexed { index, _ ->
+        animateFloatAsState(
+            targetValue = if (index == selectedIndex) 1.9f else 1f,
+            animationSpec = tween(durationMillis = 260),
+            label = "navWeight_$index"
+        ).value
+    }
+    val weightSum = weights.sum()
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+    ) {
+        val total = maxWidth
+        val leftFraction = weights.take(selectedIndex).sum() / weightSum
+        val widthFraction = weights[selectedIndex] / weightSum
+        val inset = 4.dp
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = total * leftFraction + inset)
+                .width(total * widthFraction - inset * 2)
+                .height(48.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .selectableGroup()
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                FloatingNavItem(
+                    tab = tab,
+                    selected = index == selectedIndex,
+                    onClick = { onSelect(index) },
+                    modifier = Modifier.weight(weights[index])
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun FloatingNavItem(
     tab: MainTab,
     selected: Boolean,
     onClick: () -> Unit,
-    onBounds: (x: Float, width: Float) -> Unit
+    modifier: Modifier = Modifier,
 ) {
     val contentColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -548,32 +557,29 @@ private fun FloatingNavItem(
         label = "navFg_${tab.name}"
     )
     val title = stringResource(tab.titleRes)
-    Box(
-        modifier = Modifier
+    Row(
+        modifier = modifier
+            .fillMaxHeight()
             .clip(RoundedCornerShape(24.dp))
             .clickable(role = Role.Tab, onClick = onClick)
             .semantics { this.selected = selected }
-            .onGloballyPositioned { coords ->
-                val bounds = coords.boundsInParent()
-                onBounds(bounds.left, bounds.width)
-            }
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Icon(
+            imageVector = tab.icon,
+            contentDescription = title,
+            tint = contentColor,
+            modifier = Modifier.size(22.dp)
+        )
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = tween(220), clip = false),
+            exit = fadeOut(tween(220)) + shrinkHorizontally(animationSpec = tween(220), clip = false)
         ) {
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = title,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp)
-            )
-            AnimatedVisibility(
-                visible = selected,
-                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = tween(220), clip = false),
-                exit = fadeOut(tween(220)) + shrinkHorizontally(animationSpec = tween(220), clip = false)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
