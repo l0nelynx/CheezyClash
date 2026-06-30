@@ -14,8 +14,12 @@ import org.junit.Test
  *
  * Scenario:
  *  1. App cold-start (the main part — records everything needed for launch).
- *  2. Click through tabs: Home → Proxies → Settings.
- *  3. On the Proxies tab, expand the first group (triggers LazyColumn + ProxyRow).
+ *  2. Click through tabs: Home → Proxies → Settings → Home.
+ *
+ * Navigation note: the bottom nav shows a text label only on the *active* tab,
+ * so inactive tabs can't be matched by `By.text`. Every nav icon carries a
+ * contentDescription equal to its title, so we navigate by `By.desc(...)`,
+ * which works regardless of which tab is selected.
  *
  * Does NOT cover:
  *  - Real network operations (auth, importFromUrl) — too fragile in CI.
@@ -44,20 +48,23 @@ class BaselineProfileGenerator {
         pressHome()
         startActivityAndWait()
 
-        // Give MainScreen time for its first composition. 5 seconds is generous,
-        // but anything less risks not waiting for the scaffold on slow emulators.
-        device.wait(Until.hasObject(By.text("Главная")), 5_000)
+        // Give MainScreen time for its first composition. The bottom-nav icons
+        // are always present and carry their title as contentDescription.
+        device.wait(Until.hasObject(By.desc("Главная")), 5_000)
 
-        // Clicking through tabs is the most effective way to load
-        // Composable classes of all screens into the profile.
-        device.findObject(By.text("Правила"))?.click()
-        device.wait(Until.hasObject(By.text("Правила")), 2_000)
+        // Clicking through tabs is the most effective way to load the Composable
+        // classes of all screens into the profile. Navigate by contentDescription
+        // (labels only render on the active tab).
+        device.findObject(By.desc("Правила"))?.click()
+        device.waitForIdle()
 
-        device.findObject(By.text("Настройки"))?.click()
-        device.wait(Until.hasObject(By.text("Аккаунт")), 2_000)
+        device.findObject(By.desc("Настройки"))?.click()
+        // "Информация" is a settings row present in every flavor (unlike the
+        // account card, which only exists in the proprietary build).
+        device.wait(Until.hasObject(By.text("Информация")), 2_000)
 
-        device.findObject(By.text("Главная"))?.click()
-        device.wait(Until.hasObject(By.text("Главная")), 2_000)
+        device.findObject(By.desc("Главная"))?.click()
+        device.waitForIdle()
     }
 
     companion object {
