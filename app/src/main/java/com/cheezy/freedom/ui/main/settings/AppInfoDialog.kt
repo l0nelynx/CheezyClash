@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.cheezy.freedom.R
@@ -56,14 +58,20 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.info_title)) },
         text = {
+            // ListItem defaults to an opaque `surface` container that reads as a
+            // white block against the dialog's container colour — make them
+            // transparent so the rows blend into the dialog.
+            val transparentList = ListItemDefaults.colors(containerColor = Color.Transparent)
             Column {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_developer)) },
-                    supportingContent = { Text("l0nelynx") }
+                    supportingContent = { Text("l0nelynx") },
+                    colors = transparentList
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_core_version)) },
                     supportingContent = { Text(stringResource(R.string.info_core_version_value, mihomoVersion)) },
+                    colors = transparentList,
                     modifier = Modifier.clickable {
                         CustomTabsIntent.Builder()
                             .setShowTitle(true)
@@ -73,10 +81,12 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_privacy_policy)) },
+                    colors = transparentList,
                     modifier = Modifier.clickable { showPolicyDialog = true }
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_terms)) },
+                    colors = transparentList,
                     modifier = Modifier.clickable { showTermsDialog = true }
                 )
             }

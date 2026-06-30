@@ -1,27 +1,28 @@
 package com.cheezy.freedom.ui.main.proxies
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -59,6 +61,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val PING_TIMEOUT_VALUE = 65535
 private const val HEALTH_CHECK_TIMEOUT_MS = 5_000L
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProxiesTab(
     vpnRunning: Boolean,
@@ -94,102 +97,105 @@ fun ProxiesTab(
             else -> {
                 val groups = rawGroups ?: emptyList()
                 val listState = rememberLazyListState()
+                val cardColor = MaterialTheme.colorScheme.surfaceContainerLow
                 LazyColumn(
                     state = listState,
-                    flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalFadingEdges(listState),
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
                 ) {
-                    items(items = groups, key = { it.first }) { (groupName, proxies) ->
+                    groups.forEach { (groupName, proxies) ->
                         val isExpanded = expandedGroups[groupName] == true
                         val currentProxy = proxies.firstOrNull()?.groupNow ?: ""
 
-                        // Each group is its own card (like the subscription card on Home).
-                        // The header scrolls with the card, so there's no sticky-header
-                        // overlap with rows scrolling underneath.
-                        val headerItem = remember(groupName, proxies.size, currentProxy, isExpanded, groupIcons) {
-                            ProxyListItem.Header(
-                                name = groupName,
-                                type = "Selector",
-                                proxiesCount = proxies.size,
-                                currentProxy = currentProxy,
-                                isExpanded = isExpanded,
-                                iconResId = groupIcons[groupName] ?: 0
-                            )
-                        }
-                        ElevatedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateItem(),
-                            shape = MaterialTheme.shapes.extraLarge,
-                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-                        ) {
-                            GroupHeader(
-                                item = headerItem,
-                                onToggle = {
-                                    expandedGroups[groupName] = !isExpanded
-                                },
-                                isPinging = pingingGroups[groupName] == true,
-                                onPing = if (vpnRunning) {
-                                    {
-                                        scope.launch {
-                                            pingingGroups[groupName] = true
-                                            try {
-                                                withContext(Dispatchers.IO) {
-                                                    withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
-                                                        runCatching { ClashRemoteManager.healthCheck(groupName) }
-                                                    }
-                                                    kotlinx.coroutines.delay(2000)
-                                                    val existing = HashMap(ClashState.pings.value)
-                                                    ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                                                        group.proxies.forEach { p ->
-                                                            existing[p.name] = if (p.delay in 1 until PING_TIMEOUT_VALUE) p.delay else -1
+                        // Sticky group header: stays pinned to the top while its
+                        // proxies scroll under it, so the group can be collapsed at
+                        // any scroll position. It's opaque (cardColor) so the rows
+                        // pass cleanly behind it. Rounded fully when collapsed, only
+                        // on top when expanded so it joins the rows into one card.
+                        stickyHeader(key = "h_$groupName") {
+                            val headerShape = if (isExpanded) {
+                                RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                            } else {
+                                RoundedCornerShape(24.dp)
+                            }
+                            val headerItem = remember(groupName, proxies.size, currentProxy, isExpanded, groupIcons) {
+                                ProxyListItem.Header(
+                                    name = groupName,
+                                    type = "Selector",
+                                    proxiesCount = proxies.size,
+                                    currentProxy = currentProxy,
+                                    isExpanded = isExpanded,
+                                    iconResId = groupIcons[groupName] ?: 0
+                                )
+                            }
+                            Surface(color = cardColor, shape = headerShape) {
+                                GroupHeader(
+                                    item = headerItem,
+                                    onToggle = {
+                                        expandedGroups[groupName] = !isExpanded
+                                    },
+                                    isPinging = pingingGroups[groupName] == true,
+                                    onPing = if (vpnRunning) {
+                                        {
+                                            scope.launch {
+                                                pingingGroups[groupName] = true
+                                                try {
+                                                    withContext(Dispatchers.IO) {
+                                                        withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
+                                                            runCatching { ClashRemoteManager.healthCheck(groupName) }
                                                         }
+                                                        kotlinx.coroutines.delay(2000)
+                                                        val existing = HashMap(ClashState.pings.value)
+                                                        ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                                                            group.proxies.forEach { p ->
+                                                                existing[p.name] = if (p.delay in 1 until PING_TIMEOUT_VALUE) p.delay else -1
+                                                            }
+                                                        }
+                                                        ClashState.setPings(existing)
                                                     }
-                                                    ClashState.setPings(existing)
+                                                } finally {
+                                                    pingingGroups[groupName] = false
                                                 }
-                                            } finally {
-                                                pingingGroups[groupName] = false
                                             }
                                         }
-                                    }
-                                } else null
-                            )
-
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = isExpanded,
-                                enter = androidx.compose.animation.expandVertically(
-                                    animationSpec = androidx.compose.animation.core.tween(220),
-                                    expandFrom = Alignment.Top
-                                ) + androidx.compose.animation.fadeIn(
-                                    animationSpec = androidx.compose.animation.core.tween(220)
-                                ),
-                                exit = androidx.compose.animation.shrinkVertically(
-                                    animationSpec = androidx.compose.animation.core.tween(220),
-                                    shrinkTowards = Alignment.Top
-                                ) + androidx.compose.animation.fadeOut(
-                                    animationSpec = androidx.compose.animation.core.tween(220)
+                                    } else null
                                 )
-                            ) {
-                                Column {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            }
+                        }
+
+                        if (isExpanded) {
+                            itemsIndexed(
+                                items = proxies,
+                                key = { _, proxy -> "p_${groupName}_${proxy.name}" }
+                            ) { index, proxy ->
+                                val isLast = index == proxies.lastIndex
+                                val rowShape = if (isLast) {
+                                    RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                                } else {
+                                    RectangleShape
+                                }
+                                val displaySubtitle = proxy.activeChild ?: proxy.subtitle
+                                val pingKey = proxy.activeChild ?: proxy.name
+                                val pingMs = pings[pingKey]
+                                val isSelected = proxy.name == currentProxy
+                                val rowItem = remember(groupName, proxy, displaySubtitle, pingMs, isSelected) {
+                                    ProxyListItem.ProxyItem(
+                                        groupName, proxy.name, proxy.type, displaySubtitle,
+                                        pingMs, isSelected
                                     )
-                                    proxies.forEach { proxy ->
-                                        val displaySubtitle = proxy.activeChild ?: proxy.subtitle
-                                        val pingKey = proxy.activeChild ?: proxy.name
-                                        val pingMs = pings[pingKey]
-                                        val isSelected = proxy.name == currentProxy
-                                        val rowItem = remember(groupName, proxy, displaySubtitle, pingMs, isSelected) {
-                                            ProxyListItem.ProxyItem(
-                                                groupName, proxy.name, proxy.type, displaySubtitle,
-                                                pingMs, isSelected
-                                            )
-                                        }
+                                }
+                                Surface(
+                                    color = cardColor,
+                                    shape = rowShape,
+                                    modifier = Modifier.animateItem()
+                                ) {
+                                    Column {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        )
                                         ProxyRow(
                                             item = rowItem,
                                             onClick = {
@@ -231,6 +237,10 @@ fun ProxiesTab(
                                 }
                             }
                         }
+
+                        item(key = "sp_$groupName") {
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -247,7 +257,7 @@ fun ProxiesTab(
  */
 private fun Modifier.verticalFadingEdges(
     state: LazyListState,
-    edge: Dp = 28.dp,
+    edge: Dp = 16.dp,
 ): Modifier = this
     .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
     .drawWithContent {
