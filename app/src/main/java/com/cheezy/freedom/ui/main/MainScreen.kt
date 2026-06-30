@@ -9,9 +9,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -322,7 +321,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(bottom = 80.dp),
+                    .padding(bottom = 100.dp),
                 // Card-like carousel: neighbouring pages peek at the edges and a
                 // gap separates them, so swiping reads as moving between cards.
                 contentPadding = PaddingValues(horizontal = 12.dp),
@@ -489,13 +488,13 @@ private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit
     val backgroundColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
                       else Color.Transparent,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = tween(durationMillis = 220),
         label = "navBg_${tab.name}"
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                       else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = tween(durationMillis = 220),
         label = "navFg_${tab.name}"
     )
     Surface(
@@ -516,8 +515,8 @@ private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit
             )
             AnimatedVisibility(
                 visible = selected,
-                enter = fadeIn() + expandHorizontally(clip = false),
-                exit = fadeOut() + shrinkHorizontally(clip = false)
+                enter = fadeIn(tween(220)) + expandHorizontally(animationSpec = tween(220), clip = false),
+                exit = fadeOut(tween(220)) + shrinkHorizontally(animationSpec = tween(220), clip = false)
             ) {
                 Text(
                     text = tab.title,

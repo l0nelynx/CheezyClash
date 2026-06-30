@@ -1,16 +1,21 @@
 package com.cheezy.freedom.ui.main.proxies
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,26 +87,33 @@ fun ProxiesTab(
                 val groups = rawGroups ?: emptyList()
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp)
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    groups.forEach { (groupName, proxies) ->
+                    items(items = groups, key = { it.first }) { (groupName, proxies) ->
                         val isExpanded = expandedGroups[groupName] == true
                         val currentProxy = proxies.firstOrNull()?.groupNow ?: ""
 
-                        // Wrap Header in remember so the data class isn't created
-                        // on every recompose of the parent lambda — this is important
-                        // for GroupHeader's skippability.
-                        stickyHeader(key = "h_$groupName") {
-                            val headerItem = remember(groupName, proxies.size, currentProxy, isExpanded, groupIcons) {
-                                ProxyListItem.Header(
-                                    name = groupName,
-                                    type = "Selector",
-                                    proxiesCount = proxies.size,
-                                    currentProxy = currentProxy,
-                                    isExpanded = isExpanded,
-                                    iconResId = groupIcons[groupName] ?: 0
-                                )
-                            }
+                        // Each group is its own card (like the subscription card on Home).
+                        // The header scrolls with the card, so there's no sticky-header
+                        // overlap with rows scrolling underneath.
+                        val headerItem = remember(groupName, proxies.size, currentProxy, isExpanded, groupIcons) {
+                            ProxyListItem.Header(
+                                name = groupName,
+                                type = "Selector",
+                                proxiesCount = proxies.size,
+                                currentProxy = currentProxy,
+                                isExpanded = isExpanded,
+                                iconResId = groupIcons[groupName] ?: 0
+                            )
+                        }
+                        ElevatedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem(),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                        ) {
                             GroupHeader(
                                 item = headerItem,
                                 onToggle = {
@@ -133,70 +145,64 @@ fun ProxiesTab(
                                     }
                                 } else null
                             )
-                        }
 
-                        if (isExpanded) {
-                            items(
-                                items = proxies,
-                                key = { "p_${groupName}_${it.name}" }
-                            ) { proxy ->
-                                val displaySubtitle = proxy.activeChild ?: proxy.subtitle
-                                val pingKey = proxy.activeChild ?: proxy.name
-                                val pingMs = pings[pingKey]
-                                val isSelected = proxy.name == currentProxy
-                                val rowItem = remember(groupName, proxy, displaySubtitle, pingMs, isSelected) {
-                                    ProxyListItem.ProxyItem(
-                                        groupName, proxy.name, proxy.type, displaySubtitle,
-                                        pingMs, isSelected
+                            androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+                                Column {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                     )
-                                }
-                                ProxyRow(
-                                    item = rowItem,
-                                    onClick = {
-                                        scope.launch {
-                                            val ok = withContext(Dispatchers.IO) {
-                                                ClashRemoteManager.patchSelector(groupName, proxy.name)
-                                            }
-                                            if (ok) viewModel.reloadProxyGroups()
+                                    proxies.forEach { proxy ->
+                                        val displaySubtitle = proxy.activeChild ?: proxy.subtitle
+                                        val pingKey = proxy.activeChild ?: proxy.name
+                                        val pingMs = pings[pingKey]
+                                        val isSelected = proxy.name == currentProxy
+                                        val rowItem = remember(groupName, proxy, displaySubtitle, pingMs, isSelected) {
+                                            ProxyListItem.ProxyItem(
+                                                groupName, proxy.name, proxy.type, displaySubtitle,
+                                                pingMs, isSelected
+                                            )
                                         }
-                                    },
-                                    isPinging = pingingProxies[proxy.name] == true,
-                                    onPing = if (vpnRunning) {
-                                        {
-                                            scope.launch {
-                                                pingingProxies[proxy.name] = true
-                                                try {
-                                                    withContext(Dispatchers.IO) {
-                                                        withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
-                                                            runCatching { ClashRemoteManager.healthCheck(proxy.name) }
-                                                        }
-                                                        kotlinx.coroutines.delay(2000)
-                                                        ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                                                            val found = group.proxies.firstOrNull { it.name == proxy.name }
-                                                            if (found != null) {
-                                                                val existing = HashMap(ClashState.pings.value)
-                                                                existing[found.name] = if (found.delay in 1 until PING_TIMEOUT_VALUE) found.delay else -1
-                                                                ClashState.setPings(existing)
+                                        ProxyRow(
+                                            item = rowItem,
+                                            onClick = {
+                                                scope.launch {
+                                                    val ok = withContext(Dispatchers.IO) {
+                                                        ClashRemoteManager.patchSelector(groupName, proxy.name)
+                                                    }
+                                                    if (ok) viewModel.reloadProxyGroups()
+                                                }
+                                            },
+                                            isPinging = pingingProxies[proxy.name] == true,
+                                            onPing = if (vpnRunning) {
+                                                {
+                                                    scope.launch {
+                                                        pingingProxies[proxy.name] = true
+                                                        try {
+                                                            withContext(Dispatchers.IO) {
+                                                                withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
+                                                                    runCatching { ClashRemoteManager.healthCheck(proxy.name) }
+                                                                }
+                                                                kotlinx.coroutines.delay(2000)
+                                                                ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                                                                    val found = group.proxies.firstOrNull { it.name == proxy.name }
+                                                                    if (found != null) {
+                                                                        val existing = HashMap(ClashState.pings.value)
+                                                                        existing[found.name] = if (found.delay in 1 until PING_TIMEOUT_VALUE) found.delay else -1
+                                                                        ClashState.setPings(existing)
+                                                                    }
+                                                                }
                                                             }
+                                                        } finally {
+                                                            pingingProxies[proxy.name] = false
                                                         }
                                                     }
-                                                } finally {
-                                                    pingingProxies[proxy.name] = false
                                                 }
-                                            }
-                                        }
-                                    } else null,
-                                    modifier = Modifier.animateItem()
-                                )
+                                            } else null
+                                        )
+                                    }
+                                }
                             }
-                        }
-
-                        item(key = "d_$groupName") {
-                            HorizontalDivider(
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp)
-                                    .animateItem()
-                            )
                         }
                     }
                 }
