@@ -415,7 +415,7 @@ class ClashVpnService : VpnService() {
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_tile)
             .setContentIntent(openMain)
             .addAction(0, "Stop", stopIntent)
             .setOngoing(true)
