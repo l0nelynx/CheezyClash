@@ -25,7 +25,11 @@ class OpenAppLaunchers : AppLaunchers {
 
     override val ExtraSettingsItems: @Composable (onAddConfig: () -> Unit) -> Unit = { onAddConfig ->
         androidx.compose.material3.ListItem(
-            headlineContent = { androidx.compose.material3.Text("Add configuration") },
+            headlineContent = {
+                androidx.compose.material3.Text(
+                    androidx.compose.ui.res.stringResource(com.cheezy.freedom.R.string.settings_add_configuration)
+                )
+            },
             leadingContent = {
                 androidx.compose.material3.Icon(
                     androidx.compose.material.icons.Icons.Default.Add,

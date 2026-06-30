@@ -34,11 +34,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.cheezy.freedom.R
 import com.cheezy.freedom.util.QrCodeUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,10 +68,10 @@ fun ShareVpnDialog(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Share VPN") },
+                        title = { Text(stringResource(R.string.share_title)) },
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.share_close))
                             }
                         }
                     )
@@ -84,7 +86,7 @@ fun ShareVpnDialog(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Use the QR code for quick subscription import or the local IP for proxy settings.",
+                        stringResource(R.string.share_intro),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
@@ -93,13 +95,13 @@ fun ShareVpnDialog(
                         Spacer(modifier = Modifier.height(24.dp))
                         Image(
                             bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "Subscription QR Code",
+                            contentDescription = stringResource(R.string.share_qr_caption),
                             modifier = Modifier
                                 .size(240.dp)
                                 .aspectRatio(1f)
                         )
                         Text(
-                            "Subscription QR Code",
+                            stringResource(R.string.share_qr_caption),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -114,7 +116,7 @@ fun ShareVpnDialog(
                                     putExtra(Intent.EXTRA_TEXT, subscriptionUrl)
                                 }
                                 context.startActivity(
-                                    Intent.createChooser(intent, "Поделиться ссылкой VPN")
+                                    Intent.createChooser(intent, context.getString(R.string.share_chooser_title))
                                 )
                             }
                         ) {
@@ -124,7 +126,7 @@ fun ShareVpnDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.size(8.dp))
-                            Text("Поделиться ссылкой")
+                            Text(stringResource(R.string.share_share_link))
                         }
                     }
 
@@ -134,15 +136,15 @@ fun ShareVpnDialog(
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         InfoSection(
-                            label = "TUN IP Address:",
-                            value = tunAddress.ifBlank { "VPN not running" }
+                            label = stringResource(R.string.share_tun_ip),
+                            value = tunAddress.ifBlank { stringResource(R.string.share_vpn_not_running) }
                         )
 
                         Spacer(modifier = Modifier.height(20.dp))
 
                         InfoSection(
-                            label = "Local IP Address:",
-                            value = localIp.ifBlank { "Unknown" }
+                            label = stringResource(R.string.share_local_ip),
+                            value = localIp.ifBlank { stringResource(R.string.share_unknown) }
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -189,7 +191,7 @@ private fun LocalProxySection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            "Enable Local Proxy",
+            stringResource(R.string.share_enable_local_proxy),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -201,7 +203,7 @@ private fun LocalProxySection(
     }
     if (info.localProxyForcedByBase) {
         Text(
-            "Local proxy parameters are managed by your provider.",
+            stringResource(R.string.share_local_proxy_managed),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -214,11 +216,11 @@ private fun PortsSection(info: ShareVpnInfo) {
     val style = MaterialTheme.typography.bodySmall
     when {
         info.mixedPort != null -> {
-            Text("Port (HTTP/SOCKS): ${info.mixedPort}", style = style, color = color)
+            Text(stringResource(R.string.share_port_mixed, info.mixedPort), style = style, color = color)
         }
         info.httpPort != null || info.socksPort != null -> {
-            info.httpPort?.let { Text("HTTP: $it", style = style, color = color) }
-            info.socksPort?.let { Text("SOCKS: $it", style = style, color = color) }
+            info.httpPort?.let { Text(stringResource(R.string.share_port_http, it), style = style, color = color) }
+            info.socksPort?.let { Text(stringResource(R.string.share_port_socks, it), style = style, color = color) }
         }
     }
 }

@@ -1,5 +1,112 @@
 <resources>
     <string name="app_name">CheezyVPN</string>
-    <string name="title_logs">Logs</string>
-    <string name="title_proxies">Proxies</string>
+    <string name="title_logs">Логи</string>
+    <string name="title_proxies">Правила</string>
+
+    <!-- Bottom navigation -->
+    <string name="tab_home">Главная</string>
+    <string name="tab_proxies">Правила</string>
+    <string name="tab_settings">Настройки</string>
+
+    <!-- Home tab -->
+    <string name="home_read_more">Читать далее</string>
+    <string name="home_collapse">Свернуть</string>
+    <string name="home_connected">Подключено</string>
+    <string name="home_disconnected">Отключено</string>
+    <string name="home_action_connect">Подключить</string>
+    <string name="home_action_disconnect">Отключить</string>
+    <string name="home_stat_used">Использовано</string>
+    <string name="home_stat_remaining">Остаток</string>
+    <string name="home_stat_limit">Лимит</string>
+    <string name="home_unlimited">∞</string>
+    <string name="home_expires">Истекает: %1$s</string>
+    <string name="home_error_no_config">Сначала загрузите конфигурацию</string>
+
+    <!-- Proxies -->
+    <string name="proxies_check_ping">Проверить ping</string>
+    <string name="proxies_ping_group">Проверить ping группы</string>
+    <string name="proxies_ping_proxy">Проверить ping прокси</string>
+    <string name="proxies_group_subtitle">%1$d прокси · %2$s</string>
+    <string name="proxies_placeholder_dash">—</string>
+    <string name="proxies_timeout">таймаут</string>
+    <string name="proxies_ms">%1$d мс</string>
+
+    <!-- Settings -->
+    <string name="settings_section_account">Аккаунт</string>
+    <string name="settings_account_logged_in">Вы вошли как:</string>
+    <string name="settings_account_status">Статус аккаунта:</string>
+    <string name="settings_account_unregistered">Не зарегистрирован</string>
+    <string name="settings_devices">Устройства</string>
+    <string name="settings_subscription">Подписка</string>
+    <string name="settings_transfer_subscription">Перенести подписку</string>
+    <string name="settings_telegram_linked">Telegram привязан</string>
+    <string name="settings_telegram_id">ID: %1$d (Нажмите, чтобы отвязать)</string>
+    <string name="settings_section_settings">Настройки</string>
+    <string name="settings_add_configuration">Добавить конфигурацию</string>
+    <string name="settings_access_control">Контроль доступа</string>
+    <string name="settings_access_control_subtitle">Управление доступом приложений к туннелю</string>
+    <string name="settings_share_vpn">Раздать VPN</string>
+    <string name="settings_logs">Логи</string>
+    <string name="settings_info">Информация</string>
+    <string name="settings_checking_update">проверка…</string>
+    <string name="settings_check_update">проверить обновление</string>
+    <string name="settings_logout">Выйти из аккаунта</string>
+    <string name="settings_register_reset">Зарегистрироваться / Сброс</string>
+
+    <!-- Access control -->
+    <string name="ac_title">Контроль доступа</string>
+    <string name="ac_close">Закрыть</string>
+    <string name="ac_override_title">Переопределить приложения</string>
+    <string name="ac_override_subtitle">По умолчанию используется список из конфига</string>
+    <string name="ac_restart_hint">Изменения применятся при перезапуске VPN</string>
+    <string name="ac_restart_action">Перезапустить</string>
+    <string name="ac_enable_title">Включите переопределение</string>
+    <string name="ac_enable_subtitle">чтобы управлять доступом каждого приложения к туннелю независимо от конфига</string>
+    <string name="ac_search_placeholder">Поиск приложений…</string>
+    <string name="ac_clear">Очистить</string>
+    <string name="ac_tab_include">Включить в VPN</string>
+    <string name="ac_tab_exclude">Исключить из VPN</string>
+    <string name="ac_empty_none">Нет приложений</string>
+    <string name="ac_empty_no_match">Нет совпадений</string>
+
+    <!-- Share VPN -->
+    <string name="share_title">Раздать VPN</string>
+    <string name="share_close">Закрыть</string>
+    <string name="share_intro">Используйте QR-код для быстрого импорта подписки или локальный IP для настройки прокси.</string>
+    <string name="share_qr_caption">QR-код подписки</string>
+    <string name="share_share_link">Поделиться ссылкой</string>
+    <string name="share_chooser_title">Поделиться ссылкой VPN</string>
+    <string name="share_tun_ip">TUN IP-адрес:</string>
+    <string name="share_vpn_not_running">VPN не запущен</string>
+    <string name="share_local_ip">Локальный IP-адрес:</string>
+    <string name="share_unknown">Неизвестно</string>
+    <string name="share_enable_local_proxy">Включить локальный прокси</string>
+    <string name="share_local_proxy_managed">Параметры локального прокси заданы вашим провайдером.</string>
+    <string name="share_port_mixed">Порт (HTTP/SOCKS): %1$d</string>
+    <string name="share_port_http">HTTP: %1$d</string>
+    <string name="share_port_socks">SOCKS: %1$d</string>
+
+    <!-- URL dialog -->
+    <string name="url_title">URL конфигурации</string>
+    <string name="url_hint">https://…</string>
+    <string name="url_load">Загрузить</string>
+    <string name="url_cancel">Отмена</string>
+
+    <!-- Update dialog -->
+    <string name="update_title">Доступно обновление</string>
+    <string name="update_downloading">Новая версия %1$s уже загружается…</string>
+    <string name="update_downloaded">Новая версия %1$s скачана и готова к установке.</string>
+    <string name="update_available">Найдена новая версия: %1$s. Хотите обновить приложение?</string>
+    <string name="update_install">Установить</string>
+    <string name="update_update">Обновить</string>
+    <string name="update_later">Позже</string>
+
+    <!-- App info dialog -->
+    <string name="info_title">О приложении</string>
+    <string name="info_developer">Разработчик</string>
+    <string name="info_core_version">Версия ядра (Mihomo)</string>
+    <string name="info_core_version_value">%1$s · открыть Dashboard</string>
+    <string name="info_privacy_policy">Политика конфиденциальности</string>
+    <string name="info_terms">Пользовательское соглашение</string>
+    <string name="info_close">Закрыть</string>
 </resources>

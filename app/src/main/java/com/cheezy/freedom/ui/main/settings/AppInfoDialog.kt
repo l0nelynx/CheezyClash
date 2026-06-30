@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.cheezy.freedom.R
 import com.cheezy.freedom.PrivacyPolicyDialog
 import com.cheezy.freedom.TermsOfServiceDialog
 import com.github.kr328.clash.core.bridge.Bridge
@@ -52,16 +54,16 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("О приложении") },
+        title = { Text(stringResource(R.string.info_title)) },
         text = {
             Column {
                 ListItem(
-                    headlineContent = { Text("Разработчик") },
+                    headlineContent = { Text(stringResource(R.string.info_developer)) },
                     supportingContent = { Text("l0nelynx") }
                 )
                 ListItem(
-                    headlineContent = { Text("Версия ядра (Mihomo)") },
-                    supportingContent = { Text("$mihomoVersion · открыть Dashboard") },
+                    headlineContent = { Text(stringResource(R.string.info_core_version)) },
+                    supportingContent = { Text(stringResource(R.string.info_core_version_value, mihomoVersion)) },
                     modifier = Modifier.clickable {
                         CustomTabsIntent.Builder()
                             .setShowTitle(true)
@@ -70,15 +72,15 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
                     }
                 )
                 ListItem(
-                    headlineContent = { Text("Политика конфиденциальности") },
+                    headlineContent = { Text(stringResource(R.string.info_privacy_policy)) },
                     modifier = Modifier.clickable { showPolicyDialog = true }
                 )
                 ListItem(
-                    headlineContent = { Text("Пользовательское соглашение") },
+                    headlineContent = { Text(stringResource(R.string.info_terms)) },
                     modifier = Modifier.clickable { showTermsDialog = true }
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.info_close)) } }
     )
 }

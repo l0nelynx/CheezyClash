@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.cheezy.freedom.BuildConfig
+import com.cheezy.freedom.R
 import com.cheezy.freedom.LogsActivity
 import com.cheezy.freedom.UpdateManager
 import com.cheezy.freedom.account.AppDeps
@@ -93,7 +95,7 @@ fun SettingsTab(
     ) {
         if (showAccountCard) {
             Text(
-                "Аккаунт",
+                stringResource(R.string.settings_section_account),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
@@ -105,11 +107,12 @@ fun SettingsTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        if (userEmail != null) "Logged in as:" else "Account Status:",
+                        if (userEmail != null) stringResource(R.string.settings_account_logged_in)
+                        else stringResource(R.string.settings_account_status),
                         style = MaterialTheme.typography.labelSmall
                     )
                     Text(
-                        userEmail ?: "Unregistered",
+                        userEmail ?: stringResource(R.string.settings_account_unregistered),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -118,7 +121,7 @@ fun SettingsTab(
         }
         if (showDevices) {
             ListItem(
-                headlineContent = { Text("Устройства") },
+                headlineContent = { Text(stringResource(R.string.settings_devices)) },
                 leadingContent = { Icon(Icons.Default.Computer, null) },
                 colors = transparentList,
                 modifier = Modifier.clickable(onClick = onOpenDevices)
@@ -126,7 +129,7 @@ fun SettingsTab(
         }
         if (showSubscription) {
             ListItem(
-                headlineContent = { Text("Подписка") },
+                headlineContent = { Text(stringResource(R.string.settings_subscription)) },
                 leadingContent = { Icon(Icons.Default.ShoppingCart, null) },
                 colors = transparentList,
                 modifier = Modifier.clickable(onClick = onOpenSubscription)
@@ -134,8 +137,8 @@ fun SettingsTab(
         }
         if (showTelegramLink) {
             ListItem(
-                headlineContent = { Text(if (tgId == null) "Перенести подписку" else "Telegram привязан") },
-                supportingContent = if (tgId != null) { { Text("ID: $tgId (Нажмите, чтобы отвязать)") } } else null,
+                headlineContent = { Text(if (tgId == null) stringResource(R.string.settings_transfer_subscription) else stringResource(R.string.settings_telegram_linked)) },
+                supportingContent = if (tgId != null) { { Text(stringResource(R.string.settings_telegram_id, tgId)) } } else null,
                 leadingContent = { Icon(Icons.Default.Link, null) },
                 colors = transparentList,
                 modifier = Modifier.clickable {
@@ -146,7 +149,7 @@ fun SettingsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Settings",
+            stringResource(R.string.settings_section_settings),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(vertical = 8.dp)
         )
@@ -154,20 +157,20 @@ fun SettingsTab(
         AppDeps.launchers.ExtraSettingsItems(onAddConfig)
 
         ListItem(
-            headlineContent = { Text("Контроль доступа") },
-            supportingContent = { Text("Управление доступом приложений к туннелю") },
+            headlineContent = { Text(stringResource(R.string.settings_access_control)) },
+            supportingContent = { Text(stringResource(R.string.settings_access_control_subtitle)) },
             leadingContent = { Icon(Icons.Default.Security, null) },
             colors = transparentList,
             modifier = Modifier.clickable(onClick = onOpenAccessControl)
         )
         ListItem(
-            headlineContent = { Text("Раздать VPN") },
+            headlineContent = { Text(stringResource(R.string.settings_share_vpn)) },
             leadingContent = { Icon(Icons.Default.Share, null) },
             colors = transparentList,
             modifier = Modifier.clickable(onClick = onShareVpn)
         )
         ListItem(
-            headlineContent = { Text("Логи") },
+            headlineContent = { Text(stringResource(R.string.settings_logs)) },
             leadingContent = { Icon(Icons.Default.List, null) },
             colors = transparentList,
             modifier = Modifier.clickable {
@@ -175,7 +178,7 @@ fun SettingsTab(
             }
         )
         ListItem(
-            headlineContent = { Text("Информация") },
+            headlineContent = { Text(stringResource(R.string.settings_info)) },
             leadingContent = { Icon(Icons.Default.Info, null) },
             colors = transparentList,
             modifier = Modifier.clickable { showInfoDialog = true }
@@ -189,6 +192,8 @@ fun SettingsTab(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (UpdateManager.isEnabled) {
+                val checkingUpdateText = stringResource(R.string.settings_checking_update)
+                val checkUpdateText = stringResource(R.string.settings_check_update)
                 val versionText = buildAnnotatedString {
                     append("v$displayVersion · ")
                     pushStringAnnotation(tag = "check", annotation = "check")
@@ -198,7 +203,7 @@ fun SettingsTab(
                             textDecoration = TextDecoration.Underline
                         )
                     ) {
-                        append(if (isCheckingUpdate) "проверка..." else "проверить обновление")
+                        append(if (isCheckingUpdate) checkingUpdateText else checkUpdateText)
                     }
                     pop()
                 }
@@ -228,7 +233,8 @@ fun SettingsTab(
 
                 TextButton(onClick = onLogout) {
                     Text(
-                        if (userEmail != null) "Выйти из аккаунта" else "Зарегистрироваться / Сброс",
+                        if (userEmail != null) stringResource(R.string.settings_logout)
+                        else stringResource(R.string.settings_register_reset),
                         color = MaterialTheme.colorScheme.error
                     )
                 }

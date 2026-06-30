@@ -1,6 +1,5 @@
 package com.cheezy.freedom.ui.main.proxies
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +49,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val PING_TIMEOUT_VALUE = 65535
 private const val HEALTH_CHECK_TIMEOUT_MS = 5_000L
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProxiesTab(
     vpnRunning: Boolean,
@@ -146,7 +144,21 @@ fun ProxiesTab(
                                 } else null
                             )
 
-                            androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isExpanded,
+                                enter = androidx.compose.animation.expandVertically(
+                                    animationSpec = androidx.compose.animation.core.tween(220),
+                                    expandFrom = Alignment.Top
+                                ) + androidx.compose.animation.fadeIn(
+                                    animationSpec = androidx.compose.animation.core.tween(220)
+                                ),
+                                exit = androidx.compose.animation.shrinkVertically(
+                                    animationSpec = androidx.compose.animation.core.tween(220),
+                                    shrinkTowards = Alignment.Top
+                                ) + androidx.compose.animation.fadeOut(
+                                    animationSpec = androidx.compose.animation.core.tween(220)
+                                )
+                            ) {
                                 Column {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 16.dp),

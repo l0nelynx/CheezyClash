@@ -53,12 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cheezy.freedom.R
 import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ClashVpnService
 
@@ -96,10 +98,10 @@ fun AccessControlScreen(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Контроль доступа") },
+                        title = { Text(stringResource(R.string.ac_title)) },
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {
-                                Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.ac_close))
                             }
                         }
                     )
@@ -111,8 +113,8 @@ fun AccessControlScreen(
                         .padding(padding)
                 ) {
                     ListItem(
-                        headlineContent = { Text("Переопределить приложения") },
-                        supportingContent = { Text("По умолчанию используется список из конфига") },
+                        headlineContent = { Text(stringResource(R.string.ac_override_title)) },
+                        supportingContent = { Text(stringResource(R.string.ac_override_subtitle)) },
                         trailingContent = {
                             Switch(
                                 checked = overrideEnabled,
@@ -147,13 +149,13 @@ fun AccessControlScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
-                                    "Включите переопределение",
+                                    stringResource(R.string.ac_enable_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "чтобы управлять доступом каждого приложения к туннелю независимо от конфига",
+                                    stringResource(R.string.ac_enable_subtitle),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -166,7 +168,7 @@ fun AccessControlScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Поиск приложений...") },
+                        placeholder = { Text(stringResource(R.string.ac_search_placeholder)) },
                         singleLine = true,
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null)
@@ -174,7 +176,7 @@ fun AccessControlScreen(
                         trailingIcon = if (searchQuery.isNotEmpty()) {
                             {
                                 IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.ac_clear))
                                 }
                             }
                         } else null,
@@ -187,12 +189,12 @@ fun AccessControlScreen(
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            text = { Text("Включить в VPN") }
+                            text = { Text(stringResource(R.string.ac_tab_include)) }
                         )
                         Tab(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            text = { Text("Исключить из VPN") }
+                            text = { Text(stringResource(R.string.ac_tab_exclude)) }
                         )
                     }
 
@@ -212,7 +214,7 @@ fun AccessControlScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (currentList.isEmpty()) "Нет приложений" else "Нет совпадений",
+                                    text = if (currentList.isEmpty()) stringResource(R.string.ac_empty_none) else stringResource(R.string.ac_empty_no_match),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -268,7 +270,7 @@ private fun RestartBanner(onRestart: () -> Unit) {
                 modifier = Modifier.size(18.dp)
             )
             Text(
-                text = "Изменения применятся при перезапуске VPN",
+                text = stringResource(R.string.ac_restart_hint),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
@@ -278,7 +280,7 @@ private fun RestartBanner(onRestart: () -> Unit) {
                     horizontal = 12.dp, vertical = 6.dp
                 )
             ) {
-                Text("Перезапустить", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.ac_restart_action), style = MaterialTheme.typography.labelSmall)
             }
         }
     }

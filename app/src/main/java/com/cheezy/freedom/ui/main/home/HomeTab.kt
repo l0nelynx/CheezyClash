@@ -74,13 +74,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
+import com.cheezy.freedom.R
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.ui.library.MorphPolygonShape
 import com.cheezy.freedom.ui.theme.CheezyVPNTheme
+import com.cheezy.freedom.ui.theme.warningColor
 import com.cheezy.freedom.util.formatBytes
 import com.cheezy.freedom.util.formatExpire
 import com.cheezy.freedom.util.formatKbps
@@ -89,7 +92,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 
-private val ConnectButtonSize = 256.dp
+private val ConnectButtonSize = 224.dp
 private val ProgressRingStroke = 8.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -204,12 +207,12 @@ private fun AnnounceCard(text: String) {
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         shape = MaterialTheme.shapes.large,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 maxLines = if (expanded) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis,
                 onTextLayout = { result ->
@@ -226,7 +229,7 @@ private fun AnnounceCard(text: String) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (expanded) "Свернуть" else "Читать далее",
+                        text = if (expanded) stringResource(R.string.home_collapse) else stringResource(R.string.home_read_more),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -289,13 +292,13 @@ private fun SubscriptionCard(info: SubscriptionInfo, lastUpdateTime: Long) {
     val progressColor = when {
         isUnlimited -> MaterialTheme.colorScheme.primary
         progress > 0.9f -> MaterialTheme.colorScheme.error
-        progress > 0.75f -> Color(0xFFFFA000)
+        progress > 0.75f -> warningColor
         else -> MaterialTheme.colorScheme.primary
     }
     val expireColor = when {
         daysLeft < 0 -> MaterialTheme.colorScheme.onSurfaceVariant
         daysLeft < 3 -> MaterialTheme.colorScheme.error
-        daysLeft < 7 -> Color(0xFFFFA000)
+        daysLeft < 7 -> warningColor
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -325,13 +328,13 @@ private fun SubscriptionCard(info: SubscriptionInfo, lastUpdateTime: Long) {
                 verticalAlignment = Alignment.Bottom
             ) {
                 StatColumn(
-                    label = "Использовано",
+                    label = stringResource(R.string.home_stat_used),
                     value = formatBytes(used),
                     valueColor = progressColor
                 )
                 StatColumn(
-                    label = if (isUnlimited) "Лимит" else "Остаток",
-                    value = if (isUnlimited) "∞" else formatBytes(remaining),
+                    label = if (isUnlimited) stringResource(R.string.home_stat_limit) else stringResource(R.string.home_stat_remaining),
+                    value = if (isUnlimited) stringResource(R.string.home_unlimited) else formatBytes(remaining),
                     alignment = Alignment.End
                 )
             }
@@ -347,7 +350,7 @@ private fun SubscriptionCard(info: SubscriptionInfo, lastUpdateTime: Long) {
                 ) {
                     if (info.expire > 0) {
                         Text(
-                            text = "Истекает: ${formatExpire(info.expire)}",
+                            text = stringResource(R.string.home_expires, formatExpire(info.expire)),
                             style = MaterialTheme.typography.labelMedium,
                             color = expireColor,
                             fontWeight = if (daysLeft in 0..6) FontWeight.SemiBold else FontWeight.Normal
@@ -499,7 +502,7 @@ private fun ConnectButton(
             shape = morphShape,
             color = contentColorinverse,
             modifier = Modifier
-                .size(192.dp)
+                .size(168.dp)
                 .graphicsLayer {
                     scaleX = scale; scaleY = scale
                     rotationZ = if (isRotating) angle else 0f
@@ -515,13 +518,13 @@ private fun ConnectButton(
             ) {
                 Icon(
                     Icons.Default.PowerSettingsNew,
-                    contentDescription = if (running) "Отключить" else "Подключить",
-                    modifier = Modifier.size(56.dp),
+                    contentDescription = if (running) stringResource(R.string.home_action_disconnect) else stringResource(R.string.home_action_connect),
+                    modifier = Modifier.size(48.dp),
                     tint = contentColor
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (running) "Подключено" else "Отключено",
+                    if (running) stringResource(R.string.home_connected) else stringResource(R.string.home_disconnected),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = contentColor

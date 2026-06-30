@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,8 +37,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cheezy.freedom.R
+import com.cheezy.freedom.ui.theme.successColor
+import com.cheezy.freedom.ui.theme.warningColor
 
 @Composable
 fun GroupHeader(
@@ -67,7 +72,11 @@ fun GroupHeader(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${item.proxiesCount} прокси · ${item.currentProxy.ifBlank { "—" }}",
+                    text = stringResource(
+                        R.string.proxies_group_subtitle,
+                        item.proxiesCount,
+                        item.currentProxy.ifBlank { "—" }
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
@@ -77,14 +86,14 @@ fun GroupHeader(
                 IconButton(
                     onClick = onPing,
                     enabled = !isPinging,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     if (isPinging) {
                         CircularWavyProgressIndicator(modifier = Modifier.size(18.dp))
                     } else {
                         Icon(
                             Icons.Default.Speed,
-                            contentDescription = "Ping group",
+                            contentDescription = stringResource(R.string.proxies_ping_group),
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -124,8 +133,8 @@ fun ProxyRow(
     val pingColor = when {
         item.pingMs == null -> MaterialTheme.colorScheme.onSurfaceVariant
         item.pingMs <= 0 -> MaterialTheme.colorScheme.error
-        item.pingMs < 500 -> Color(0xFF4CAF50)
-        item.pingMs < 700 -> Color(0xFFFFA000)
+        item.pingMs < 500 -> successColor
+        item.pingMs < 700 -> warningColor
         else -> MaterialTheme.colorScheme.error
     }
 
@@ -153,7 +162,9 @@ fun ProxyRow(
                 }
             },
             leadingContent = {
-                RadioButton(selected = item.isSelected, onClick = onClick)
+                // onClick = null: the whole row is already clickable, so the radio
+                // is decorative here — avoids a duplicate semantics node for TalkBack.
+                RadioButton(selected = item.isSelected, onClick = null)
             },
             trailingContent = {
                 when {
@@ -163,13 +174,14 @@ fun ProxyRow(
                     onPing != null && item.pingMs == null -> {
                         Box(
                             modifier = Modifier
+                                .minimumInteractiveComponentSize()
                                 .clickable(onClick = onPing)
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Bolt,
-                                contentDescription = "Ping proxy",
+                                contentDescription = stringResource(R.string.proxies_ping_proxy),
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                             )
@@ -178,12 +190,13 @@ fun ProxyRow(
                     else -> {
                         val delayText = when {
                             item.pingMs == null -> "—"
-                            item.pingMs <= 0 -> "timeout"
-                            else -> "${item.pingMs} ms"
+                            item.pingMs <= 0 -> stringResource(R.string.proxies_timeout)
+                            else -> stringResource(R.string.proxies_ms, item.pingMs)
                         }
                         Box(
                             modifier = if (onPing != null) {
                                 Modifier
+                                    .minimumInteractiveComponentSize()
                                     .clickable(onClick = onPing)
                                     .padding(horizontal = 6.dp, vertical = 4.dp)
                             } else {

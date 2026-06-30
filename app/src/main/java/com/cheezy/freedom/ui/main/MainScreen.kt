@@ -6,15 +6,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,15 +65,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cheezy.freedom.R
 import com.cheezy.freedom.account.AppDeps
 import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ClashVpnService
@@ -80,10 +94,10 @@ import com.cheezy.freedom.ui.main.proxies.ProxiesTab
 import com.cheezy.freedom.ui.main.settings.SettingsTab
 import kotlinx.coroutines.launch
 
-private enum class MainTab(val title: String, val icon: ImageVector) {
-    HOME("Главная", Icons.Default.Home),
-    PROXIES("Правила", Icons.Default.List),
-    SETTINGS("Настройки", Icons.Default.Settings)
+private enum class MainTab(@StringRes val titleRes: Int, val icon: ImageVector) {
+    HOME(R.string.tab_home, Icons.Default.Home),
+    PROXIES(R.string.tab_proxies, Icons.Default.List),
+    SETTINGS(R.string.tab_settings, Icons.Default.Settings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -326,10 +340,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 // gap separates them, so swiping reads as moving between cards.
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 pageSpacing = 12.dp,
-                beyondViewportPageCount = 2
+                beyondViewportPageCount = 1
             ) { page ->
                 when (MainTab.entries[page]) {
-                    MainTab.HOME -> TabCard(title = subscription?.title ?: "CheezyVPN") {
+                    MainTab.HOME -> TabCard(title = subscription?.title ?: stringResource(R.string.app_name)) {
                         HomeTab(
                             running = running,
                             proxyname = proxyname ?: "",
@@ -344,7 +358,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 if (running) {
                                     ClashVpnService.stop(context)
                                 } else if (!ConfigManager.hasConfig(context)) {
-                                    ClashState.setError("First load the configuration")
+                                    ClashState.setError(context.getString(R.string.home_error_no_config))
                                 } else if (localNetworkPermName != null && !localNetworkGranted()) {
                                     // Request local network access (Android 16+/17+).
                                     // After user response, VPN starts — refusal doesn't block operation through loopback.
@@ -356,20 +370,20 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         )
                     }
                     MainTab.PROXIES -> TabCard(
-                        title = MainTab.PROXIES.title,
+                        title = stringResource(MainTab.PROXIES.titleRes),
                         action = {
                             IconButton(onClick = { viewModel.measurePings() }, enabled = !proxiesPinging) {
                                 if (proxiesPinging) {
                                     CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
                                 } else {
-                                    Icon(Icons.Default.Speed, contentDescription = "Проверить ping")
+                                    Icon(Icons.Default.Speed, contentDescription = stringResource(R.string.proxies_check_ping))
                                 }
                             }
                         }
                     ) {
                         ProxiesTab(running)
                     }
-                    MainTab.SETTINGS -> TabCard(title = MainTab.SETTINGS.title) {
+                    MainTab.SETTINGS -> TabCard(title = stringResource(MainTab.SETTINGS.titleRes)) {
                         SettingsTab(
                             userEmail = userEmail,
                             tgId = tgId,
@@ -414,22 +428,60 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
             ) {
-                Row(
+                val density = LocalDensity.current
+                val itemX = remember { mutableStateMapOf<Int, Float>() }
+                val itemW = remember { mutableStateMapOf<Int, Float>() }
+                val selectedOrdinal = selectedTab.ordinal
+                // A single highlight that slides between tabs by animating its
+                // x-offset and width to the selected item's measured bounds, so
+                // the selection flows instead of snapping on/off per item.
+                val indicatorX by animateDpAsState(
+                    targetValue = with(density) { (itemX[selectedOrdinal] ?: 0f).toDp() },
+                    animationSpec = tween(durationMillis = 280),
+                    label = "navIndicatorX"
+                )
+                val indicatorW by animateDpAsState(
+                    targetValue = with(density) { (itemW[selectedOrdinal] ?: 0f).toDp() },
+                    animationSpec = tween(durationMillis = 280),
+                    label = "navIndicatorW"
+                )
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .height(64.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(64.dp)
                 ) {
-                    MainTab.entries.forEach { tab ->
-                        FloatingNavItem(
-                            tab = tab,
-                            selected = selectedTab == tab,
-                            onClick = {
-                                scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
-                            }
+                    if ((itemW[selectedOrdinal] ?: 0f) > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .offset(x = indicatorX)
+                                .width(indicatorW)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
                         )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp)
+                            .selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MainTab.entries.forEach { tab ->
+                            FloatingNavItem(
+                                tab = tab,
+                                selected = selectedTab == tab,
+                                onClick = {
+                                    scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+                                },
+                                onBounds = { x, w ->
+                                    itemX[tab.ordinal] = x
+                                    itemW[tab.ordinal] = w
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -482,25 +534,29 @@ private fun TabCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
-                      else Color.Transparent,
-        animationSpec = tween(durationMillis = 220),
-        label = "navBg_${tab.name}"
-    )
+private fun FloatingNavItem(
+    tab: MainTab,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onBounds: (x: Float, width: Float) -> Unit
+) {
     val contentColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                       else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(durationMillis = 220),
         label = "navFg_${tab.name}"
     )
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        color = backgroundColor
+    val title = stringResource(tab.titleRes)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics { this.selected = selected }
+            .onGloballyPositioned { coords ->
+                val bounds = coords.boundsInParent()
+                onBounds(bounds.left, bounds.width)
+            }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -509,7 +565,7 @@ private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit
         ) {
             Icon(
                 imageVector = tab.icon,
-                contentDescription = tab.title,
+                contentDescription = title,
                 tint = contentColor,
                 modifier = Modifier.size(22.dp)
             )
@@ -519,7 +575,7 @@ private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit
                 exit = fadeOut(tween(220)) + shrinkHorizontally(animationSpec = tween(220), clip = false)
             ) {
                 Text(
-                    text = tab.title,
+                    text = title,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = contentColor,
