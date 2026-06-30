@@ -8,9 +8,7 @@ import android.net.VpnService
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
@@ -18,11 +16,9 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,6 +65,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -310,31 +307,27 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                // Lift the snackbar above the floating nav bar (≈64dp card + 12dp×2
+                // padding) so toasts like "enable VPN first" aren't hidden behind it.
+                SnackbarHost(
+                    snackbarHostState,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 88.dp)
+                )
+            },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
                         val title = if (selectedTab == MainTab.HOME) (subscription?.title ?: "CheezyVPN") else selectedTab.title
-                        AnimatedContent(
-                            targetState = title,
-                            transitionSpec = {
-                                if (pagerState.targetPage > pagerState.currentPage) {
-                                    (slideInVertically { height -> height } + fadeIn() togetherWith
-                                            slideOutVertically { height -> -height } + fadeOut())
-                                } else {
-                                    (slideInVertically { height -> -height } + fadeIn() togetherWith
-                                            slideOutVertically { height -> height } + fadeOut())
-                                }.using(SizeTransform(clip = false))
-                            },
-                            contentAlignment = androidx.compose.ui.Alignment.Center,
-                            label = "topBarTitle"
-                        ) { targetTitle ->
-                            Text(
-                                text = targetTitle,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     },
                     actions = {
                         if (selectedTab == MainTab.PROXIES) {
@@ -361,8 +354,17 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     .fillMaxSize()
                     .padding(padding)
                     .padding(bottom = 80.dp),
+                // Card-like carousel: neighbouring pages peek at the edges and a
+                // gap separates them, so swiping reads as moving between cards.
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                pageSpacing = 12.dp,
                 beyondViewportPageCount = 2
             ) { page ->
+              Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+              ) {
                 when (MainTab.entries[page]) {
                     MainTab.HOME -> HomeTab(
                         running = running,
@@ -413,6 +415,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         onOpenAccessControl = { showAccessControlDialog = true },
                     )
                 }
+              }
             }
         }
 
@@ -485,14 +488,16 @@ private fun FloatingNavItem(tab: MainTab, selected: Boolean, onClick: () -> Unit
             )
             AnimatedVisibility(
                 visible = selected,
-                enter = fadeIn() + expandHorizontally(),
-                exit = fadeOut() + shrinkHorizontally()
+                enter = fadeIn() + expandHorizontally(clip = false),
+                exit = fadeOut() + shrinkHorizontally(clip = false)
             ) {
                 Text(
                     text = tab.title,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = contentColor
+                    color = contentColor,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
