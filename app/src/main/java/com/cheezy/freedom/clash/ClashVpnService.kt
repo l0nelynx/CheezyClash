@@ -42,6 +42,31 @@ class ClashVpnService : VpnService() {
     private var acForceIncluded: Set<String> = emptySet()
     private var acForceExcluded: Set<String> = emptySet()
 
+    // Signature (mtime:size) of the config.yaml currently loaded into the core.
+    // Lets us skip a redundant native reload on the hot start path when the
+    // Proxies tab (or a warm-up) has already loaded the same config.
+    @Volatile
+    private var loadedConfigSig: String? = null
+
+    private fun configSignature(): String {
+        val f = filesDir.resolve("clash/config.yaml")
+        return "${f.lastModified()}:${f.length()}"
+    }
+
+    /**
+     * Loads config.yaml into the core only if it isn't already loaded with the
+     * same content. Shared by the binder's loadConfig (warm-up / Proxies tab)
+     * and startClash, so the config is parsed once, not on every entry point.
+     */
+    private suspend fun ensureConfigLoaded() {
+        val sig = configSignature()
+        val alreadyLoaded = loadedConfigSig == sig &&
+            runCatching { Clash.queryGroupNames(false).isNotEmpty() }.getOrDefault(false)
+        if (alreadyLoaded) return
+        Clash.load(filesDir.resolve("clash"))
+        loadedConfigSig = sig
+    }
+
     private val callbacks = RemoteCallbackList<IClashCallback>()
     private val logCallbacks = RemoteCallbackList<ILogcatCallback>()
 
@@ -51,6 +76,7 @@ class ClashVpnService : VpnService() {
             // Immediately send current state to the new subscriber
             try {
                 callback.onStateChanged(ClashState.running.value, ClashState.lastError.value)
+                callback.onPhaseChanged(ClashState.phase.value.ordinal)
                 callback.onActiveProxyChanged(ClashState.activeProxy.value)
                 callback.onIpAddressesUpdated(ClashState.tunAddress.value, ClashState.localIp.value)
             } catch (e: RemoteException) {}
@@ -67,7 +93,9 @@ class ClashVpnService : VpnService() {
         }
 
         override fun loadConfig(path: String) = runBlocking {
-            Clash.load(java.io.File(path))
+            // path is always the clash home dir; ensureConfigLoaded reads
+            // config.yaml from there and dedups against the loaded signature.
+            ensureConfigLoaded()
         }
 
         override fun queryGroupNames(excludeNotSelectable: Boolean): String = runBlocking {
@@ -149,6 +177,11 @@ class ClashVpnService : VpnService() {
             }
         }
         scope.launch {
+            ClashState.phase.collect { p ->
+                broadcast { it.onPhaseChanged(p.ordinal) }
+            }
+        }
+        scope.launch {
             ClashState.trafficNow.collect { t ->
                 broadcast { it.onTrafficUpdated(t) }
             }
@@ -213,8 +246,10 @@ class ClashVpnService : VpnService() {
             var fd = -1
             var fdOwned = true
             try {
-                val home = filesDir.resolve("clash").apply { mkdirs() }
-                Clash.load(home)
+                ClashState.setError(null)
+                ClashState.setPhase(ConnectionPhase.LOADING)
+                filesDir.resolve("clash").apply { mkdirs() }
+                ensureConfigLoaded()
 
                 // Apply user-saved proxies
                 val currentGroups = Clash.queryGroupNames(false).toSet()
@@ -263,13 +298,16 @@ class ClashVpnService : VpnService() {
                         .onFailure { Log.w(TAG, "exclude-package not installed, skipped: $pkg") }
                 }
 
+                ClashState.setPhase(ConnectionPhase.ESTABLISHING)
                 val pfd = builder.establish() ?: error("VpnService.establish() returned null")
                 fd = pfd.detachFd()
 
                 // Update state BEFORE starting blocking nativeStartTun
+                ClashState.setPhase(ConnectionPhase.STARTING)
                 ClashState.setTunAddress(tunAddress)
                 ClashState.setLocalIp(com.cheezy.freedom.util.NetworkUtils.getLocalIpAddress())
                 ClashState.setRunning(true)
+                ClashState.setPhase(ConnectionPhase.CONNECTED)
                 updateTile()
                 ClashState.setError(null)
                 startTrafficPolling()
@@ -300,6 +338,7 @@ class ClashVpnService : VpnService() {
                 }
                 ClashState.setError(t.message ?: t.javaClass.simpleName)
                 stopClash()
+                ClashState.setPhase(ConnectionPhase.ERROR)
             }
         }
     }
@@ -315,6 +354,7 @@ class ClashVpnService : VpnService() {
             runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
         }
         ClashState.setRunning(false)
+        ClashState.setPhase(ConnectionPhase.IDLE)
         ClashState.setTunAddress(null)
         ClashState.setLocalIp(null)
         ClashState.setActiveProxy(null)

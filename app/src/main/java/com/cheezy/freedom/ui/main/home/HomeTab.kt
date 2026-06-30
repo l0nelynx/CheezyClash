@@ -80,6 +80,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import com.cheezy.freedom.R
+import com.cheezy.freedom.clash.ConnectionPhase
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.ui.library.MorphPolygonShape
 import com.cheezy.freedom.ui.theme.CheezyVPNTheme
@@ -107,7 +108,8 @@ fun HomeTab(
     configName: String?,
     loading: Boolean,
     onRefresh: () -> Unit,
-    onVpnToggle: () -> Unit
+    onVpnToggle: () -> Unit,
+    phase: ConnectionPhase = ConnectionPhase.IDLE
 ) {
     // Preserve last known proxy name so it's visible during exit animation
     var lastKnownProxy by remember { mutableStateOf(proxyname) }
@@ -151,10 +153,10 @@ fun HomeTab(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ConnectButton(
                         running = running,
+                        phase = phase,
                         trafficNowFlow = trafficNowFlow,
                         subscription = subscription,
                         enabled = configName != null,
-                        lastError = lastError,
                         onClick = onVpnToggle
                     )
 
@@ -424,11 +426,11 @@ private fun ErrorCard(message: String) {
 @Composable
 private fun ConnectButton(
     running: Boolean,
+    phase: ConnectionPhase,
     trafficNowFlow: StateFlow<Long>,
     subscription: SubscriptionInfo?,
     enabled: Boolean,
     onClick: () -> Unit,
-    lastError: String? = null
 ) {
     val used = subscription?.let { it.upload + it.download } ?: 0L
     val total = subscription?.total ?: 0L
@@ -456,11 +458,7 @@ private fun ConnectButton(
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessVeryLow),
         label = "buttonScale"
     )
-    var isConnecting by remember { mutableStateOf(false) }
-    LaunchedEffect(running, lastError) {
-        if (running || lastError != null) isConnecting = false
-    }
-    val isRotating = running || isConnecting
+    val isRotating = running || phase.isBusy
     val angle = rotationAngle(isRotating)
     val morph = remember { Morph(MaterialShapes.Cookie4Sided, MaterialShapes.Cookie7Sided) }
     val morphProgress by animateFloatAsState(
@@ -494,10 +492,7 @@ private fun ConnectButton(
             else MaterialTheme.colorScheme.tertiary
         )
         Surface(
-            onClick = {
-                if (!running) isConnecting = true
-                onClick()
-            },
+            onClick = onClick,
             enabled = enabled,
             shape = morphShape,
             color = contentColorinverse,
@@ -524,7 +519,11 @@ private fun ConnectButton(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (running) stringResource(R.string.home_connected) else stringResource(R.string.home_disconnected),
+                    when {
+                        phase.isBusy -> stringResource(R.string.home_connecting)
+                        running -> stringResource(R.string.home_connected)
+                        else -> stringResource(R.string.home_disconnected)
+                    },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = contentColor

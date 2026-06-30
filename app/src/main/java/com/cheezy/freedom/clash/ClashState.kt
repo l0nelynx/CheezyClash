@@ -7,6 +7,9 @@ object ClashState {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running
 
+    private val _phase = MutableStateFlow(ConnectionPhase.IDLE)
+    val phase: StateFlow<ConnectionPhase> = _phase
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError
 
@@ -56,6 +59,10 @@ object ClashState {
 
     fun setActiveProxy(value: String?) {
         _activeProxy.value = value
+    }
+
+    fun setPhase(value: ConnectionPhase) {
+        _phase.value = value
     }
 
     fun setError(value: String?) {

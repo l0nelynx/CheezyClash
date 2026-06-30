@@ -36,6 +36,11 @@ object ClashRemoteManager {
             ClashState.setError(lastError)
         }
 
+        override fun onPhaseChanged(phase: Int) {
+            val value = ConnectionPhase.entries.getOrElse(phase) { ConnectionPhase.IDLE }
+            ClashState.setPhase(value)
+        }
+
         override fun onTrafficUpdated(bytesPerSecond: Long) {
             ClashState.setTraffic(bytesPerSecond)
         }

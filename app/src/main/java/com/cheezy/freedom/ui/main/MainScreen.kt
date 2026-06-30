@@ -107,6 +107,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     val proxyname by ClashState.activeProxy.collectAsState()
     val running by ClashState.running.collectAsState()
+    val phase by ClashState.phase.collectAsState()
     val tunAddress by ClashState.tunAddress.collectAsState()
     val localIp by ClashState.localIp.collectAsState()
     // trafficNow ticks ~once per second. We don't collect it at the MainScreen
@@ -345,6 +346,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             lastError = lastError,
                             configName = configName,
                             loading = loading,
+                            phase = phase,
                             onRefresh = { viewModel.refresh() },
                             onVpnToggle = {
                                 if (running) {

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -156,6 +157,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _needsAuth.value = false
 
+            // Warm up the core: pre-load the config into the :vpn process while the
+            // user is on the home screen, so pressing Connect only has to build the
+            // TUN, not parse the whole config. Guarded by an existing group cache so
+            // we don't trigger a first-time geodata download at startup.
+            warmUpCore()
+
             // The source of truth for title/announce is the YAML subscription; data from the API is overlaid on top.
             syncSubscriptionState()
 
@@ -203,6 +210,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ))
                 }
             }
+        }
+    }
+
+    /**
+     * Eagerly loads the config into the core once the :vpn service is bound, so a
+     * later Connect tap skips the expensive parse. Idempotent on the service side
+     * (dedup by config signature). Only runs when a group cache already exists —
+     * that means the core has loaded this config successfully before (geodata
+     * present), so we won't kick off a slow first-time download in the background.
+     */
+    private fun warmUpCore() {
+        if (ClashState.running.value) return
+        if (!ConfigManager.hasConfig(context)) return
+        if (ConfigManager.loadProxyGroupsCache(context).isNullOrEmpty()) return
+        viewModelScope.launch {
+            ClashRemoteManager.connected.first { it }
+            if (ClashState.running.value) return@launch
+            val home = context.filesDir.resolve("clash").absolutePath
+            withContext(Dispatchers.IO) { ClashRemoteManager.loadConfig(home) }
         }
     }
 

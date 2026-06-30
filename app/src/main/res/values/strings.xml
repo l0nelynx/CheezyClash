@@ -13,6 +13,7 @@
     <string name="home_collapse">Свернуть</string>
     <string name="home_connected">Подключено</string>
     <string name="home_disconnected">Отключено</string>
+    <string name="home_connecting">Подключение…</string>
     <string name="home_action_connect">Подключить</string>
     <string name="home_action_disconnect">Отключить</string>
     <string name="home_stat_used">Использовано</string>
