@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,7 +37,6 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,7 +48,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -317,36 +316,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         .padding(bottom = 88.dp)
                 )
             },
-            topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        val title = if (selectedTab == MainTab.HOME) (subscription?.title ?: "CheezyVPN") else selectedTab.title
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    actions = {
-                        if (selectedTab == MainTab.PROXIES) {
-                            IconButton(onClick = { viewModel.measurePings() }, enabled = !proxiesPinging) {
-                                if (proxiesPinging) {
-                                    CircularWavyProgressIndicator(
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                } else {
-                                    Icon(Icons.Default.Speed, contentDescription = "Проверить ping")
-                                }
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
         ) { padding ->
             HorizontalPager(
                 state = pagerState,
@@ -360,62 +329,73 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 pageSpacing = 12.dp,
                 beyondViewportPageCount = 2
             ) { page ->
-              Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-              ) {
                 when (MainTab.entries[page]) {
-                    MainTab.HOME -> HomeTab(
-                        running = running,
-                        proxyname = proxyname ?: "",
-                        trafficNowFlow = trafficNowFlow,
-                        subscription = subscription,
-                        lastUpdateTime = lastUpdateTime,
-                        lastError = lastError,
-                        configName = configName,
-                        loading = loading,
-                        onRefresh = { viewModel.refresh() },
-                        onVpnToggle = {
-                            if (running) {
-                                ClashVpnService.stop(context)
-                            } else if (!ConfigManager.hasConfig(context)) {
-                                ClashState.setError("First load the configuration")
-                            } else if (localNetworkPermName != null && !localNetworkGranted()) {
-                                // Request local network access (Android 16+/17+).
-                                // After user response, VPN starts — refusal doesn't block operation through loopback.
-                                localNetworkPermissionLauncher.launch(localNetworkPermName)
-                            } else {
-                                startVpnAfterPermissions()
+                    MainTab.HOME -> TabCard(title = subscription?.title ?: "CheezyVPN") {
+                        HomeTab(
+                            running = running,
+                            proxyname = proxyname ?: "",
+                            trafficNowFlow = trafficNowFlow,
+                            subscription = subscription,
+                            lastUpdateTime = lastUpdateTime,
+                            lastError = lastError,
+                            configName = configName,
+                            loading = loading,
+                            onRefresh = { viewModel.refresh() },
+                            onVpnToggle = {
+                                if (running) {
+                                    ClashVpnService.stop(context)
+                                } else if (!ConfigManager.hasConfig(context)) {
+                                    ClashState.setError("First load the configuration")
+                                } else if (localNetworkPermName != null && !localNetworkGranted()) {
+                                    // Request local network access (Android 16+/17+).
+                                    // After user response, VPN starts — refusal doesn't block operation through loopback.
+                                    localNetworkPermissionLauncher.launch(localNetworkPermName)
+                                } else {
+                                    startVpnAfterPermissions()
+                                }
+                            }
+                        )
+                    }
+                    MainTab.PROXIES -> TabCard(
+                        title = MainTab.PROXIES.title,
+                        action = {
+                            IconButton(onClick = { viewModel.measurePings() }, enabled = !proxiesPinging) {
+                                if (proxiesPinging) {
+                                    CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
+                                } else {
+                                    Icon(Icons.Default.Speed, contentDescription = "Проверить ping")
+                                }
                             }
                         }
-                    )
-                    MainTab.PROXIES -> ProxiesTab(running)
-                    MainTab.SETTINGS -> SettingsTab(
-                        userEmail = userEmail,
-                        tgId = tgId,
-                        isCheckingUpdate = isCheckingUpdate,
-                        showAccountCard = AppDeps.accountProvider.supportsAuthFlow,
-                        showDevices = AppDeps.accountProvider.supportsDeviceManagement,
-                        showSubscription = AppDeps.accountProvider.supportsBilling,
-                        showTelegramLink = AppDeps.accountProvider.supportsTelegramLink,
-                        showLogout = AppDeps.accountProvider.supportsAuthFlow,
-                        onAddConfig = { viewModel.openUrlDialog() },
-                        onCheckUpdate = { viewModel.checkUpdate() },
-                        onLogout = { viewModel.logout() },
-                        onOpenSubscription = {
-                            viewModel.subscriptionIntent()?.let { subscriptionLauncher.launch(it) }
-                        },
-                        onOpenDevices = {
-                            viewModel.devicesIntent()?.let { context.startActivity(it) }
-                        },
-                        onShareVpn = { showShareDialog = true },
-                        onUnlinkTelegram = { viewModel.unlinkTelegram() },
-                        onRequestTransfer = { showTransferDialog = true },
-                        onOpenAccessControl = { showAccessControlDialog = true },
-                    )
+                    ) {
+                        ProxiesTab(running)
+                    }
+                    MainTab.SETTINGS -> TabCard(title = MainTab.SETTINGS.title) {
+                        SettingsTab(
+                            userEmail = userEmail,
+                            tgId = tgId,
+                            isCheckingUpdate = isCheckingUpdate,
+                            showAccountCard = AppDeps.accountProvider.supportsAuthFlow,
+                            showDevices = AppDeps.accountProvider.supportsDeviceManagement,
+                            showSubscription = AppDeps.accountProvider.supportsBilling,
+                            showTelegramLink = AppDeps.accountProvider.supportsTelegramLink,
+                            showLogout = AppDeps.accountProvider.supportsAuthFlow,
+                            onAddConfig = { viewModel.openUrlDialog() },
+                            onCheckUpdate = { viewModel.checkUpdate() },
+                            onLogout = { viewModel.logout() },
+                            onOpenSubscription = {
+                                viewModel.subscriptionIntent()?.let { subscriptionLauncher.launch(it) }
+                            },
+                            onOpenDevices = {
+                                viewModel.devicesIntent()?.let { context.startActivity(it) }
+                            },
+                            onShareVpn = { showShareDialog = true },
+                            onUnlinkTelegram = { viewModel.unlinkTelegram() },
+                            onRequestTransfer = { showTransferDialog = true },
+                            onOpenAccessControl = { showAccessControlDialog = true },
+                        )
+                    }
                 }
-              }
             }
         }
 
@@ -430,7 +410,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             ElevatedCard(
                 modifier = Modifier.width(280.dp),
                 shape = RoundedCornerShape(32.dp),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -450,6 +433,51 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * A page wrapped as a rounded card with its title baked into the header. The
+ * old top app bar is gone — the title lives inside the card so the card reads
+ * as a self-contained surface and the swipe feels like flipping between cards.
+ */
+@Composable
+private fun TabCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 8.dp, top = 18.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                action?.invoke()
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                content()
             }
         }
     }

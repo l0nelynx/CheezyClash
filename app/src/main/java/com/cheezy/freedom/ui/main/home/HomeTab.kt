@@ -21,12 +21,14 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -117,52 +119,69 @@ fun HomeTab(
         state = pullState,
         modifier = Modifier.fillMaxSize()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            subscription?.announce?.takeIf { it.isNotBlank() }?.let { announce ->
-                AnnounceCard(text = announce)
-                Spacer(Modifier.height(8.dp))
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            ConnectButton(
-                running = running,
-                trafficNowFlow = trafficNowFlow,
-                subscription = subscription,
-                enabled = configName != null,
-                lastError = lastError,
-                onClick = onVpnToggle
-            )
-
-            AnimatedVisibility(
-                visible = running && proxyname.isNotBlank(),
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        // Content is laid out to fill the card exactly (top / centre / bottom blocks
+        // spread via SpaceBetween) so nothing scrolls on a normal screen. The
+        // verticalScroll + heightIn(min) only engages as a safety net on very short
+        // screens, and is also what lets the pull-to-refresh gesture work.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val minContentHeight = maxHeight
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = minContentHeight)
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
+                // Top block — announcement (or nothing).
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    subscription?.announce?.takeIf { it.isNotBlank() }?.let { announce ->
+                        AnnounceCard(text = announce)
+                    }
+                }
+
+                // Centre block — the connect button and active-proxy badge.
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(Modifier.height(14.dp))
-                    ProxyBadge(proxyname = lastKnownProxy)
+                    ConnectButton(
+                        running = running,
+                        trafficNowFlow = trafficNowFlow,
+                        subscription = subscription,
+                        enabled = configName != null,
+                        lastError = lastError,
+                        onClick = onVpnToggle
+                    )
+
+                    AnimatedVisibility(
+                        visible = running && proxyname.isNotBlank(),
+                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Spacer(Modifier.height(14.dp))
+                            ProxyBadge(proxyname = lastKnownProxy)
+                        }
+                    }
+                }
+
+                // Bottom block — error and subscription stats.
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (lastError != null) {
+                        ErrorCard(message = lastError)
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    subscription?.let {
+                        SubscriptionCard(info = it, lastUpdateTime = lastUpdateTime)
+                    }
                 }
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (lastError != null) {
-                ErrorCard(message = lastError)
-                Spacer(Modifier.height(8.dp))
-            }
-
-            subscription?.let {
-                SubscriptionCard(info = it, lastUpdateTime = lastUpdateTime)
-            }
-
-            Spacer(Modifier.weight(1f))
         }
     }
 }

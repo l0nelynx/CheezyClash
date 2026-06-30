@@ -80,7 +80,10 @@ fun ProxiesTab(
             }
             else -> {
                 val groups = rawGroups ?: emptyList()
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp)
+                ) {
                     groups.forEach { (groupName, proxies) ->
                         val isExpanded = expandedGroups[groupName] == true
                         val currentProxy = proxies.firstOrNull()?.groupNow ?: ""
