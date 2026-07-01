@@ -6,7 +6,16 @@
     <!-- Bottom navigation -->
     <string name="tab_home">Главная</string>
     <string name="tab_proxies">Правила</string>
+    <string name="tab_profiles">Профили</string>
     <string name="tab_settings">Настройки</string>
+
+    <!-- Profiles tab -->
+    <string name="profiles_add">Добавить подписку</string>
+    <string name="profiles_refresh">Обновить</string>
+    <string name="profiles_delete">Удалить</string>
+    <string name="profiles_delete_confirm">Удалить профиль «%1$s»?</string>
+    <string name="profiles_managed_badge">Аккаунт</string>
+    <string name="profiles_empty">Нет профилей. Добавьте подписку.</string>
 
     <!-- Home tab -->
     <string name="home_read_more">Читать далее</string>

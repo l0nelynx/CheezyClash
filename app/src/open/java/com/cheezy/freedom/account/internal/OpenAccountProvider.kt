@@ -23,6 +23,7 @@ class OpenAccountProvider : AccountProvider {
     override val supportsBilling: Boolean = false
     override val supportsTelegramLink: Boolean = false
     override val supportsDeviceManagement: Boolean = false
+    override val supportsMultipleProfiles: Boolean = true
 
     override suspend fun bootstrap(context: Context) {
         // Nothing to restore — in the open flow, the state is always Anonymous.

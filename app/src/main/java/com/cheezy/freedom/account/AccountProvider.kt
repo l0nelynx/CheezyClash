@@ -11,6 +11,14 @@ interface AccountProvider {
     val supportsTelegramLink: Boolean
     val supportsDeviceManagement: Boolean
 
+    /**
+     * Whether the user may manage multiple subscription profiles (add/switch/
+     * delete). Open flavor = true. Proprietary = false: it shows a single
+     * backend-managed profile pinned first, non-deletable. Default false so the
+     * proprietary provider needn't override it.
+     */
+    val supportsMultipleProfiles: Boolean get() = false
+
     suspend fun bootstrap(context: Context)
 
     suspend fun signOut(context: Context): Result<Unit>

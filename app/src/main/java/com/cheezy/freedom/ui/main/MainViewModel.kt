@@ -17,6 +17,9 @@ import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
 import com.cheezy.freedom.clash.ConfigOverrideManager
 import com.cheezy.freedom.clash.LocalProxyOverride
+import com.cheezy.freedom.clash.Profile
+import com.cheezy.freedom.clash.ProfileManager
+import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnInfo
 import com.cheezy.freedom.ui.main.proxies.ProxyUiData
@@ -40,6 +43,7 @@ sealed class MainEffect {
     data class LaunchVerify(val email: String?) : MainEffect()
     data class ShowSnackbar(val text: String) : MainEffect()
     data class OpenUrl(val url: String) : MainEffect()
+    data class LaunchIntent(val intent: Intent) : MainEffect()
     data object CloseDialogs : MainEffect()
 }
 
@@ -47,8 +51,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val context: Context get() = getApplication()
 
-    private val _configName = MutableStateFlow(ConfigManager.currentName(context))
+    private val _configName = MutableStateFlow(ProfileStore.active(context)?.name)
     val configName: StateFlow<String?> = _configName.asStateFlow()
+
+    // Profile catalog for the Profiles tab.
+    private val _profiles = MutableStateFlow(ProfileStore.list(context))
+    val profiles: StateFlow<List<Profile>> = _profiles.asStateFlow()
+
+    private val _activeProfileId = MutableStateFlow(ProfileStore.activeId(context))
+    val activeProfileId: StateFlow<String?> = _activeProfileId.asStateFlow()
+
+    // Ids currently being refreshed (per-row spinners in the Profiles tab).
+    private val _refreshingProfiles = MutableStateFlow<Set<String>>(emptySet())
+    val refreshingProfiles: StateFlow<Set<String>> = _refreshingProfiles.asStateFlow()
+
+    // Prefill for the add/URL dialog (used by the "add subscription" deep link).
+    private val _urlDialogPrefill = MutableStateFlow("")
+    val urlDialogPrefill: StateFlow<String> = _urlDialogPrefill.asStateFlow()
 
     private val _userEmail = MutableStateFlow<String?>(null)
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
@@ -139,11 +158,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val effects: SharedFlow<MainEffect> = _effects.asSharedFlow()
 
     fun dismissUpdateDialog() { _updateInfo.value = null }
-    fun openUrlDialog() { _showUrlDialog.value = true }
-    fun dismissUrlDialog() { _showUrlDialog.value = false }
+    fun openUrlDialog(prefill: String = "") {
+        _urlDialogPrefill.value = prefill
+        _showUrlDialog.value = true
+    }
+    fun dismissUrlDialog() {
+        _showUrlDialog.value = false
+        _urlDialogPrefill.value = ""
+    }
+
+    private fun refreshProfilesState() {
+        _profiles.value = ProfileStore.list(context)
+        _activeProfileId.value = ProfileStore.activeId(context)
+        _configName.value = ProfileStore.active(context)?.name
+    }
 
     fun bootstrap() {
         viewModelScope.launch {
+            // Migrate a pre-multiprofile single config into profile #1 (idempotent).
+            withContext(Dispatchers.IO) { ProfileManager.migrateLegacyIfNeeded(context) }
+            refreshProfilesState()
+
             // Restore account cache (in open this is a no-op; in proprietary it reads last_me).
             AppDeps.accountProvider.bootstrap(context)
 
@@ -167,7 +202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             syncSubscriptionState()
 
             if (ClashState.lastUpdateTime.value == 0L) {
-                ClashState.setLastUpdateTime(ConfigManager.lastUpdateTime(context))
+                ClashState.setLastUpdateTime(ProfileStore.active(context)?.lastUpdateTime ?: 0L)
             }
 
             // Subscribe to config time updates as well as the service connection state
@@ -183,7 +218,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
             }
 
-            ConfigManager.ensureUpdateScheduled(context)
+            ProfileManager.ensureUpdateScheduled(context)
 
             viewModelScope.launch { migrateClashCacheIfVersionChanged() }
 
@@ -227,24 +262,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             ClashRemoteManager.connected.first { it }
             if (ClashState.running.value) return@launch
-            val home = context.filesDir.resolve("clash").absolutePath
-            withContext(Dispatchers.IO) { ClashRemoteManager.loadConfig(home) }
+            val activeDir = ProfileStore.activeDir(context).absolutePath
+            withContext(Dispatchers.IO) { ClashRemoteManager.loadConfig(activeDir) }
         }
     }
 
     private fun handleSyncSuccess() {
-        _configName.value = ConfigManager.currentName(context)
+        refreshProfilesState()
         syncSubscriptionState()
     }
 
     private fun syncSubscriptionState() {
-        val cachedFromYaml = ConfigManager.loadSubscription(context)
+        val active = ProfileStore.active(context)
+        val cachedFromYaml = active?.subscription
         val snap = (AppDeps.accountProvider.state.value as? AccountState.Authenticated)?.snapshot
         val merged = mergeSubscription(cachedFromYaml, snap)
         if (merged != null) {
             ClashState.setSubscription(merged)
-            // Save the merged state as current to avoid data loss upon restart
-            ConfigManager.saveSubscription(context, merged)
+            // Persist merged state onto the active profile to avoid data loss on restart.
+            if (active != null) {
+                ProfileStore.upsert(context, active.copy(subscription = merged))
+                _profiles.value = ProfileStore.list(context)
+            }
         }
     }
 
@@ -270,42 +309,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val currentVer = BuildConfig.VERSION_NAME
         if (lastVer == currentVer) return
 
-        // On a core/app version change only the core's own runtime cache may be
-        // format-incompatible between mihomo builds, so clear just that. Everything
-        // else — config.yaml/base.yaml AND the rule-provider caches (rule-sets/,
-        // ruleset/, ru-bundle/, *.mrs, *.yaml) — is preserved, so a cold start after
-        // an update doesn't have to re-download ~25 rule sets through the proxy.
-        val volatile = setOf("cache.db")
-        context.filesDir.resolve("clash").listFiles()?.forEach { file ->
-            if (file.name in volatile) {
-                file.deleteRecursively()
-            }
-        }
+        // On a core/app version change only the core's own runtime cache (cache.db,
+        // in the shared HOME) may be format-incompatible between mihomo builds, so
+        // clear just that. Everything else — each profile's config.yaml/base.yaml and
+        // its rule-provider caches (profiles/<id>/providers/) — is preserved, so a
+        // cold start after an update doesn't have to re-download rule sets.
+        context.filesDir.resolve("clash/cache.db").let { if (it.exists()) it.deleteRecursively() }
 
         prefs.edit().putString("last_run_version", currentVer).apply()
-        val url = ConfigManager.lastUrl(context)
-        if (!url.isNullOrBlank()) {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    AppDeps.subscriptionGateway.importByUrl(context, url).getOrThrow()
-                }
-                _configName.value = ConfigManager.currentName(context)
-            }
-        }
     }
 
     fun onPaymentSuccess() {
         viewModelScope.launch {
+            // syncFromBackend re-imports the managed subscription (proprietary).
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
-            ConfigManager.lastUrl(context)?.let { url ->
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        AppDeps.subscriptionGateway.importByUrl(context, url).getOrThrow()
-                    }
-                }
-            }
-            _configName.value = ConfigManager.currentName(context)
+            refreshProfilesState()
             syncSubscriptionState()
+            reloadProxyGroups(forceLoad = true)
             _effects.emit(MainEffect.ShowSnackbar("Оплата прошла успешно!"))
         }
     }
@@ -315,45 +335,103 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else ClashState.setError("VPN permission denied")
     }
 
+    /** Pull-to-refresh on Home: refresh the active profile's subscription. */
     fun refresh() {
         _loading.value = true
         ClashState.setError(null)
         viewModelScope.launch {
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
-            val url = ConfigManager.lastUrl(context)
-            if (url.isNullOrBlank()) {
-                ClashState.setError("Нет сохранённого URL")
+            if (ProfileStore.activeId(context) == null) {
+                ClashState.setError("Нет активного профиля")
                 _loading.value = false
             } else {
-                withContext(Dispatchers.IO) {
-                    runCatching { AppDeps.subscriptionGateway.importByUrl(context, url).getOrThrow() }
-                }
+                withContext(Dispatchers.IO) { ProfileManager.refreshActive(context) }
                 _loading.value = false
-                _configName.value = ConfigManager.currentName(context)
+                refreshProfilesState()
                 syncSubscriptionState()
-                // Subscription updated — the set of groups/icons in YAML might have changed;
-                // push this to the UI, same as importByUrl(url) does.
                 reloadProxyGroups(forceLoad = true)
             }
         }
     }
 
-    fun importFromUrl(url: String) {
+    /** Onboarding / add-subscription dialog confirm: add [url] as a new profile. */
+    fun importFromUrl(url: String) = addProfile(url)
+
+    fun addProfile(url: String) {
         _showUrlDialog.value = false
+        _urlDialogPrefill.value = ""
         _loading.value = true
         ClashState.setError(null)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                AppDeps.subscriptionGateway.importByUrl(context, url)
+                AppDeps.subscriptionGateway.addProfile(context, url)
             }
             _loading.value = false
             result.onSuccess {
-                _configName.value = it
                 _needsAuth.value = false
+                refreshProfilesState()
                 syncSubscriptionState()
                 reloadProxyGroups(forceLoad = true)
+            }.onFailure { ClashState.setError("Загрузка не удалась: ${it.message}") }
+        }
+    }
+
+    /** Profiles tab: make [id] the active profile (restarts the tunnel if running). */
+    fun switchProfile(id: String) {
+        if (ProfileStore.activeId(context) == id) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { ProfileManager.switchTo(context, id) }
+            refreshProfilesState()
+            syncSubscriptionState()
+            reloadProxyGroups(forceLoad = true)
+        }
+    }
+
+    /** Profiles tab: delete a user profile. */
+    fun removeProfile(id: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { ProfileManager.remove(context, id) }
+            refreshProfilesState()
+            syncSubscriptionState()
+            reloadProxyGroups(forceLoad = true)
+        }
+    }
+
+    /** Profiles tab: manual refresh of a single profile. Managed profiles refresh
+     *  via the backend sync; user profiles re-download their URL directly. */
+    fun refreshProfile(id: String) {
+        if (id in _refreshingProfiles.value) return
+        viewModelScope.launch {
+            _refreshingProfiles.value = _refreshingProfiles.value + id
+            try {
+                val managed = ProfileStore.get(context, id)?.managed == true
+                val result = withContext(Dispatchers.IO) {
+                    if (managed) AppDeps.subscriptionGateway.syncFromBackend(context)
+                    else ProfileManager.refreshProfile(context, id)
+                }
+                result.onFailure {
+                    _effects.emit(MainEffect.ShowSnackbar("Обновление не удалось: ${it.message}"))
+                }
+                refreshProfilesState()
+                syncSubscriptionState()
+                if (ProfileStore.activeId(context) == id) reloadProxyGroups(forceLoad = true)
+            } finally {
+                _refreshingProfiles.value = _refreshingProfiles.value - id
             }
-                .onFailure { ClashState.setError("Загрузка не удалась: ${it.message}") }
+        }
+    }
+
+    /** Routes an incoming deep link (parsed in MainScreen). */
+    fun handleDeepLink(link: DeepLink) {
+        when (link) {
+            is DeepLink.Add -> openUrlDialog(prefill = link.url)
+            is DeepLink.Login -> {
+                val intent = AppDeps.launchers.loginDeepLinkIntent(context, link.payload)
+                if (intent != null) {
+                    _effects.tryEmit(MainEffect.LaunchIntent(intent))
+                }
+                // else: unsupported (open / backend not ready) — silently ignore.
+            }
         }
     }
 
@@ -370,7 +448,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AppDeps.accountProvider.signOut(context)
             if (ClashState.running.value) ClashVpnService.stop(context)
             ConfigManager.clearAll(context)
-            _configName.value = null
+            refreshProfilesState()
             _userEmail.value = null
             _needsAuth.value = true
         }
@@ -383,10 +461,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // was last bootstrapped as Anonymous (no config existed yet); now a config is on
             // disk, so re-bootstrap to pick up Unregistered/Authenticated.
             AppDeps.accountProvider.bootstrap(context)
-            // Refresh the config name directly from disk so the connect button enables.
+            // Refresh profile state directly so the connect button enables.
             // In unregistered mode syncFromBackend fails ("No access token") and never
             // reaches handleSyncSuccess, so configName would otherwise stay null.
-            _configName.value = ConfigManager.currentName(context)
+            refreshProfilesState()
             syncSubscriptionState()
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
                 .onFailure { Log.e("Auth", "Failed to sync sub", it) }
@@ -443,7 +521,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val clashHome = context.filesDir.resolve("clash")
+                    val activeDir = ProfileStore.activeDir(context)
 
                     // Check the current state of the core in the remote process
                     val coreNames = ClashRemoteManager.queryGroupNames(false)
@@ -454,7 +532,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val didReload = ConfigManager.hasConfig(context) &&
                             (!isClashLoaded && !isAlreadyLoaded || forceLoad)
                     if (didReload) {
-                        ClashRemoteManager.loadConfig(clashHome.absolutePath)
+                        ClashRemoteManager.loadConfig(activeDir.absolutePath)
                         isClashLoaded = true
 
                         val validGroups = ClashRemoteManager.queryGroupNames(false).toSet()

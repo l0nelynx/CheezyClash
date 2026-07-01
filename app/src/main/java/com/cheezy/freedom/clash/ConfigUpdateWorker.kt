@@ -7,29 +7,37 @@ import com.cheezy.freedom.account.AppDeps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Periodic background refresh of ALL profiles (not just the active one). A single
+ * unique-periodic work fires on the smallest per-profile interval; each firing
+ * refreshes every profile whose own interval is due. One profile failing does
+ * not abort the rest.
+ */
 class ConfigUpdateWorker(
     context: Context,
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        // First, try to update profile info and URL via the subscription gateway.
-        // In proprietary, this triggers /me and automatically redownloads YAML if the
-        // URL changed; in open, this is a no-op — we just proceed to the saved URL below.
-        AppDeps.subscriptionGateway.syncFromBackend(applicationContext)
+        val ctx = applicationContext
+        ProfileManager.migrateLegacyIfNeeded(ctx)
 
-        // Get the current URL (it might have been updated above)
-        val url = ConfigManager.lastUrl(applicationContext) ?: return@withContext Result.failure()
+        // Managed (backend-owned) profile is refreshed by the gateway sync
+        // (proprietary re-fetches /me and re-imports; open is a no-op).
+        AppDeps.subscriptionGateway.syncFromBackend(ctx)
 
-        runCatching {
-            // If syncFromBackend did not trigger an import (URL didn't change / no
-            // backend), forcibly update the config content from the current URL via
-            // the gateway — in proprietary, this attaches Cheezy header validators;
-            // in open, it doesn't.
-            AppDeps.subscriptionGateway.importByUrl(applicationContext, url).getOrThrow()
-        }.fold(
-            onSuccess = { Result.success() },
-            onFailure = { Result.retry() }
-        )
+        val now = System.currentTimeMillis()
+        var anyFailure = false
+
+        ProfileStore.list(ctx).forEach { profile ->
+            if (profile.managed) return@forEach          // handled by syncFromBackend
+            val url = profile.url ?: return@forEach
+            val intervalMs = profile.updateIntervalHours.toLong() * 3_600_000L
+            val due = intervalMs > 0 && now - profile.lastUpdateTime >= intervalMs
+            if (!due) return@forEach
+            ProfileManager.refreshProfile(ctx, profile.id).onFailure { anyFailure = true }
+        }
+
+        if (anyFailure) Result.retry() else Result.success()
     }
 }

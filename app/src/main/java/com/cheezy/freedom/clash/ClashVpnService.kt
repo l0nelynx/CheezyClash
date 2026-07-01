@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.io.File
 
 class ClashVpnService : VpnService() {
 
@@ -42,6 +43,14 @@ class ClashVpnService : VpnService() {
     private var acForceIncluded: Set<String> = emptySet()
     private var acForceExcluded: Set<String> = emptySet()
 
+    // Directory of the active profile's config (profiles/<id>/). The core HOME
+    // stays filesDir/clash (shared static), but the *load* directory is per
+    // profile. The main process passes the active dir via Intent extras (start)
+    // or loadConfig(path); we only fall back to reading it from disk on a fresh
+    // (OS-restarted) process, where SharedPreferences are authoritative.
+    @Volatile
+    private var activeConfigDir: File = File("")
+
     // Signature (mtime:size) of the config.yaml currently loaded into the core.
     // Lets us skip a redundant native reload on the hot start path when the
     // Proxies tab (or a warm-up) has already loaded the same config.
@@ -49,21 +58,22 @@ class ClashVpnService : VpnService() {
     private var loadedConfigSig: String? = null
 
     private fun configSignature(): String {
-        val f = filesDir.resolve("clash/config.yaml")
+        val f = activeConfigDir.resolve("config.yaml")
         return "${f.lastModified()}:${f.length()}"
     }
 
     /**
-     * Loads config.yaml into the core only if it isn't already loaded with the
-     * same content. Shared by the binder's loadConfig (warm-up / Proxies tab)
-     * and startClash, so the config is parsed once, not on every entry point.
+     * Loads config.yaml from [activeConfigDir] into the core only if it isn't
+     * already loaded with the same content. Shared by the binder's loadConfig
+     * (warm-up / Proxies tab) and startClash, so the config is parsed once, not
+     * on every entry point.
      */
     private suspend fun ensureConfigLoaded() {
         val sig = configSignature()
         val alreadyLoaded = loadedConfigSig == sig &&
             runCatching { Clash.queryGroupNames(false).isNotEmpty() }.getOrDefault(false)
         if (alreadyLoaded) return
-        Clash.load(filesDir.resolve("clash"))
+        Clash.load(activeConfigDir)
         loadedConfigSig = sig
     }
 
@@ -93,8 +103,9 @@ class ClashVpnService : VpnService() {
         }
 
         override fun loadConfig(path: String) = runBlocking {
-            // path is always the clash home dir; ensureConfigLoaded reads
-            // config.yaml from there and dedups against the loaded signature.
+            // path is the active profile's directory; adopt it and load config.yaml
+            // from there (dedup against the loaded signature).
+            if (path.isNotBlank()) activeConfigDir = File(path)
             ensureConfigLoaded()
         }
 
@@ -167,6 +178,9 @@ class ClashVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         ClashCore.init(this)
+        // Default to the active profile dir from disk; overridden by the start
+        // Intent extra / loadConfig(path) during normal operation.
+        activeConfigDir = ProfileStore.activeDir(this)
         ensureChannel()
         
         // Forward ClashState changes (in this process) to all remote callbacks
@@ -222,9 +236,10 @@ class ClashVpnService : VpnService() {
                 return START_NOT_STICKY
             }
         }
-        // Read AC settings from Intent extras (provided by the main process in start()).
-        // Falls back to SharedPreferences only when intent is null (OS restart after OOM kill),
-        // in which case the :vpn process is fresh and reads the correct values from disk.
+        // Read AC settings + active profile dir from Intent extras (provided by the
+        // main process in start()). Falls back to SharedPreferences only when intent
+        // is null (OS restart after OOM kill), in which case the :vpn process is fresh
+        // and reads the correct values from disk.
         if (intent != null && intent.hasExtra(EXTRA_AC_ENABLED)) {
             acEnabled = intent.getBooleanExtra(EXTRA_AC_ENABLED, false)
             acForceIncluded = intent.getStringArrayExtra(EXTRA_AC_FORCE_INCLUDED)?.toSet() ?: emptySet()
@@ -234,6 +249,9 @@ class ClashVpnService : VpnService() {
             acEnabled = ConfigManager.isAccessControlEnabled(ctx)
             acForceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(ctx) else emptySet()
             acForceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(ctx) else emptySet()
+        }
+        intent?.getStringExtra(EXTRA_ACTIVE_DIR)?.takeIf { it.isNotBlank() }?.let {
+            activeConfigDir = File(it)
         }
         startForegroundCompat()
         startClash()
@@ -248,7 +266,8 @@ class ClashVpnService : VpnService() {
             try {
                 ClashState.setError(null)
                 ClashState.setPhase(ConnectionPhase.LOADING)
-                filesDir.resolve("clash").apply { mkdirs() }
+                filesDir.resolve("clash").apply { mkdirs() } // core HOME (shared static)
+                activeConfigDir.mkdirs()
                 ensureConfigLoaded()
 
                 // Apply user-saved proxies
@@ -270,8 +289,8 @@ class ClashVpnService : VpnService() {
                 val tunGateway = tunAddress
                 val tunPortal = neighborAddress(tunAddress)
                 val dnsServer = VPN_DNS
-                val stack = ConfigManager.readTunStack(ctx) ?: "gvisor"
-                val base = ConfigManager.readExcludePackages(ctx).toMutableSet()
+                val stack = ConfigManager.readTunStack(activeConfigDir) ?: "gvisor"
+                val base = ConfigManager.readExcludePackages(activeConfigDir).toMutableSet()
                 val excludePackages = if (acEnabled) {
                     (base - acForceIncluded + acForceExcluded).toList()
                 } else {
@@ -486,10 +505,12 @@ class ClashVpnService : VpnService() {
         private const val EXTRA_AC_ENABLED = "extra.ac_enabled"
         private const val EXTRA_AC_FORCE_INCLUDED = "extra.ac_force_included"
         private const val EXTRA_AC_FORCE_EXCLUDED = "extra.ac_force_excluded"
+        private const val EXTRA_ACTIVE_DIR = "extra.active_dir"
 
         fun start(context: Context) {
-            // Read AC settings in the calling (main) process — its SharedPreferences cache
-            // is always up-to-date. The :vpn process has a separate cache that may be stale.
+            // Read AC settings + active profile dir in the calling (main) process — its
+            // SharedPreferences cache is always up-to-date. The :vpn process has a separate
+            // cache that may be stale.
             val acEnabled = ConfigManager.isAccessControlEnabled(context)
             val forceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(context) else emptySet()
             val forceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(context) else emptySet()
@@ -498,6 +519,7 @@ class ClashVpnService : VpnService() {
                 putExtra(EXTRA_AC_ENABLED, acEnabled)
                 putExtra(EXTRA_AC_FORCE_INCLUDED, forceIncluded.toTypedArray())
                 putExtra(EXTRA_AC_FORCE_EXCLUDED, forceExcluded.toTypedArray())
+                putExtra(EXTRA_ACTIVE_DIR, ProfileStore.activeDir(context).absolutePath)
             }
             if (Build.VERSION.SDK_INT >= 26) {
                 context.startForegroundService(intent)

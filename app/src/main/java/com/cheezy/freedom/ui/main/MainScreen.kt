@@ -39,7 +39,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -82,25 +84,33 @@ import com.cheezy.freedom.account.AppDeps
 import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
+import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnDialog
+import com.cheezy.freedom.ui.main.profiles.ProfilesTab
 import com.cheezy.freedom.ui.main.settings.AccessControlScreen
 import com.cheezy.freedom.ui.main.dialogs.UpdateDialog
 import com.cheezy.freedom.ui.main.dialogs.UrlDialog
 import com.cheezy.freedom.ui.main.home.HomeTab
 import com.cheezy.freedom.ui.main.proxies.ProxiesTab
 import com.cheezy.freedom.ui.main.settings.SettingsTab
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private enum class MainTab(@StringRes val titleRes: Int, val icon: ImageVector) {
     HOME(R.string.tab_home, Icons.Default.Home),
     PROXIES(R.string.tab_proxies, Icons.Default.List),
+    PROFILES(R.string.tab_profiles, Icons.Default.Layers),
     SETTINGS(R.string.tab_settings, Icons.Default.Settings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(
+    viewModel: MainViewModel = viewModel(),
+    deepLinkFlow: StateFlow<String?>? = null,
+    onDeepLinkHandled: () -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
@@ -223,6 +233,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     showTransferDialog = false
                     viewModel.dismissUrlDialog()
                 }
+                is MainEffect.LaunchIntent -> {
+                    runCatching { context.startActivity(effect.intent) }
+                }
                 is MainEffect.OpenUrl -> {
                     val originalUrl = effect.url
                     android.util.Log.d("CheezyVPN", "Opening URL: $originalUrl")
@@ -270,9 +283,20 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    if (deepLinkFlow != null) {
+        LaunchedEffect(deepLinkFlow) {
+            deepLinkFlow.collect { raw ->
+                val link = parseDeepLink(raw) ?: return@collect
+                viewModel.handleDeepLink(link)
+                onDeepLinkHandled()
+            }
+        }
+    }
+
     if (showUrlDialog) {
+        val prefill by viewModel.urlDialogPrefill.collectAsState()
         UrlDialog(
-            initial = ConfigManager.lastUrl(context).orEmpty(),
+            initial = prefill,
             onDismiss = { viewModel.dismissUrlDialog() },
             onConfirm = { url -> viewModel.importFromUrl(url) }
         )
@@ -290,7 +314,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         ShareVpnDialog(
             tunAddress = tunAddress ?: "",
             localIp = localIp ?: "",
-            subscriptionUrl = ConfigManager.lastUrl(context).orEmpty(),
+            subscriptionUrl = ProfileStore.active(context)?.url.orEmpty(),
             info = shareInfo,
             onToggleLocalProxy = viewModel::toggleLocalProxy,
             onDismiss = { showShareDialog = false }
@@ -377,6 +401,18 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     ) {
                         ProxiesTab(running)
                     }
+                    MainTab.PROFILES -> TabCard(
+                        title = stringResource(MainTab.PROFILES.titleRes),
+                        action = if (AppDeps.accountProvider.supportsMultipleProfiles) {
+                            {
+                                IconButton(onClick = { viewModel.openUrlDialog() }) {
+                                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.profiles_add))
+                                }
+                            }
+                        } else null
+                    ) {
+                        ProfilesTab(viewModel)
+                    }
                     MainTab.SETTINGS -> TabCard(title = stringResource(MainTab.SETTINGS.titleRes)) {
                         SettingsTab(
                             userEmail = userEmail,
@@ -415,7 +451,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             contentAlignment = Alignment.Center
         ) {
             ElevatedCard(
-                modifier = Modifier.width(280.dp),
+                modifier = Modifier.width(320.dp),
                 shape = RoundedCornerShape(32.dp),
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest

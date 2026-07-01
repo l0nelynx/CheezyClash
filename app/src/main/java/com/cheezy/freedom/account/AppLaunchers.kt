@@ -10,6 +10,15 @@ interface AppLaunchers {
     fun devicesActivityIntent(context: Context): Intent?
 
     /**
+     * Handles a `cheezy://login/<payload>` deep link. Returns an Intent to launch
+     * (proprietary, once the backend is wired) or null when unsupported (open, or
+     * not yet implemented) — in which case the link is silently ignored. Default
+     * null so the open launcher needn't override it and the routing is ready for
+     * the proprietary side to fill in later.
+     */
+    fun loginDeepLinkIntent(context: Context, payload: String): Intent? = null
+
+    /**
      * Composable-слот для диалога переноса подписки (Telegram/email-URL).
      * Open-вариант возвращает null — диалога нет, кнопки тоже нет (см. capabilities).
      * Proprietary возвращает обёртку над TransferSubscriptionDialog.

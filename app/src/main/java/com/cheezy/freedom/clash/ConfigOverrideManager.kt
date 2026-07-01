@@ -44,10 +44,14 @@ object ConfigOverrideManager {
      * logged so a malformed config never crashes the caller; in that case
      * config.yaml is left untouched.
      */
-    fun rebuild(context: Context) {
-        ensureBaseExists(context)
+    fun rebuild(context: Context) = rebuild(context, clashDir(context))
+
+    /** Rebuilds config.yaml inside an explicit profile [dir] (used when importing
+     *  or refreshing a profile that is not necessarily the active one). */
+    fun rebuild(context: Context, dir: File) {
+        ensureBaseExists(dir)
         val enabled = registry.filter { isEnabled(context, it.id) }.map { it.id }.toSet()
-        rebuildInDir(clashDir(context), enabled)
+        rebuildInDir(dir, enabled)
     }
 
     /** Pure helper for unit tests: operate on an explicit clash directory and id set. */
@@ -73,17 +77,19 @@ object ConfigOverrideManager {
         }
     }
 
-    internal fun ensureBaseExists(context: Context) {
-        val clash = clashDir(context)
-        val base = File(clash, BASE_FILE_NAME)
-        val config = File(clash, CONFIG_FILE_NAME)
+    internal fun ensureBaseExists(context: Context) = ensureBaseExists(clashDir(context))
+
+    internal fun ensureBaseExists(dir: File) {
+        val base = File(dir, BASE_FILE_NAME)
+        val config = File(dir, CONFIG_FILE_NAME)
         if (!base.exists() && config.exists()) {
             runCatching { config.copyTo(base, overwrite = false) }
         }
     }
 
+    /** The directory the core loads: the active profile's directory. */
     internal fun clashDir(context: Context): File =
-        context.filesDir.resolve("clash")
+        ProfileStore.activeDir(context)
 
     internal fun clearPrefs(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
