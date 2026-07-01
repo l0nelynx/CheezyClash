@@ -52,6 +52,8 @@ object ConfigManager {
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): DownloadMeta {
         val url = URL(urlString)
+        // App name differs per flavor: open → CheezyClash, proprietary → CheezyVPN.
+        val appName = if (com.cheezy.freedom.BuildConfig.EDITION == "OPEN") "CheezyClash" else "CheezyVPN"
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 20_000
@@ -61,7 +63,7 @@ object ConfigManager {
             setRequestProperty("x-device-os", "Android")
             setRequestProperty("x-ver-os", Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString())
             setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
-            setRequestProperty("user-agent", "CheezyVPN/${com.cheezy.freedom.BuildConfig.EDITION}/${com.cheezy.freedom.BuildConfig.VERSION_NAME}")
+            setRequestProperty("user-agent", "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/${com.cheezy.freedom.BuildConfig.VERSION_NAME}")
             instanceFollowRedirects = true
         }
         try {

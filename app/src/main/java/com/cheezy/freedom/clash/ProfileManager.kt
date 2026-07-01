@@ -141,6 +141,10 @@ object ProfileManager {
      */
     private suspend fun applyActive(context: Context) {
         val dir = ProfileStore.activeDir(context)
+        // Overrides (e.g. Local Proxy / "Share VPN") are global state applied into a
+        // profile's config.yaml only at rebuild time. Rebuild the now-active profile
+        // so its config reflects the current override state before the core loads it.
+        ConfigOverrideManager.rebuild(context, dir)
         if (ClashState.running.value) {
             ClashVpnService.stop(context)
             delay(400) // let the old tunnel tear down before starting the new one
