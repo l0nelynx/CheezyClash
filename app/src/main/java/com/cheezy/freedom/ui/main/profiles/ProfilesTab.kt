@@ -18,14 +18,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,17 +45,22 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cheezy.freedom.R
 import com.cheezy.freedom.account.AppDeps
+import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.Profile
 import com.cheezy.freedom.ui.main.MainViewModel
 import com.cheezy.freedom.util.formatBytes
 import com.cheezy.freedom.util.formatExpire
-import java.time.Instant
+import com.cheezy.freedom.util.formatLastUpdate
 
 @Composable
 fun ProfilesTab(viewModel: MainViewModel = viewModel()) {
     val profiles by viewModel.profiles.collectAsState()
     val activeId by viewModel.activeProfileId.collectAsState()
     val refreshing by viewModel.refreshingProfiles.collectAsState()
+    // The active profile's live subscription (merged with backend snapshot in
+    // proprietary) is richer than the copy stored on disk — use it for the active
+    // row so its stats match the Home tab.
+    val liveSub by ClashState.subscription.collectAsState()
     val canManage = AppDeps.accountProvider.supportsMultipleProfiles
 
     var pendingDelete by remember { mutableStateOf<Profile?>(null) }
@@ -75,9 +82,11 @@ fun ProfilesTab(viewModel: MainViewModel = viewModel()) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(profiles, key = { it.id }) { profile ->
+            val isActive = profile.id == activeId
             ProfileCard(
                 profile = profile,
-                isActive = profile.id == activeId,
+                subscription = if (isActive) (liveSub ?: profile.subscription) else profile.subscription,
+                isActive = isActive,
                 isRefreshing = profile.id in refreshing,
                 canDelete = canManage && !profile.managed,
                 onSelect = { viewModel.switchProfile(profile.id) },
@@ -110,6 +119,7 @@ fun ProfilesTab(viewModel: MainViewModel = viewModel()) {
 @Composable
 private fun ProfileCard(
     profile: Profile,
+    subscription: com.cheezy.freedom.clash.SubscriptionInfo?,
     isActive: Boolean,
     isRefreshing: Boolean,
     canDelete: Boolean,
@@ -128,12 +138,10 @@ private fun ProfileCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (isActive) 3.dp else 0.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            RadioButton(selected = isActive, onClick = onSelect)
-
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
@@ -146,46 +154,102 @@ private fun ProfileCard(
                     )
                     if (profile.managed) ManagedBadge()
                 }
-                ProfileSubtitle(profile)
+                Spacer(Modifier.height(6.dp))
+                ProfileStats(subscription = subscription, lastUpdateTime = profile.lastUpdateTime)
             }
 
             if (isRefreshing) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
             } else {
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.profiles_refresh))
-                }
-            }
-            if (canDelete) {
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.profiles_delete),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                ProfileMenu(canDelete = canDelete, onRefresh = onRefresh, onDelete = onDelete)
             }
         }
     }
 }
 
 @Composable
-private fun ProfileSubtitle(profile: Profile) {
-    val sub = profile.subscription
-    val parts = buildList {
-        if (sub != null) {
-            val used = sub.upload + sub.download
-            if (sub.total > 0) add("${formatBytes(used)} / ${formatBytes(sub.total)}")
-            else if (used > 0) add(formatBytes(used))
-            if (sub.expire > 0) {
-                val days = ((sub.expire - Instant.now().epochSecond) / 86400L).toInt()
-                if (days >= 0) add(formatExpire(sub.expire))
+private fun ProfileMenu(
+    canDelete: Boolean,
+    onRefresh: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.profiles_menu))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.profiles_refresh)) },
+                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                onClick = { expanded = false; onRefresh() }
+            )
+            if (canDelete) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.profiles_delete)) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    onClick = { expanded = false; onDelete() }
+                )
             }
         }
     }
-    if (parts.isNotEmpty()) {
+}
+
+@Composable
+private fun ProfileStats(
+    subscription: com.cheezy.freedom.clash.SubscriptionInfo?,
+    lastUpdateTime: Long,
+) {
+    val sub = subscription
+    val used = sub?.let { it.upload + it.download } ?: 0L
+
+    // Traffic. Some plans expose a total (limit), others only count usage (total=0)
+    // with the real cap living in the announce text. Show used / limit when a limit
+    // exists, otherwise just the used amount — never hide usage.
+    val trafficLabel: String
+    val trafficValue: String?
+    when {
+        sub == null -> { trafficLabel = ""; trafficValue = null }
+        sub.total > 0 -> {
+            trafficLabel = stringResource(R.string.profiles_stat_traffic)
+            trafficValue = "${formatBytes(used)} / ${formatBytes(sub.total)}"
+        }
+        used > 0 -> {
+            trafficLabel = stringResource(R.string.profiles_stat_used)
+            trafficValue = formatBytes(used)
+        }
+        else -> { trafficLabel = ""; trafficValue = null }
+    }
+    // Expiry (only for time-limited plans)
+    val expireValue = sub?.expire?.takeIf { it > 0 }?.let { formatExpire(it) }
+    // Last updated
+    val updatedValue = lastUpdateTime.takeIf { it > 0 }?.let { formatLastUpdate(it) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        trafficValue?.let { StatLine(trafficLabel, it) }
+        expireValue?.let { StatLine(stringResource(R.string.profiles_stat_expires), it) }
+        updatedValue?.let { StatLine(stringResource(R.string.profiles_stat_updated), it) }
+    }
+}
+
+@Composable
+private fun StatLine(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = parts.joinToString("  •  "),
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+        Text(
+            text = value,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

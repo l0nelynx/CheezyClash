@@ -12,10 +12,15 @@
     <!-- Profiles tab -->
     <string name="profiles_add">Добавить подписку</string>
     <string name="profiles_refresh">Обновить</string>
+    <string name="profiles_menu">Меню профиля</string>
     <string name="profiles_delete">Удалить</string>
     <string name="profiles_delete_confirm">Удалить профиль «%1$s»?</string>
     <string name="profiles_managed_badge">Аккаунт</string>
     <string name="profiles_empty">Нет профилей. Добавьте подписку.</string>
+    <string name="profiles_stat_traffic">Трафик:</string>
+    <string name="profiles_stat_used">Использовано:</string>
+    <string name="profiles_stat_expires">Истекает:</string>
+    <string name="profiles_stat_updated">Обновлено:</string>
 
     <!-- Home tab -->
     <string name="home_read_more">Читать далее</string>

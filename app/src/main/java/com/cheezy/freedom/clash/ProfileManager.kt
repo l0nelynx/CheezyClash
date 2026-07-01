@@ -32,12 +32,23 @@ object ProfileManager {
 
     // --- Import ------------------------------------------------------------
 
-    /** Adds a brand-new user profile from [url] and makes it active. */
+    /**
+     * Adds a user profile from [url] and makes it active. If a profile with the
+     * same URL already exists it is refreshed and activated instead of creating a
+     * duplicate.
+     */
     suspend fun importNew(
         context: Context,
         url: String,
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): Profile {
+        val duplicate = ProfileStore.list(context).firstOrNull { it.url == url }
+        if (duplicate != null) {
+            refreshProfile(context, duplicate.id)
+            switchTo(context, duplicate.id, forceReload = true)
+            return ProfileStore.get(context, duplicate.id) ?: duplicate
+        }
+
         val id = UUID.randomUUID().toString()
         val dir = ProfileStore.dir(context, id)
         val meta = ConfigManager.downloadBase(context, url, dir, validateHeaders)
