@@ -139,6 +139,8 @@ fun MainScreen(
     val updateInfo by viewModel.updateInfo.collectAsState()
     val showUrlDialog by viewModel.showUrlDialog.collectAsState()
     val needsAuth by viewModel.needsAuth.collectAsState()
+    // Hoisted here so the (non-composable) onVpnToggle lambda can use it.
+    val noConfigMsg = stringResource(R.string.home_error_no_config)
 
     var showShareDialog by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
@@ -376,7 +378,7 @@ fun MainScreen(
                                 if (running) {
                                     ClashVpnService.stop(context)
                                 } else if (!ConfigManager.hasConfig(context)) {
-                                    ClashState.setError(context.getString(R.string.home_error_no_config))
+                                    ClashState.setError(noConfigMsg)
                                 } else if (localNetworkPermName != null && !localNetworkGranted()) {
                                     // Request local network access (Android 16+/17+).
                                     // After user response, VPN starts — refusal doesn't block operation through loopback.

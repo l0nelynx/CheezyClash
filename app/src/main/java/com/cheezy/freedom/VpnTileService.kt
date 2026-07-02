@@ -97,7 +97,7 @@ class VpnTileService : TileService() {
                 )
             )
         } else {
-            @Suppress("DEPRECATION")
+            @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")
             startActivityAndCollapse(intent)
         }
     }

@@ -108,6 +108,7 @@ fun ShareVpnDialog(
                     }
 
                     if (subscriptionUrl.isNotBlank()) {
+                        val chooserTitle = stringResource(R.string.share_chooser_title)
                         Spacer(modifier = Modifier.height(16.dp))
                         FilledTonalButton(
                             onClick = {
@@ -116,7 +117,7 @@ fun ShareVpnDialog(
                                     putExtra(Intent.EXTRA_TEXT, subscriptionUrl)
                                 }
                                 context.startActivity(
-                                    Intent.createChooser(intent, context.getString(R.string.share_chooser_title))
+                                    Intent.createChooser(intent, chooserTitle)
                                 )
                             }
                         ) {
