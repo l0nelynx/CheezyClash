@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Supported app languages for the Android 13+ (API 33) per-app language picker
+    (Settings → Apps → this app → Language). "ru" resolves to the default
+    resources (values/), "en" to values-en/.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ru" />
+    <locale android:name="en" />
+</locale-config>
