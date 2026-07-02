@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">CheezyVPN</string>
+    <string name="app_name" translatable="false">CheezyVPN</string>
     <string name="title_logs">Логи</string>
     <string name="title_proxies">Правила</string>
 
@@ -33,7 +33,7 @@
     <string name="home_stat_used">Использовано</string>
     <string name="home_stat_remaining">Остаток</string>
     <string name="home_stat_limit">Лимит</string>
-    <string name="home_unlimited">∞</string>
+    <string name="home_unlimited" translatable="false">∞</string>
     <string name="home_expires">Истекает: %1$s</string>
     <string name="home_error_no_config">Сначала загрузите конфигурацию</string>
 
@@ -42,7 +42,7 @@
     <string name="proxies_ping_group">Проверить ping группы</string>
     <string name="proxies_ping_proxy">Проверить ping прокси</string>
     <string name="proxies_group_subtitle">%1$d прокси · %2$s</string>
-    <string name="proxies_placeholder_dash">—</string>
+    <string name="proxies_placeholder_dash" translatable="false">—</string>
     <string name="proxies_timeout">таймаут</string>
     <string name="proxies_ms">%1$d мс</string>
 
@@ -103,7 +103,7 @@
 
     <!-- URL dialog -->
     <string name="url_title">URL конфигурации</string>
-    <string name="url_hint">https://…</string>
+    <string name="url_hint" translatable="false">https://…</string>
     <string name="url_load">Загрузить</string>
     <string name="url_cancel">Отмена</string>
 
