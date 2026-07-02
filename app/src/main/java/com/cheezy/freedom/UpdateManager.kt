@@ -127,8 +127,8 @@ object UpdateManager {
         if (file.exists()) file.delete()
 
         val request = DownloadManager.Request(Uri.parse(info.downloadUrl)).apply {
-            setTitle("CheezyVPN ${info.version}")
-            setDescription("Загрузка обновления...")
+            setTitle("${context.getString(R.string.app_name)} ${info.version}")
+            setDescription(context.getString(R.string.update_notification_desc))
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationUri(Uri.fromFile(file))
         }

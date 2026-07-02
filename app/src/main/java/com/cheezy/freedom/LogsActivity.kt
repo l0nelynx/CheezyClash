@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Clear
@@ -55,10 +56,10 @@ class LogsActivity : ComponentActivity() {
 
 private const val MAX_LOG_LINES = 1000
 
-enum class LogSource(val displayName: String) {
-    CORE("Ядро"),
-    SYSTEM("Система (ClashMeta)"),
-    APP("Приложение (All)")
+enum class LogSource(@androidx.annotation.StringRes val labelRes: Int) {
+    CORE(R.string.logs_filter_core),
+    SYSTEM(R.string.logs_filter_system),
+    APP(R.string.logs_filter_app)
 }
 
 data class LogEntry(
@@ -141,12 +142,12 @@ private fun LogsScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Логи") },
+                title = { Text(stringResource(R.string.title_logs)) },
                 actions = {
                     IconButton(onClick = { autoScroll = !autoScroll }) {
                         Icon(
                             imageVector = Icons.Default.VerticalAlignBottom,
-                            contentDescription = "Автоскролл",
+                            contentDescription = stringResource(R.string.logs_autoscroll),
                             tint = if (autoScroll) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -155,7 +156,7 @@ private fun LogsScreen() {
                         systemLogs.clear()
                         appLogs.clear()
                     }) {
-                        Icon(Icons.Default.Clear, "Очистить")
+                        Icon(Icons.Default.Clear, stringResource(R.string.logs_clear))
                     }
                 }
             )
@@ -174,7 +175,7 @@ private fun LogsScreen() {
                     FilterChip(
                         selected = selectedSource == source,
                         onClick = { selectedSource = source },
-                        label = { Text(source.displayName) }
+                        label = { Text(stringResource(source.labelRes)) }
                     )
                 }
             }
@@ -204,7 +205,7 @@ private fun LogsScreen() {
             Box(modifier = Modifier.weight(1f)) {
                 if (filteredLogs.isEmpty()) {
                     Text(
-                        text = "Логи отсутствуют для данных фильтров",
+                        text = stringResource(R.string.logs_empty),
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -239,7 +240,7 @@ private fun LogsScreen() {
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(48.dp)
                             ) {
-                                Icon(Icons.Default.ArrowDownward, "Вниз")
+                                Icon(Icons.Default.ArrowDownward, stringResource(R.string.logs_scroll_down))
                             }
                         }
                     }

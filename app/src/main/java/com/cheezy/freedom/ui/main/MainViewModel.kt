@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cheezy.freedom.BuildConfig
+import com.cheezy.freedom.R
 import com.cheezy.freedom.UpdateManager
 import com.cheezy.freedom.account.AccountState
 import com.cheezy.freedom.account.AppDeps
@@ -241,7 +242,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // masked as 'forgot who I am'. Show a snackbar for clarity.
                 if (_userEmail.value.isNullOrBlank() && supportsAuthFlow) {
                     _effects.emit(MainEffect.ShowSnackbar(
-                        "Failed to update account data. Check your connection."
+                        context.getString(R.string.error_account_sync_failed)
                     ))
                 }
             }
@@ -326,7 +327,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refreshProfilesState()
             syncSubscriptionState()
             reloadProxyGroups(forceLoad = true)
-            _effects.emit(MainEffect.ShowSnackbar("Оплата прошла успешно!"))
+            _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.sb_payment_success)))
         }
     }
 
@@ -342,7 +343,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
             if (ProfileStore.activeId(context) == null) {
-                ClashState.setError("Нет активного профиля")
+                ClashState.setError(context.getString(R.string.error_no_active_profile))
                 _loading.value = false
             } else {
                 withContext(Dispatchers.IO) { ProfileManager.refreshActive(context) }
@@ -372,7 +373,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 refreshProfilesState()
                 syncSubscriptionState()
                 reloadProxyGroups(forceLoad = true)
-            }.onFailure { ClashState.setError("Загрузка не удалась: ${it.message}") }
+            }.onFailure { ClashState.setError(context.getString(R.string.error_load_failed, it.message ?: "")) }
         }
     }
 
@@ -410,7 +411,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     else ProfileManager.refreshProfile(context, id)
                 }
                 result.onFailure {
-                    _effects.emit(MainEffect.ShowSnackbar("Обновление не удалось: ${it.message}"))
+                    _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_refresh_failed, it.message ?: "")))
                 }
                 refreshProfilesState()
                 syncSubscriptionState()
@@ -486,7 +487,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             AppDeps.accountProvider.startTelegramLink(context)
                 .onSuccess { _effects.emit(MainEffect.OpenUrl(it.deeplink)) }
-                .onFailure { _effects.emit(MainEffect.ShowSnackbar("Ошибка: ${it.message}")) }
+                .onFailure { _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_generic, it.message ?: ""))) }
         }
     }
 
@@ -496,10 +497,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AppDeps.accountProvider.linkByUrl(context, url, email)
                 .onSuccess {
                     AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
-                    _effects.emit(MainEffect.ShowSnackbar("Подписка перенесена"))
+                    _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.sb_subscription_transferred)))
                     _effects.emit(MainEffect.CloseDialogs)
                 }
-                .onFailure { _effects.emit(MainEffect.ShowSnackbar("Ошибка: ${it.message}")) }
+                .onFailure { _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_generic, it.message ?: ""))) }
             _loading.value = false
         }
     }
@@ -509,9 +510,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AppDeps.accountProvider.unlinkTelegram(context)
                 .onSuccess {
                     _tgId.value = null
-                    _effects.emit(MainEffect.ShowSnackbar("Telegram отвязан"))
+                    _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.sb_telegram_unlinked)))
                 }
-                .onFailure { _effects.emit(MainEffect.ShowSnackbar("Ошибка: ${it.message}")) }
+                .onFailure { _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_generic, it.message ?: ""))) }
         }
     }
 
@@ -628,7 +629,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Better not to start it at all.
         if (!ClashRemoteManager.connected.value || !ClashState.running.value) {
             viewModelScope.launch {
-                _effects.emit(MainEffect.ShowSnackbar("Start VPN to measure ping"))
+                _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.sb_start_vpn_for_ping)))
             }
             return
         }

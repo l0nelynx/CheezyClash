@@ -116,6 +116,32 @@
     <string name="update_update">Обновить</string>
     <string name="update_later">Позже</string>
 
+    <!-- Snackbars / errors -->
+    <string name="sb_payment_success">Оплата прошла успешно!</string>
+    <string name="sb_subscription_transferred">Подписка перенесена</string>
+    <string name="sb_telegram_unlinked">Telegram отвязан</string>
+    <string name="sb_start_vpn_for_ping">Запустите VPN для замера пинга</string>
+    <string name="error_no_active_profile">Нет активного профиля</string>
+    <string name="error_load_failed">Загрузка не удалась: %1$s</string>
+    <string name="error_refresh_failed">Обновление не удалось: %1$s</string>
+    <string name="error_generic">Ошибка: %1$s</string>
+    <string name="error_account_sync_failed">Не удалось обновить данные аккаунта. Проверьте соединение.</string>
+
+    <!-- VPN notification -->
+    <string name="notif_active_rule">Активное правило: %1$s</string>
+    <string name="notif_vpn_active">VPN активен</string>
+    <string name="notif_stop">Стоп</string>
+    <string name="update_notification_desc">Загрузка обновления…</string>
+
+    <!-- Logs -->
+    <string name="logs_autoscroll">Автоскролл</string>
+    <string name="logs_clear">Очистить</string>
+    <string name="logs_scroll_down">Вниз</string>
+    <string name="logs_empty">Логи отсутствуют для данных фильтров</string>
+    <string name="logs_filter_core">Ядро</string>
+    <string name="logs_filter_system">Система (ClashMeta)</string>
+    <string name="logs_filter_app">Приложение (All)</string>
+
     <!-- App info dialog -->
     <string name="info_title">О приложении</string>
     <string name="info_developer">Разработчик</string>

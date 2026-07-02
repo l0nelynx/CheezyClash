@@ -470,13 +470,14 @@ class ClashVpnService : VpnService() {
             Intent(this, ClashVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = activeProxy?.let { "Активное правило: $it" } ?: "VPN активен"
+        val text = activeProxy?.let { getString(R.string.notif_active_rule, it) }
+            ?: getString(R.string.notif_vpn_active)
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_tile)
             .setContentIntent(openMain)
-            .addAction(0, "Stop", stopIntent)
+            .addAction(0, getString(R.string.notif_stop), stopIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
