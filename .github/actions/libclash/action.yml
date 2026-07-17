@@ -36,8 +36,17 @@ runs:
       id: hash
       shell: bash
       run: |
-        HASH=$(find "${{ inputs.go-sources-path }}" \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
-               | sort | xargs sha256sum | sha256sum | cut -c1-16)
+        # Hash file CONTENTS only (path-independent). Otherwise CheezyClash
+        # (core/src/main/golang/...) and CheezyVPN (upstream/core/...) diverge.
+        HASH=$(
+          cd "${{ inputs.go-sources-path }}"
+          find . \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
+            | LC_ALL=C sort \
+            | xargs sha256sum \
+            | awk '{print $1}' \
+            | sha256sum \
+            | cut -c1-16
+        )
         echo "go_hash=$HASH" >> "$GITHUB_OUTPUT"
         echo "Go sources hash: $HASH"
 

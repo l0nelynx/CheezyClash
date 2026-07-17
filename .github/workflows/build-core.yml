@@ -40,8 +40,15 @@ jobs:
       - name: Compute Go sources hash
         id: hash
         run: |
-          HASH=$(find core/src/main/golang \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
-                 | sort | xargs sha256sum | sha256sum | cut -c1-16)
+          HASH=$(
+            cd core/src/main/golang
+            find . \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
+              | LC_ALL=C sort \
+              | xargs sha256sum \
+              | awk '{print $1}' \
+              | sha256sum \
+              | cut -c1-16
+          )
           echo "go_hash=$HASH" >> "$GITHUB_OUTPUT"
           echo "Go sources hash: $HASH"
 
