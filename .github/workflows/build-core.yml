@@ -55,7 +55,7 @@ jobs:
       - name: Restore libclash cache
         id: cache-libclash
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force_rebuild) }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: core/build/generatedJniLibs
           key: libclash-${{ steps.hash.outputs.go_hash }}
@@ -108,7 +108,7 @@ jobs:
 
       - name: Save libclash to Actions cache
         if: steps.cache-libclash.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: core/build/generatedJniLibs
           key: libclash-${{ steps.hash.outputs.go_hash }}
