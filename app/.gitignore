@@ -4,7 +4,8 @@
 /release
 
 # Baseline Profile артефакты должны коммититься — это входные данные для release-сборки,
-# а не build output. Лежат в generated/, но генерируются вручную через
-# `gradlew :app:generateDirectBaselineProfile` и без них release APK теряет AOT-оптимизацию.
+# а не build output. Канон: src/directRelease/generated/baselineProfiles/ (shared open+proprietary).
+# Генерация: `gradlew :app:generateDirectOpenReleaseBaselineProfile` затем
+# `gradlew :app:promoteBaselineProfileToDirectRelease`.
 !src/*/generated/baselineProfiles/baseline-prof.txt
 !src/*/generated/baselineProfiles/startup-prof.txt

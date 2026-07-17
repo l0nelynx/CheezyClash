@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -181,7 +182,9 @@ fun SettingsTab(
             headlineContent = { Text(stringResource(R.string.settings_info)) },
             leadingContent = { Icon(Icons.Default.Info, null) },
             colors = transparentList,
-            modifier = Modifier.clickable { showInfoDialog = true }
+            modifier = Modifier
+                .testTag("settings_info")
+                .clickable { showInfoDialog = true }
         )
 
         Spacer(modifier = Modifier.height(32.dp))

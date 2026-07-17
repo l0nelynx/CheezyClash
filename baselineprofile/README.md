@@ -1,68 +1,66 @@
 # Baseline Profile
 
-Что это: список классов и методов, которые ART AOT-компилирует при установке
-APK. Cold-start ускоряется на 20-30%, плюс убирается часть JIT-лагов в первые
-секунды после запуска.
+Список классов и методов, которые ART AOT-компилирует при установке APK.
+Cold-start ускоряется; часть JIT-лагов в первые секунды уходит.
 
-## Как сгенерировать (один раз / при больших UI-изменениях)
+## Один профиль на open + proprietary
 
-1. Запусти эмулятор Android Studio (API 28+ с Google APIs).
-   Лучше — `Pixel 6 / API 34` или похожий.
-2. Открой терминал в корне проекта:
+Профиль описывает методы DEX (`Lcom/cheezy/freedom/...`), не `applicationId`.
+Файлы лежат в общем source set:
+
+```
+app/src/directRelease/generated/baselineProfiles/
+  baseline-prof.txt
+  startup-prof.txt
+```
+
+AGP мержит `directRelease` в оба варианта: `directOpenRelease` и
+`directProprietaryRelease`. Gplay локально не профилируем (Cloud Profile в Play).
+
+Генерируем **один раз** против open (`com.cheezy.freedom.clash`) — без Auth overlay.
+
+## Как сгенерировать
+
+1. Эмулятор API 28+ (лучше Pixel 6 / API 34).
+2. Из корня репо:
 
    ```
-   gradlew :app:generateDirectBaselineProfile
+   gradlew :app:generateDirectOpenReleaseBaselineProfile
+   gradlew :app:promoteBaselineProfileToDirectRelease
    ```
 
-3. Жди ~3-5 минут (Gradle ставит app, бежит сценарий из
-   `baselineprofile/src/main/java/.../BaselineProfileGenerator.kt`, копирует
-   результат).
-4. После успеха появится файл:
+3. Закоммить обновлённые файлы в `app/src/directRelease/generated/baselineProfiles/`.
 
-   ```
-   app/src/directRelease/generated/baselineProfiles/baseline-prof.txt
-   ```
+Плагин сначала пишет в `directOpenRelease/...`; `promote…` копирует в shared
+`directRelease`. Без promote / без коммита release APK теряет AOT.
 
-5. **Закоммить его в git** — следующие release-сборки автоматически вкомпилят
-   профиль в APK. Без коммита профиль будет существовать только локально.
+## Сценарий генератора
 
-## Чем покрывается профиль
+См. `BaselineProfileGenerator.kt` — один сценарий на каждую итерацию:
 
-См. `BaselineProfileGenerator.kt`. Сейчас:
+1. Cold start + `pm grant` уведомлений.
+2. Пауза 2 с (чтобы успел UrlDialog) → один `Back` → пауза 5 с.
+3. Медленные свайпы HorizontalPager по вкладкам и обратно.
 
-- Cold-start приложения → MainScreen.
-- Переключение вкладок Home → Proxies → Settings → Home.
+Не покрывается: VPN connect, импорт подписки, proprietary AuthActivity (~ок для
+общего UI).
 
-НЕ покрывается (нужны system-permissions / реальная сеть):
+## Когда регенерировать `.txt`
 
-- Подключение к VPN (`ClashVpnService` bind и старт TUN).
-- Загрузка подписки.
-- Auth.
+- Крупные изменения навигации / стартового экрана / тяжёлых Compose-экранов.
+- **Не** нужно при смене строк, иконок, цветов — генератор на `testTag`, старый
+  `.txt` продолжает работать (новые методы просто JIT’ятся).
 
-Если когда-нибудь будут профилироваться эти флоу — нужно расширять `generate()`
-и грантить разрешения через `device.executeShellCommand("pm grant ...")`.
+## Чего не делать
 
-## Что НЕ нужно делать
-
-- Не пытайся генерировать профиль на gplay-флейворе через `generateGplayBaselineProfile`
-  — там зависимости от Play Services, в эмуляторе без GMS они недоступны.
-  Для gplay используется Cloud Profile (генерируется Play Store автоматически из
-  телеметрии пользователей).
-- Не запускай `:baselineprofile` тесты как обычный androidTest — это
-  Macrobenchmark, он запускается только через `generateXxxBaselineProfile`-таски.
+- Не генерировать gplay через `generateGplay…BaselineProfile`.
+- Не запускать `:baselineprofile` как обычный androidTest — только через
+  `generateDirectOpenReleaseBaselineProfile`.
+- Не коммитить профили из `directOpenRelease` / `gplay*` — канон только
+  `directRelease`.
 
 ## Если генератор падает
 
-Самые частые причины:
-
-- **Эмулятор слишком медленный** → `device.wait(...)` не успевает найти "Главная".
-  Увеличить таймауты в `BaselineProfileGenerator.kt`.
-- **Текст вкладок изменился** в `MainScreen.kt` (`MainTab.HOME.title` и т.п.) — синхронизировать
-  с `By.text(...)` селекторами в генераторе.
-- **API < 28** на эмуляторе → Macrobenchmark не поддерживает, поднять API.
-
-## Версия профиля устаревает?
-
-После любых крупных UI-изменений (новые экраны, переработка home/proxies)
-имеет смысл регенерировать. Без регенерации старый профиль продолжает работать,
-но новые классы будут JIT-иться при первом обращении.
+- Медленный эмулятор → увеличить таймауты в `BaselineProfileGenerator.kt`.
+- Переименовали `testTag` на вкладках → синхронизировать с генератором.
+- API < 28 → Macrobenchmark не поддерживает.

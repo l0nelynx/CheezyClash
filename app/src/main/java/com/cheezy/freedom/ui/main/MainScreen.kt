@@ -70,10 +70,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -335,7 +337,12 @@ fun MainScreen(
         )
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            // Expose Compose testTags as resource-ids for UiAutomator (baseline profile).
+            .semantics { testTagsAsResourceId = true }
+    ) {
         Scaffold(
             snackbarHost = {
                 // Lift the snackbar above the floating nav bar (≈64dp card + 12dp×2
@@ -600,8 +607,10 @@ private fun FloatingNavItem(
         modifier = modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(24.dp))
-            .clickable(role = Role.Tab, onClick = onClick)
+            // testTag before clickable so UiAutomator hits the clickable semantics node.
+            .testTag("tab_${tab.name.lowercase()}")
             .semantics { this.selected = selected }
+            .clickable(role = Role.Tab, onClick = onClick)
             .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically

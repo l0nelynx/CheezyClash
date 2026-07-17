@@ -11,13 +11,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import com.cheezy.freedom.R
 
 @Composable
 fun UrlDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
+        // Dialog is a separate window — expose testTags for UiAutomator (baseline profile).
+        modifier = Modifier
+            .semantics { testTagsAsResourceId = true }
+            .testTag("url_dialog"),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.url_title)) },
         text = {
@@ -34,6 +41,13 @@ fun UrlDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Uni
                 Text(stringResource(R.string.url_load))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.url_cancel)) } }
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("url_dialog_cancel"),
+            ) {
+                Text(stringResource(R.string.url_cancel))
+            }
+        }
     )
 }

@@ -4,10 +4,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    // Connects baselineProfile { ... } DSL and autowires the generated profile
-    // from :baselineprofile into src/<flavor>/generated/baselineProfiles/ before
-    // building the release APK. On dev/CI without generation, it does nothing
-    // (the profile will be empty).
+    // Connects baselineProfile { ... } DSL. Committed profiles live in
+    // src/directRelease/generated/baselineProfiles/ (shared by open + proprietary direct releases).
+    // Generate: :app:generateDirectOpenReleaseBaselineProfile then promoteBaselineProfileToDirectRelease.
     alias(libs.plugins.androidx.baselineprofile)
 }
 
@@ -152,22 +151,32 @@ android {
     }
 }
 
-// baseline-profile-plugin configuration for the app.
+// Shared Baseline Profile for direct*Release (open + proprietary).
 //
-// During a release build, D8 checks the profile against the final bytecode and logs
-// warnings like "Startup method not found: ComponentActivity$$ExternalSyntheticLambda10.<init>"
-// — these are desugared lambdas from AndroidX, whose synthetic names change between
-// builds (profile generated on benchmark build without R8, applied on release build
-// with R8). D8 simply skips these entries; it doesn't affect profile performance,
-// but creates a lot of noise in CI logs.
-//
-// Warnings cannot be completely removed via DSL options (no such option exists),
-// but noise can be reduced: automaticGenerationDuringBuild = false means the profile
-// is read from a committed .txt instead of being regenerated for every release build.
-// CI then skips the Macrobenchmark run, the profile remains stable between builds,
-// and the number of "missing" methods after R8 is minimized.
+// Profiles live in src/directRelease/generated/baselineProfiles/ so AGP merges them
+// into both directOpenRelease and directProprietaryRelease (shared com.cheezy.freedom.* DEX).
+// Generate against open only, then promote:
+//   ./gradlew :app:generateDirectOpenReleaseBaselineProfile
+//   ./gradlew :app:promoteBaselineProfileToDirectRelease
+// Gplay variants intentionally have no local profile (Play Cloud Profile).
 baselineProfile {
     automaticGenerationDuringBuild = false
+}
+
+tasks.register<Copy>("promoteBaselineProfileToDirectRelease") {
+    group = "baseline profile"
+    description =
+        "Copy profiles from directOpenRelease (plugin output) into shared directRelease source set"
+    from("src/directOpenRelease/generated/baselineProfiles")
+    into("src/directRelease/generated/baselineProfiles")
+    include("baseline-prof.txt", "startup-prof.txt")
+    doLast {
+        val dest = file("src/directRelease/generated/baselineProfiles")
+        check(dest.resolve("baseline-prof.txt").exists()) {
+            "baseline-prof.txt missing after promote — run generateDirectOpenReleaseBaselineProfile first"
+        }
+        println("Promoted baseline profiles → ${dest.invariantSeparatorsPath}")
+    }
 }
 
 androidComponents {
@@ -205,11 +214,9 @@ tasks.matching { it.name == "preBuild" }.configureEach {
     }
 }
 
-// :baselineprofile generates a profile for directRelease; AGP automatically places
-// the file in src/directRelease/generated/baselineProfiles/. During a release build,
-// the plugin packs it into META-INF/baseline.prof — ART reads it and AOT-compiles
-// the listed classes upon APK installation. No profile is generated for gplay builds
-// (Play Store gathers its own Cloud Profile from real user telemetry).
+// Generate against open, then promote into shared directRelease (covers open + proprietary):
+//   ./gradlew :app:generateDirectOpenReleaseBaselineProfile
+//   ./gradlew :app:promoteBaselineProfileToDirectRelease
 dependencies {
     baselineProfile(project(":baselineprofile"))
 }
