@@ -27,7 +27,7 @@ benchmarkMacro = "1.5.0-alpha06"
 uiautomator = "2.3.0"
 baselineprofile = "1.5.0-alpha06"
 startup = "1.2.0"
-snakeyaml = "2.2"
+snakeyaml = "2.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
