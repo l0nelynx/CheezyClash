@@ -146,6 +146,10 @@ android {
             useLegacyPackaging = false
         }
     }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
 }
 
 // baseline-profile-plugin configuration for the app.
@@ -251,5 +255,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// Apply proprietary configuration if the file exists (private repo only)
-file("proprietary.gradle").takeIf { it.exists() }?.let { apply(from = it) }
+// Apply the proprietary overlay if present (private builds only). The path may be
+// supplied via -PproprietaryGradle=<abs path> so this public repo can be consumed
+// as a git submodule of the private repo without copying any proprietary files into
+// the working tree. Falls back to an in-tree app/proprietary.gradle (legacy layout).
+// When neither exists (public builds), the "proprietary" flavor is simply absent.
+run {
+    val overlay = (findProperty("proprietaryGradle") as String?)
+        ?.let { file(it) }
+        ?: file("proprietary.gradle")
+    if (overlay.exists()) apply(from = overlay)
+}

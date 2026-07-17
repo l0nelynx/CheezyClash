@@ -31,6 +31,22 @@
   - `arm64-v8a`
   - `armeabi-v7a`
   - `x86_64`
+### 🔧 Build & CI
+**Local build (open flavor):**
+```bash
+./gradlew assembleDirectOpenDebug
+```
+**Flavors:** `distribution` (`gplay` | `direct`) × `edition` (`open`). Proprietary edition is applied via `-PproprietaryGradle` from the private CheezyVPN repo.
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| [PR Check](.github/workflows/pr-check.yml) | PR / push to `main` | Compile, unit tests, lint |
+| [Build Clash Core](.github/workflows/build-core.yml) | Go/core changes | Build `libclash.so`, cache, publish `libclash-<hash>.zip` release |
+| [Release](.github/workflows/release.yml) | Tag `v*` | Signed open APK + GitHub Release |
+
+Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprietary builds).
+
+**Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
 ### 📄 License
 This project is licensed under the [MIT License](LICENSE).
 ### ⭐ Support
@@ -59,6 +75,22 @@ If you like this project, please give it a **Star**
   - `arm64-v8a`
   - `armeabi-v7a`
   - `x86_64`
+### 🔧 Сборка и CI
+**Локально (open flavor):**
+```bash
+./gradlew assembleDirectOpenDebug
+```
+**Флаворы:** `distribution` (`gplay` | `direct`) × `edition` (`open`). Proprietary-редакция подключается через `-PproprietaryGradle` из приватного CheezyVPN.
+
+| Workflow | Триггер | Назначение |
+|----------|---------|------------|
+| [PR Check](.github/workflows/pr-check.yml) | PR / push в `main` | Компиляция, unit-тесты, lint |
+| [Build Clash Core](.github/workflows/build-core.yml) | Изменения Go/core | Сборка `libclash.so`, кеш, релиз `libclash-<hash>.zip` |
+| [Release](.github/workflows/release.yml) | Тег `v*` | Подписанный open APK + GitHub Release |
+
+Готовые `libclash-<go_hash>.zip` используются CI CheezyVPN (proprietary-сборки).
+
+**Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
 ### 📄 Лицензия
 Этот проект распространяется под лицензией [MIT License](LICENSE).
 ### ⭐ Support

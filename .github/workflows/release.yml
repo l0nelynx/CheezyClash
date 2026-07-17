@@ -1,8 +1,5 @@
 name: Build and Release (Open Source)
 
-# When pushing a v* tag, builds the Open version (CheezyClash).
-# libclash.so is taken from the cache.
-
 on:
   push:
     tags:
@@ -21,25 +18,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compute Go sources hash
-        id: hash
-        run: |
-          HASH=$(find core/src/main/golang \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
-                 | sort | xargs sha256sum | sha256sum | cut -c1-16)
-          echo "go_hash=$HASH" >> "$GITHUB_OUTPUT"
-
-      - name: Restore libclash from cache
-        id: cache-libclash
-        uses: actions/cache/restore@v4
+      - name: Acquire libclash
+        id: libclash
+        uses: ./.github/actions/libclash
         with:
-          path: core/build/generatedJniLibs
-          key: libclash-${{ steps.hash.outputs.go_hash }}
-
-      - name: Require pre-built libclash
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
-        run: |
-          echo "ERROR: libclash.so not found in cache. Run 'Build Clash Core' workflow first."
-          exit 1
+          allow-build-fallback: 'false'
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -59,8 +42,6 @@ jobs:
       - name: Decode Keystore
         run: echo "${{ secrets.SIGNING_KEY }}" | base64 --decode > release.jks
 
-      # Build only the Open variant. Signing in an open repo can be missing
-      # or configured via other secrets.
       - name: Build Direct Open Release APK
         run: |
           ./gradlew --no-daemon assembleDirectOpenRelease \
@@ -104,7 +85,8 @@ jobs:
 
       - name: Send Telegram Notification
         if: success()
-        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        uses: appleboy/telegram-action@7f1701af0cd3590fdedc9215e9edd5118a3f9dcc
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}

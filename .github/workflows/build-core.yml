@@ -1,37 +1,33 @@
 name: Build Clash Core
 
-# Собирает libclash.so из Go-исходников для всех ABI и кладёт результат
-# в actions/cache по ключу, привязанному к содержимому go-сорсов. После
-# успешного запуска release.yml может собрать APK без повторной Go-сборки.
-#
-# Запускается только вручную (workflow_dispatch). Тег пушит -> release.yml
-# тянет libclash из кеша, а не пересобирает.
+# Builds libclash.so for all ABIs, caches under libclash-<go_hash>, and publishes
+# libclash-<go_hash>.zip as a GitHub Release asset (cross-repo consumption by CheezyVPN).
 
 on:
   workflow_dispatch:
     inputs:
       force_rebuild:
-        description: "Пересобрать libclash даже если кеш есть (debug Go-кода)"
+        description: "Rebuild libclash even if cache exists"
         type: boolean
         default: false
-  # PR, трогающий Go-сорсы (включая авто-PR от bump-mihomo) — проверяем
-  # сборку. ВАЖНО: actions/cache из PR-сборки scoped на refs/pull/N/merge
-  # и НЕ виден с master. Поэтому ниже есть отдельный push-триггер,
-  # который перезаполняет кеш в master-scope сразу после merge.
   pull_request:
     paths:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
-  # После merge в master Go-сорсы изменились — нужно прогреть кеш именно
-  # в scope default-ветки, иначе release.yml на следующем теге упадёт.
+      - '.github/actions/libclash/**'
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
       - 'core/src/main/cpp/CMakeLists.txt'
+      - '.github/workflows/build-core.yml'
+      - '.github/actions/libclash/**'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -41,8 +37,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Ключ кеша: хеш go.sum + всё содержимое cheezy/native + entry-point.
-      # Любое изменение Go-исходников или зависимостей invalidate'ит кеш.
       - name: Compute Go sources hash
         id: hash
         run: |
@@ -53,9 +47,8 @@ jobs:
 
       - name: Restore libclash cache
         id: cache-libclash
-        # force_rebuild только из workflow_dispatch; для pull_request inputs пуст.
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force_rebuild) }}
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: core/build/generatedJniLibs
           key: libclash-${{ steps.hash.outputs.go_hash }}
@@ -63,9 +56,8 @@ jobs:
       - name: Skip build if already cached
         if: steps.cache-libclash.outputs.cache-hit == 'true'
         run: |
-          echo "libclash.so для всех ABI уже в кеше под ключом libclash-${{ steps.hash.outputs.go_hash }}"
+          echo "libclash.so already cached under libclash-${{ steps.hash.outputs.go_hash }}"
           ls -lhR core/build/generatedJniLibs/
-          exit 0
 
       - name: Set up JDK 17
         if: steps.cache-libclash.outputs.cache-hit != 'true'
@@ -99,7 +91,6 @@ jobs:
             :core:assembleGoJniLibs
 
       - name: Verify outputs
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
         run: |
           for abi in arm64-v8a armeabi-v7a x86_64; do
             f="core/build/generatedJniLibs/$abi/libclash.so"
@@ -108,9 +99,39 @@ jobs:
             file "$f"
           done
 
-      # Опубликовать как workflow artifact, чтобы можно было скачать из UI
-      # для отладки или ручной подмены.
-      - name: Upload libclash artifacts
+      - name: Save libclash to Actions cache
+        if: steps.cache-libclash.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: core/build/generatedJniLibs
+          key: libclash-${{ steps.hash.outputs.go_hash }}
+
+      - name: Package libclash zip
+        run: |
+          HASH="${{ steps.hash.outputs.go_hash }}"
+          ZIP="libclash-${HASH}.zip"
+          cd core/build/generatedJniLibs
+          zip -r "/tmp/${ZIP}" arm64-v8a armeabi-v7a x86_64
+          ls -lh "/tmp/${ZIP}"
+
+      - name: Publish libclash GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HASH="${{ steps.hash.outputs.go_hash }}"
+          TAG="libclash-${HASH}"
+          ZIP="libclash-${HASH}.zip"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping upload"
+            exit 0
+          fi
+          gh release create "$TAG" "/tmp/${ZIP}" \
+            --title "libclash ${HASH}" \
+            --notes "Prebuilt libclash.so for Go sources hash \`${HASH}\`. Used by CheezyVPN CI." \
+            --prerelease
+
+      - name: Upload libclash workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: libclash-${{ steps.hash.outputs.go_hash }}

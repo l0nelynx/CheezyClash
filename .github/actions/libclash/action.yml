@@ -1,0 +1,134 @@
+name: Acquire libclash
+description: >
+  Restore libclash.so from Actions cache, GitHub Release (libclash-HASH.zip),
+  or optionally smoke-build arm64 when allow-build-fallback is true.
+
+inputs:
+  go-sources-path:
+    description: Path to golang sources relative to workspace root
+    required: false
+    default: core/src/main/golang
+  jni-libs-path:
+    description: Destination for libclash .so files (generatedJniLibs layout)
+    required: false
+    default: core/build/generatedJniLibs
+  allow-build-fallback:
+    description: Smoke-build arm64 on cache+release miss (open repo CI only)
+    required: false
+    default: 'false'
+  release-repo:
+    description: GitHub owner/repo publishing libclash release assets
+    required: false
+    default: l0nelynx/CheezyClash
+
+outputs:
+  go_hash:
+    description: Computed hash of Go sources
+    value: ${{ steps.hash.outputs.go_hash }}
+  source:
+    description: Where libclash was obtained (cache, release, build)
+    value: ${{ steps.result.outputs.source }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute Go sources hash
+      id: hash
+      shell: bash
+      run: |
+        HASH=$(find "${{ inputs.go-sources-path }}" \( -name '*.go' -o -name 'go.sum' -o -name 'go.mod' \) -type f \
+               | sort | xargs sha256sum | sha256sum | cut -c1-16)
+        echo "go_hash=$HASH" >> "$GITHUB_OUTPUT"
+        echo "Go sources hash: $HASH"
+
+    - name: Restore libclash from Actions cache
+      id: cache-libclash
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ inputs.jni-libs-path }}
+        key: libclash-${{ steps.hash.outputs.go_hash }}
+
+    - name: Mark cache hit
+      id: from-cache
+      if: steps.cache-libclash.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        echo "source=cache" >> "$GITHUB_OUTPUT"
+        for abi in arm64-v8a armeabi-v7a x86_64; do
+          test -f "${{ inputs.jni-libs-path }}/$abi/libclash.so" || exit 1
+        done
+
+    - name: Download libclash from GitHub Release
+      id: from-release
+      if: steps.cache-libclash.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GO_HASH: ${{ steps.hash.outputs.go_hash }}
+        REPO: ${{ inputs.release-repo }}
+        JNI_PATH: ${{ inputs.jni-libs-path }}
+      run: |
+        TAG="libclash-${GO_HASH}"
+        ZIP="libclash-${GO_HASH}.zip"
+        URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP}"
+        echo "Trying release download: $URL"
+        if curl -fL --retry 3 --retry-delay 2 -o "/tmp/${ZIP}" "$URL"; then
+          mkdir -p "$JNI_PATH"
+          unzip -o "/tmp/${ZIP}" -d "$JNI_PATH"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            test -f "$JNI_PATH/$abi/libclash.so" || { echo "ERROR: missing $abi after unzip"; exit 1; }
+          done
+          echo "source=release" >> "$GITHUB_OUTPUT"
+        else
+          echo "Release asset not found (tag ${TAG})"
+          echo "source=none" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Smoke-build arm64 libclash
+      id: from-build
+      if: >-
+        steps.cache-libclash.outputs.cache-hit != 'true' &&
+        steps.from-release.outputs.source != 'release' &&
+        inputs.allow-build-fallback == 'true'
+      shell: bash
+      run: |
+        chmod +x gradlew
+        ./gradlew --no-daemon :core:buildGoClashArm64V8a :core:assembleGoJniLibs
+        test -f "${{ inputs.jni-libs-path }}/arm64-v8a/libclash.so"
+        echo "source=build" >> "$GITHUB_OUTPUT"
+
+    - name: Require libclash
+      if: >-
+        steps.cache-libclash.outputs.cache-hit != 'true' &&
+        steps.from-release.outputs.source != 'release' &&
+        (inputs.allow-build-fallback != 'true' || steps.from-build.outputs.source != 'build')
+      shell: bash
+      run: |
+        cat <<EOF
+        ERROR: libclash.so not available for hash libclash-${{ steps.hash.outputs.go_hash }}
+
+        Options:
+          1. Run "Build Clash Core" workflow on ${{ inputs.release-repo }} (push to main after Go changes)
+          2. Wait for libclash-${{ steps.hash.outputs.go_hash }} GitHub Release to be published
+        EOF
+        exit 1
+
+    - name: Set result source
+      id: result
+      shell: bash
+      run: |
+        if [ "${{ steps.from-cache.outputs.source }}" = "cache" ]; then
+          echo "source=cache" >> "$GITHUB_OUTPUT"
+        elif [ "${{ steps.from-release.outputs.source }}" = "release" ]; then
+          echo "source=release" >> "$GITHUB_OUTPUT"
+        elif [ "${{ steps.from-build.outputs.source }}" = "build" ]; then
+          echo "source=build" >> "$GITHUB_OUTPUT"
+        else
+          echo "source=unknown" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Save libclash to Actions cache
+      if: steps.cache-libclash.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ inputs.jni-libs-path }}
+        key: libclash-${{ steps.hash.outputs.go_hash }}
