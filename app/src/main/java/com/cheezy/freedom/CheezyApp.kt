@@ -1,6 +1,7 @@
 package com.cheezy.freedom
 
 import android.app.Application
+import com.cheezy.freedom.clash.AppHolder
 import com.cheezy.freedom.clash.ClashCore
 import com.cheezy.freedom.clash.ClashRemoteManager
 import com.cheezy.freedom.clash.ProfileManager
@@ -21,6 +22,9 @@ class CheezyApp : Application() {
         if (processName?.endsWith(":vpn") == true) {
             ClashCore.init(this)
         } else {
+            // Main process needs AppHolder too — ClashRemoteManager persists proxy
+            // selections via application Context after patchSelector.
+            AppHolder.init(this)
             // Main process: migrate a pre-multiprofile single config into profile #1
             // before anything (tile, UI, worker) reads the active profile. Idempotent.
             runCatching { ProfileManager.migrateLegacyIfNeeded(this) }

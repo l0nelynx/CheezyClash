@@ -24,6 +24,7 @@ import kotlinx.serialization.json.Json
 object ClashRemoteManager {
     private const val TAG = "ClashRemote"
     private var service: IClashInterface? = null
+    private lateinit var appContext: Context
     
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -71,6 +72,7 @@ object ClashRemoteManager {
     }
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         val intent = Intent(context, ClashVpnService::class.java).apply {
             action = "com.cheezy.freedom.clash.IClashInterface"
         }
@@ -121,7 +123,7 @@ object ClashRemoteManager {
         val ok = runCatching { service?.patchSelector(group, name) ?: false }.getOrDefault(false)
         if (ok) {
             // Persist in the main process only — :vpn must not write SharedPreferences.
-            runCatching { ConfigManager.saveSelectedProxy(AppHolder.get(), group, name) }
+            ConfigManager.saveSelectedProxy(appContext, group, name)
         }
         ok
     }

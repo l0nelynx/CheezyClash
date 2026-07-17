@@ -162,9 +162,12 @@ object ConfigManager {
                 if (group !in currentGroups) return@forEach
                 runCatching {
                     if (!ClashRemoteManager.patchSelector(group, proxy)) {
-                        ClashRemoteManager.queryGroup(group)?.now?.let { fallback ->
-                            saveSelectedProxy(context, group, fallback)
-                        }
+                        // Keep the user's saved choice — overwriting with core `now`
+                        // (YAML default) caused selections to stick to the cold-start node.
+                        android.util.Log.w(
+                            "ConfigManager",
+                            "Failed to reapply selection $group → $proxy; leaving prefs unchanged"
+                        )
                     }
                 }
             }
@@ -214,10 +217,12 @@ object ConfigManager {
     // --- Selections (per active profile) -----------------------------------
 
     fun saveSelectedProxy(context: Context, group: String, proxy: String) {
+        // commit(): VPN may restart immediately after a selection and must see
+        // the updated prefs when packing Intent extras (apply() is async).
         context.getSharedPreferences(PREFS_SELECTIONS, Context.MODE_PRIVATE)
             .edit()
             .putString(group, proxy)
-            .apply()
+            .commit()
     }
 
     fun getSavedSelections(context: Context): Map<String, String> {
