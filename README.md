@@ -42,11 +42,11 @@
 |----------|---------|---------|
 | [PR Check](.github/workflows/pr-check.yml) | PR / push to `main` | Compile, unit tests, lint |
 | [Build Clash Core](.github/workflows/build-core.yml) | Go/core changes | Build `libclash.so`, cache, publish `libclash-<hash>.zip` release |
-| [Release](.github/workflows/release.yml) | Tag `v*` | Signed open APK + GitHub Release |
+| [Release](.github/workflows/release.yml) | Tag `v*` | Signed open APK + GitHub Release; then dispatches proprietary release |
 
-Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprietary builds).
+Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprietary builds). After a successful open release, CI sends `repository_dispatch` (`open_release`) to private CheezyVPN so it can bump `upstream`, tag the same `v*`, and publish the proprietary APK.
 
-**Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
+**Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`, and `PROPRIETARY_DISPATCH_TOKEN` (PAT with `actions: write` on private CheezyVPN — required for the auto proprietary release).
 ### 📄 License
 This project is licensed under the [MIT License](LICENSE).
 ### ⭐ Support
@@ -86,11 +86,11 @@ If you like this project, please give it a **Star**
 |----------|---------|------------|
 | [PR Check](.github/workflows/pr-check.yml) | PR / push в `main` | Компиляция, unit-тесты, lint |
 | [Build Clash Core](.github/workflows/build-core.yml) | Изменения Go/core | Сборка `libclash.so`, кеш, релиз `libclash-<hash>.zip` |
-| [Release](.github/workflows/release.yml) | Тег `v*` | Подписанный open APK + GitHub Release |
+| [Release](.github/workflows/release.yml) | Тег `v*` | Подписанный open APK + GitHub Release; затем dispatch proprietary-релиза |
 
-Готовые `libclash-<go_hash>.zip` используются CI CheezyVPN (proprietary-сборки).
+Готовые `libclash-<go_hash>.zip` используются CI CheezyVPN (proprietary-сборки). После успешного open-релиза CI шлёт `repository_dispatch` (`open_release`) в приватный CheezyVPN: bump `upstream`, тот же тег `v*`, публикация proprietary APK.
 
-**Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
+**Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`, и `PROPRIETARY_DISPATCH_TOKEN` (PAT с `actions: write` на приватный CheezyVPN — нужен для авто-релиза proprietary).
 ### 📄 Лицензия
 Этот проект распространяется под лицензией [MIT License](LICENSE).
 ### ⭐ Support
