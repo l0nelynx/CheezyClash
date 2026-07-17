@@ -106,7 +106,8 @@ object UpdateManager {
     }
 
     internal fun isTrustedDownloadUrl(url: String): Boolean {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        // java.net.URI — works in JVM unit tests; android.net.Uri is a stub there.
+        val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
         if (uri.scheme?.equals("https", ignoreCase = true) != true) return false
         val host = uri.host?.lowercase() ?: return false
         return host in ALLOWED_DOWNLOAD_HOSTS || host.endsWith(".githubusercontent.com")
