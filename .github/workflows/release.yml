@@ -32,7 +32,7 @@ jobs:
           cache: gradle
 
       - name: Install Android SDK + NDK 28.2.13676358
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: "ndk;28.2.13676358 cmake;3.22.1"
 

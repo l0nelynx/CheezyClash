@@ -107,7 +107,7 @@ jobs:
       # For three ABIs we use a separate build-core workflow (triggered by the PR).
       - name: Install Android SDK + NDK
         if: steps.diff.outputs.changed == 'true'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: "ndk;28.2.13676358 cmake;3.22.1"
 
