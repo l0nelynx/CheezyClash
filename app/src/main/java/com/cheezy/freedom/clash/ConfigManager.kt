@@ -133,7 +133,7 @@ object ConfigManager {
             setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
             setRequestProperty(
                 "user-agent",
-                "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/${com.cheezy.freedom.BuildConfig.VERSION_NAME}"
+                "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/mihomo/${com.cheezy.freedom.BuildConfig.VERSION_NAME}"
             )
             // Follow redirects but requireHttps() re-checks the final URL.
             instanceFollowRedirects = true
