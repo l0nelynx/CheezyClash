@@ -9,6 +9,10 @@ import com.cheezy.freedom.clash.ProfileManager
 class CheezyApp : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        // Firebase Analytics / Crashlytics initialize via FirebaseInitProvider when
+        // app/google-services.json is present (both main and :vpn processes). No
+        // explicit FirebaseApp.initializeApp() needed.
         
         val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
             getProcessName()

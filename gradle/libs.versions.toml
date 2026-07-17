@@ -27,6 +27,10 @@ uiautomator = "2.3.0"
 baselineprofile = "1.5.0-alpha06"
 startup = "1.2.0"
 snakeyaml = "2.6"
+# Firebase Analytics + Crashlytics (BoM pins library versions).
+firebaseBom = "34.16.0"
+googleServices = "4.5.0"
+firebaseCrashlyticsGradle = "3.0.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -57,6 +61,9 @@ androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchm
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 androidx-startup-runtime = { group = "androidx.startup", name = "startup-runtime", version.ref = "startup" }
 snakeyaml = { group = "org.yaml", name = "snakeyaml", version.ref = "snakeyaml" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -68,3 +75,5 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 # androidx.baselineprofile — связывает test-модуль и app, кладёт сгенерированный
 # baseline-prof.txt в app/src/<flavor>/generated/baselineProfiles/.
 androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsGradle" }

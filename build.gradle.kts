@@ -8,5 +8,7 @@ plugins {
     // baselineprofile plugin is applied in :app and :baselineprofile;
     // registration at root ensures classpath is resolved from libs.
     alias(libs.plugins.androidx.baselineprofile) apply false
+    alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
 }
 val compileSdkVersion by extra("android-37")

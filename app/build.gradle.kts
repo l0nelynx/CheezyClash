@@ -8,6 +8,9 @@ plugins {
     // src/directRelease/generated/baselineProfiles/ (shared by open + proprietary direct releases).
     // Generate: :app:generateDirectOpenReleaseBaselineProfile then promoteBaselineProfileToDirectRelease.
     alias(libs.plugins.androidx.baselineprofile)
+    // Applied below only when app/google-services.json is present (see Firebase section).
+    alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
 }
 
 val versionPropsFile = rootProject.file("app/version.properties")
@@ -271,4 +274,24 @@ run {
         ?.let { file(it) }
         ?: file("proprietary.gradle")
     if (overlay.exists()) apply(from = overlay)
+}
+
+// Firebase: google-services + Crashlytics require app/google-services.json
+// (merged clients for com.cheezy.freedom.clash and com.cheezy.freedom).
+// See google-services.json.example and README. Without the file, Firebase is omitted
+// so CI/local builds still succeed.
+val googleServicesJson = file("google-services.json")
+if (googleServicesJson.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+    dependencies {
+        implementation(platform(libs.firebase.bom))
+        implementation(libs.firebase.analytics)
+        implementation(libs.firebase.crashlytics)
+    }
+} else {
+    logger.warn(
+        "app/google-services.json missing — Firebase Analytics/Crashlytics disabled. " +
+            "Copy google-services.json.example → google-services.json from Firebase Console."
+    )
 }

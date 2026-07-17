@@ -47,6 +47,14 @@
 Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprietary builds). After a successful open release, CI sends `repository_dispatch` (`open_release`) to private CheezyVPN so it can bump `upstream`, tag the same `v*`, and publish the proprietary APK.
 
 **Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`, and `PROPRIETARY_DISPATCH_TOKEN` (PAT with `actions: write` on private `l0nelynx/CheezyVPN_android` — required for the auto proprietary release).
+
+### Firebase (Analytics + Crashlytics)
+
+1. Firebase Console → one project → add Android apps for release IDs `com.cheezy.freedom.clash` and `com.cheezy.freedom`. For local debug builds also register `com.cheezy.freedom.clash.debug` and `com.cheezy.freedom.debug` (debug `applicationIdSuffix`), or merge all four clients into one json.
+2. Download the config (or merge both clients) into [`app/google-services.json`](app/google-services.json). Template: [`app/google-services.json.example`](app/google-services.json.example).
+3. Rebuild — Gradle applies `google-services` + Crashlytics plugins only when that file exists. Without it, the app builds normally with Firebase omitted.
+
+Crash reporting covers the main process and `:vpn`. No custom analytics events yet (auto-collection only).
 ### 📄 License
 This project is licensed under the [MIT License](LICENSE).
 ### ⭐ Support
@@ -91,6 +99,14 @@ If you like this project, please give it a **Star**
 Готовые `libclash-<go_hash>.zip` используются CI CheezyVPN (proprietary-сборки). После успешного open-релиза CI шлёт `repository_dispatch` (`open_release`) в приватный CheezyVPN: bump `upstream`, тот же тег `v*`, публикация proprietary APK.
 
 **Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`, и `PROPRIETARY_DISPATCH_TOKEN` (PAT с `actions: write` на приватный `l0nelynx/CheezyVPN_android` — нужен для авто-релиза proprietary).
+
+### Firebase (Analytics + Crashlytics)
+
+1. Firebase Console → один проект → Android apps для release: `com.cheezy.freedom.clash` и `com.cheezy.freedom`. Для локального debug также зарегистрируйте `com.cheezy.freedom.clash.debug` и `com.cheezy.freedom.debug` (`applicationIdSuffix`), либо объедините все четыре `client` в один json.
+2. Скачать конфиг (или объединить оба `client`) в [`app/google-services.json`](app/google-services.json). Шаблон: [`app/google-services.json.example`](app/google-services.json.example).
+3. Пересобрать — плагины `google-services` и Crashlytics подключаются только если файл есть. Без него сборка идёт как обычно, без Firebase.
+
+Краши собираются и в main, и в `:vpn`. Кастомных событий пока нет (только auto-collection).
 ### 📄 Лицензия
 Этот проект распространяется под лицензией [MIT License](LICENSE).
 ### ⭐ Support
