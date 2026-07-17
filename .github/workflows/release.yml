@@ -96,7 +96,7 @@ jobs:
             --arg tag "${{ github.ref_name }}" \
             --arg sha "${{ github.sha }}" \
             '{event_type:"open_release",client_payload:{tag:$tag,sha:$sha}}' \
-          | gh api --method POST /repos/l0nelynx/CheezyVPN/dispatches --input -
+          | gh api --method POST /repos/l0nelynx/CheezyVPN_android/dispatches --input -
 
       - name: Send Telegram Notification
         if: success()
