@@ -86,7 +86,7 @@ jobs:
       - name: Send Telegram Notification
         if: success()
         continue-on-error: true
-        uses: appleboy/telegram-action@7f1701af0cd3590fdedc9215e9edd5118a3f9dcc
+        uses: appleboy/telegram-action@221e6b684967abe813051ee4a37dd61770a83ad3
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
