@@ -118,7 +118,12 @@ object ClashRemoteManager {
     }
 
     suspend fun patchSelector(group: String, name: String): Boolean = withContext(Dispatchers.IO) {
-        runCatching { service?.patchSelector(group, name) ?: false }.getOrDefault(false)
+        val ok = runCatching { service?.patchSelector(group, name) ?: false }.getOrDefault(false)
+        if (ok) {
+            // Persist in the main process only — :vpn must not write SharedPreferences.
+            runCatching { ConfigManager.saveSelectedProxy(AppHolder.get(), group, name) }
+        }
+        ok
     }
 
     suspend fun healthCheck(name: String) = withContext(Dispatchers.IO) {

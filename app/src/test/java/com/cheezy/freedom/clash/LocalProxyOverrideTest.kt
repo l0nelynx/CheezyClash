@@ -15,10 +15,14 @@ class LocalProxyOverrideTest {
             "allow-lan" to false,
         )
 
+        LocalProxyOverride.authEntry = "cheezy:testpass"
         LocalProxyOverride.apply(map)
 
         assertEquals(2080, map["mixed-port"])
-        assertEquals(emptyList<String>(), map["authentication"])
+        @Suppress("UNCHECKED_CAST")
+        val auth = map["authentication"] as List<String>
+        assertEquals(1, auth.size)
+        assertTrue(auth[0].startsWith("cheezy:"))
         assertEquals(
             listOf(
                 "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12",

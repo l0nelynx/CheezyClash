@@ -56,7 +56,10 @@ class ConfigOverrideManagerTest {
         val out = parse(File(clash, ConfigOverrideManager.CONFIG_FILE_NAME))
         assertEquals(2080, out["mixed-port"])
         assertEquals(true, out["allow-lan"])
-        assertEquals(emptyList<String>(), out["authentication"])
+        @Suppress("UNCHECKED_CAST")
+        val auth = out["authentication"] as List<String>
+        assertEquals(1, auth.size)
+        assertTrue(auth[0].contains(":"))
         @Suppress("UNCHECKED_CAST")
         val ips = out["lan-allowed-ips"] as List<String>
         assertTrue(ips.contains("192.168.0.0/16"))

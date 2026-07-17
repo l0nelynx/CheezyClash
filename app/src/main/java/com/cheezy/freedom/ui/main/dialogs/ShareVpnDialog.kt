@@ -209,6 +209,21 @@ private fun LocalProxySection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    val user = info.localProxyUser
+    val pass = info.localProxyPassword
+    if ((info.localProxyEnabled || info.localProxyForcedByBase) && user != null && pass != null) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.share_local_proxy_auth, user, pass),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            stringResource(R.string.share_local_proxy_auth_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

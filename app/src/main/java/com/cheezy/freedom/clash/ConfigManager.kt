@@ -2,12 +2,10 @@ package com.cheezy.freedom.clash
 
 import android.content.Context
 import android.os.Build
-import android.util.Base64
 import com.cheezy.freedom.ui.main.proxies.ProxyUiData
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.yaml.snakeyaml.Yaml
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -45,57 +43,100 @@ object ConfigManager {
      * (called after HTTP 2xx, before reading the body). Open passes an empty
      * lambda (accepts any YAML); proprietary passes a Cheezy-header validator.
      */
+    private const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024 // 20 MB
+
     suspend fun downloadBase(
         context: Context,
         urlString: String,
         targetDir: File,
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): DownloadMeta {
-        val url = URL(urlString)
+        val initialUrl = URL(urlString)
+        requireHttps(initialUrl)
+
         // App name differs per flavor: open → CheezyClash, proprietary → CheezyVPN.
         val appName = if (com.cheezy.freedom.BuildConfig.EDITION == "OPEN") "CheezyClash" else "CheezyVPN"
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 20_000
-            readTimeout = 30_000
-            setRequestProperty("content-type", "application/json")
-            setRequestProperty("x-hwid", DeviceId.get(context))
-            setRequestProperty("x-device-os", "Android")
-            setRequestProperty("x-ver-os", Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString())
-            setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
-            setRequestProperty("user-agent", "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/${com.cheezy.freedom.BuildConfig.VERSION_NAME}")
-            instanceFollowRedirects = true
-        }
+        val conn = openSubscriptionConnection(initialUrl, context, appName)
         try {
             val code = conn.responseCode
             if (code !in 200..299) {
                 val err = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
                 throw IOException("HTTP $code: ${err?.take(200) ?: conn.responseMessage}")
             }
+            // Re-validate final URL after redirects (HttpURLConnection follows same-protocol by default).
+            requireHttps(conn.url)
 
             validateHeaders(conn)
 
-            val name = parseFilename(conn.getHeaderField("content-disposition"))
-                ?: url.path.substringAfterLast('/').takeIf { it.isNotBlank() }
+            val name = ConfigYamlParsers.parseFilename(conn.getHeaderField("content-disposition"))
+                ?: conn.url.path.substringAfterLast('/').takeIf { it.isNotBlank() }
                 ?: FILE_NAME
 
             val sub = SubscriptionInfo(
-                title = decodeMaybeBase64(conn.getHeaderField("profile-title")),
-                announce = decodeMaybeBase64(conn.getHeaderField("announce")),
-                tag = decodeMaybeBase64(conn.getHeaderField("subscription-tag") ?: conn.getHeaderField("profile-tag"))
-            ).mergeUserInfo(conn.getHeaderField("subscription-userinfo"))
+                title = ConfigYamlParsers.decodeMaybeBase64(conn.getHeaderField("profile-title")),
+                announce = ConfigYamlParsers.decodeMaybeBase64(conn.getHeaderField("announce")),
+                tag = ConfigYamlParsers.decodeMaybeBase64(
+                    conn.getHeaderField("subscription-tag") ?: conn.getHeaderField("profile-tag")
+                )
+            ).let { ConfigYamlParsers.mergeUserInfo(it, conn.getHeaderField("subscription-userinfo")) }
 
             val intervalHours = conn.getHeaderField("profile-update-interval")?.toIntOrNull() ?: 0
+
+            val contentLength = conn.contentLengthLong
+            if (contentLength > MAX_DOWNLOAD_BYTES) {
+                throw IOException("Subscription too large (${contentLength} bytes)")
+            }
 
             targetDir.mkdirs()
             val target = targetDir.resolve(ConfigOverrideManager.BASE_FILE_NAME)
             conn.inputStream.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                target.outputStream().use { output ->
+                    var copied = 0L
+                    val buf = ByteArray(8 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        copied += n
+                        if (copied > MAX_DOWNLOAD_BYTES) {
+                            throw IOException("Subscription exceeded size limit ($MAX_DOWNLOAD_BYTES bytes)")
+                        }
+                        output.write(buf, 0, n)
+                    }
+                }
             }
 
             return DownloadMeta(name, sub, intervalHours)
         } finally {
             conn.disconnect()
+        }
+    }
+
+    private fun requireHttps(url: URL) {
+        if (!url.protocol.equals("https", ignoreCase = true)) {
+            throw IOException("Only https:// subscription URLs are allowed (got ${url.protocol})")
+        }
+    }
+
+    private fun openSubscriptionConnection(
+        url: URL,
+        context: Context,
+        appName: String,
+    ): HttpURLConnection {
+        return (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 20_000
+            readTimeout = 30_000
+            setRequestProperty("Accept", "text/yaml, text/plain, application/octet-stream, */*")
+            setRequestProperty("x-hwid", DeviceId.get(context))
+            setRequestProperty("x-device-os", "Android")
+            setRequestProperty("x-ver-os", Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString())
+            setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
+            setRequestProperty(
+                "user-agent",
+                "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/${com.cheezy.freedom.BuildConfig.VERSION_NAME}"
+            )
+            // Follow redirects but requireHttps() re-checks the final URL.
+            instanceFollowRedirects = true
         }
     }
 
@@ -223,68 +264,25 @@ object ConfigManager {
 
     // --- YAML readers (operate on a profile dir) ---------------------------
 
-    private fun parseFilename(header: String?): String? {
-        if (header.isNullOrBlank()) return null
-        val match = Regex("""filename\*?=(?:UTF-8'')?"?([^";]+)"?""", RegexOption.IGNORE_CASE).find(header)
-        return match?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
-    }
-
     private fun configFile(context: Context): File = ProfileStore.activeDir(context).resolve(FILE_NAME)
 
-    private fun loadConfigMap(configFile: File): Map<String, Any?>? {
-        if (!configFile.exists()) return null
-        @Suppress("UNCHECKED_CAST")
-        return runCatching {
-            Yaml().load<Any>(configFile.readText()) as? Map<String, Any?>
-        }.getOrNull()
-    }
+    fun readTunStack(context: Context): String? = ConfigYamlParsers.readTunStack(ProfileStore.activeDir(context))
+    fun readTunStack(dir: File): String? = ConfigYamlParsers.readTunStack(dir)
 
-    fun readTunStack(context: Context): String? = readTunStack(ProfileStore.activeDir(context))
-    fun readTunStack(dir: File): String? {
-        val config = loadConfigMap(dir.resolve(FILE_NAME)) ?: return null
-        val tun = config["tun"] as? Map<*, *> ?: return null
-        return tun["stack"]?.toString()?.trim('"', '\'')
-    }
-
-    fun readFakeIpRange(context: Context): String? {
-        val config = loadConfigMap(configFile(context)) ?: return null
-        val dns = config["dns"] as? Map<*, *> ?: return null
-        return dns["fake-ip-range"]?.toString()?.trim('"', '\'')
-    }
+    fun readFakeIpRange(context: Context): String? =
+        ConfigYamlParsers.readFakeIpRange(configFile(context))
 
     /**
      * Parses the `proxy-groups` block of the active config and returns a map:
      * group name -> drawable resource name from `icon-cheezy` (`@drawable/foo` or `foo`).
      */
-    fun readGroupIcons(context: Context): Map<String, String> {
-        val file = configFile(context)
-        if (!file.exists()) return emptyMap()
+    fun readGroupIcons(context: Context): Map<String, String> =
+        ConfigYamlParsers.readGroupIcons(configFile(context))
 
-        return runCatching {
-            val text = file.readText()
-            @Suppress("UNCHECKED_CAST")
-            val yaml = Yaml().load<Any>(text) as? Map<String, Any?> ?: return emptyMap()
-            val groups = yaml["proxy-groups"] as? List<Any?> ?: return emptyMap()
-
-            val result = LinkedHashMap<String, String>()
-            for (item in groups) {
-                val map = item as? Map<*, *> ?: continue
-                val name = map["name"]?.toString() ?: continue
-                val icon = map["icon-cheezy"]?.toString() ?: continue
-                val resName = icon.removePrefix("@drawable/").trim()
-                if (resName.isNotBlank()) result[name] = resName
-            }
-            result
-        }.getOrDefault(emptyMap())
-    }
-
-    fun readExcludePackages(context: Context): List<String> = readExcludePackages(ProfileStore.activeDir(context))
-    fun readExcludePackages(dir: File): List<String> {
-        val config = loadConfigMap(dir.resolve(FILE_NAME)) ?: return emptyList()
-        val tun = config["tun"] as? Map<*, *> ?: return emptyList()
-        val list = tun["exclude-package"] as? List<*> ?: return emptyList()
-        return list.mapNotNull { it?.toString()?.trim('"', '\'') }
-    }
+    fun readExcludePackages(context: Context): List<String> =
+        ConfigYamlParsers.readExcludePackages(ProfileStore.activeDir(context))
+    fun readExcludePackages(dir: File): List<String> =
+        ConfigYamlParsers.readExcludePackages(dir)
 
     // --- Access control ----------------------------------------------------
 
@@ -315,36 +313,11 @@ object ConfigManager {
             .edit().putStringSet(KEY_AC_FORCE_EXCLUDED, packages).apply()
     }
 
-    fun computeEffectiveExcludePackages(context: Context): List<String> {
-        val base = readExcludePackages(context).toMutableSet()
-        if (!isAccessControlEnabled(context)) return base.toList()
-        base -= getUserForceIncluded(context)
-        base += getUserForceExcluded(context)
-        return base.toList()
-    }
-
-    // --- helpers -----------------------------------------------------------
-
-    private fun decodeMaybeBase64(value: String?): String? {
-        if (value.isNullOrBlank()) return null
-        if (!value.startsWith("base64:")) return value
-        val payload = value.removePrefix("base64:").trim()
-        return runCatching {
-            String(Base64.decode(payload, Base64.DEFAULT), Charsets.UTF_8)
-        }.getOrElse { value }
-    }
-
-    private fun SubscriptionInfo.mergeUserInfo(header: String?): SubscriptionInfo {
-        if (header.isNullOrBlank()) return this
-        val parts = header.split(';').mapNotNull {
-            val kv = it.trim().split('=', limit = 2)
-            if (kv.size == 2) kv[0].trim().lowercase() to kv[1].trim() else null
-        }.toMap()
-        return copy(
-            upload = parts["upload"]?.toLongOrNull() ?: 0,
-            download = parts["download"]?.toLongOrNull() ?: 0,
-            total = parts["total"]?.toLongOrNull() ?: 0,
-            expire = parts["expire"]?.toLongOrNull() ?: 0,
+    fun computeEffectiveExcludePackages(context: Context): List<String> =
+        ConfigYamlParsers.computeEffectiveExcludePackages(
+            base = readExcludePackages(context),
+            enabled = isAccessControlEnabled(context),
+            forceIncluded = getUserForceIncluded(context),
+            forceExcluded = getUserForceExcluded(context),
         )
-    }
 }

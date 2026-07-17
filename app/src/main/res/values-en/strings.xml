@@ -95,6 +95,8 @@
     <string name="share_unknown">Unknown</string>
     <string name="share_enable_local_proxy">Enable local proxy</string>
     <string name="share_local_proxy_managed">Local proxy settings are defined by your provider.</string>
+    <string name="share_local_proxy_auth">Proxy login: %1$s / %2$s</string>
+    <string name="share_local_proxy_auth_hint">Required for LAN clients connecting to this device.</string>
     <string name="share_port_mixed">Port (HTTP/SOCKS): %1$d</string>
     <string name="share_port_http">HTTP: %1$d</string>
     <string name="share_port_socks">SOCKS: %1$d</string>

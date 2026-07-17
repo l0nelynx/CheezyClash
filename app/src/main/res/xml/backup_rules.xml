@@ -1,13 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VPN client: do not auto-backup HWID, subscription URLs/tokens, YAML configs,
+  or proxy selections. allowBackup is false in the manifest; these excludes
+  apply if a future build re-enables backup or for device-transfer edge cases.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="cheezy.device.xml"/>
+    <exclude domain="sharedpref" path="cheezy.profiles.xml"/>
+    <exclude domain="sharedpref" path="cheezy.selections.xml"/>
+    <exclude domain="sharedpref" path="cheezy.overrides.xml"/>
+    <exclude domain="sharedpref" path="cheezy.access_control.xml"/>
+    <exclude domain="sharedpref" path="cheezy.updates.xml"/>
+    <exclude domain="sharedpref" path="cheezy.proxy_cache.xml"/>
+    <exclude domain="file" path="profiles"/>
+    <exclude domain="file" path="clash"/>
 </full-backup-content>

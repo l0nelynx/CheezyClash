@@ -6,6 +6,8 @@ data class ShareVpnInfo(
     val socksPort: Int?,
     val localProxyEnabled: Boolean,
     val localProxyForcedByBase: Boolean,
+    val localProxyUser: String? = null,
+    val localProxyPassword: String? = null,
 ) {
     companion object {
         val EMPTY = ShareVpnInfo(
@@ -14,6 +16,8 @@ data class ShareVpnInfo(
             socksPort = null,
             localProxyEnabled = false,
             localProxyForcedByBase = false,
+            localProxyUser = null,
+            localProxyPassword = null,
         )
     }
 }

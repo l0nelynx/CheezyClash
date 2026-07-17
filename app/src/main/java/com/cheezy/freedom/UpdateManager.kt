@@ -3,8 +3,10 @@ package com.cheezy.freedom
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,6 +28,13 @@ object UpdateManager {
     private const val PREFS = "cheezy.updates"
     private const val KEY_ID = "download_id"
     private const val KEY_VER = "download_ver"
+    private const val TAG = "UpdateManager"
+
+    private val ALLOWED_DOWNLOAD_HOSTS = setOf(
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    )
 
     val isEnabled: Boolean = BuildConfig.DISTRIBUTION_TYPE != "GPLAY"
 
@@ -53,11 +62,11 @@ object UpdateManager {
             val response = conn.inputStream.bufferedReader().use { it.readText() }
             val root = json.parseToJsonElement(response).jsonObject
             val tagName = root["tag_name"]?.jsonPrimitive?.content?.removePrefix("v")?.split('-')?.first() ?: return@runCatching null
-            
+
             val assets = root["assets"]?.jsonArray?.map { it.jsonObject } ?: return@runCatching null
             val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: ""
-            
-            val asset = assets.firstOrNull { 
+
+            val asset = assets.firstOrNull {
                 val name = it["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
                 name.endsWith(".apk") && name.contains(abi.lowercase())
             } ?: assets.firstOrNull {
@@ -66,10 +75,13 @@ object UpdateManager {
             } ?: assets.firstOrNull {
                 it["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true
             } ?: return@runCatching null
-            
+
             val downloadUrl = asset["browser_download_url"]?.jsonPrimitive?.content ?: return@runCatching null
-            
-            // Strip architecture suffixes from the current version before comparison
+            if (!isTrustedDownloadUrl(downloadUrl)) {
+                Log.w(TAG, "Rejecting untrusted download URL host")
+                return@runCatching null
+            }
+
             val currentVersion = BuildConfig.VERSION_NAME.split('-').first()
 
             UpdateInfo(
@@ -80,9 +92,10 @@ object UpdateManager {
         }.getOrNull()
     }
 
-    private fun isNewerVersion(new: String, current: String): Boolean {
-        val newParts = new.split('.').mapNotNull { it.toIntOrNull() }
-        val curParts = current.split('.').mapNotNull { it.toIntOrNull() }
+    /** Public for unit tests. */
+    internal fun isNewerVersion(new: String, current: String): Boolean {
+        val newParts = new.removePrefix("v").split('.').mapNotNull { it.toIntOrNull() }
+        val curParts = current.removePrefix("v").split('.').mapNotNull { it.toIntOrNull() }
         for (i in 0 until maxOf(newParts.size, curParts.size)) {
             val n = newParts.getOrNull(i) ?: 0
             val c = curParts.getOrNull(i) ?: 0
@@ -90,6 +103,13 @@ object UpdateManager {
             if (n < c) return false
         }
         return false
+    }
+
+    internal fun isTrustedDownloadUrl(url: String): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        if (uri.scheme?.equals("https", ignoreCase = true) != true) return false
+        val host = uri.host?.lowercase() ?: return false
+        return host in ALLOWED_DOWNLOAD_HOSTS || host.endsWith(".githubusercontent.com")
     }
 
     fun getDownloadStatus(context: Context, version: String): DownloadStatus {
@@ -103,13 +123,13 @@ object UpdateManager {
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val query = DownloadManager.Query().setFilterById(id)
         val cursor = runCatching { dm.query(query) }.getOrNull() ?: return DownloadStatus.NOT_STARTED
-        
+
         try {
             if (cursor.moveToFirst()) {
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 return when (status) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
-                        if (getUpdateFile(context).exists()) DownloadStatus.DOWNLOADED 
+                        if (getUpdateFile(context).exists()) DownloadStatus.DOWNLOADED
                         else DownloadStatus.NOT_STARTED
                     }
                     DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING -> DownloadStatus.DOWNLOADING
@@ -123,6 +143,10 @@ object UpdateManager {
     }
 
     fun downloadAndInstall(context: Context, info: UpdateInfo) {
+        if (!isTrustedDownloadUrl(info.downloadUrl)) {
+            Log.w(TAG, "Refusing to download from untrusted URL")
+            return
+        }
         val file = getUpdateFile(context)
         if (file.exists()) file.delete()
 
@@ -146,6 +170,13 @@ object UpdateManager {
         val file = getUpdateFile(context)
         if (!file.exists()) return
 
+        if (!verifyApkSignature(context, file)) {
+            Log.e(TAG, "Downloaded APK signature does not match installed app — refusing install")
+            file.delete()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+            return
+        }
+
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
@@ -153,6 +184,49 @@ object UpdateManager {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
+    }
+
+    /**
+     * Returns true when [apkFile] is signed with the same certificate(s) as the
+     * currently installed app. Rejects missing/unsigned archives.
+     */
+    internal fun verifyApkSignature(context: Context, apkFile: File): Boolean {
+        return runCatching {
+            val pm = context.packageManager
+            @Suppress("DEPRECATION")
+            val archiveInfo = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                pm.getPackageArchiveInfo(
+                    apkFile.absolutePath,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+            } else {
+                pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
+            } ?: return false
+
+            val apkSigs = signaturesOf(archiveInfo) ?: return false
+            val installed = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+            }
+            val appSigs = signaturesOf(installed) ?: return false
+            apkSigs.isNotEmpty() && apkSigs.contentEquals(appSigs)
+        }.getOrDefault(false)
+    }
+
+    private fun signaturesOf(info: android.content.pm.PackageInfo): Array<android.content.pm.Signature>? {
+        return if (android.os.Build.VERSION.SDK_INT >= 28) {
+            val signingInfo = info.signingInfo ?: return null
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures
+        }
     }
 
     private fun getUpdateFile(context: Context): File {

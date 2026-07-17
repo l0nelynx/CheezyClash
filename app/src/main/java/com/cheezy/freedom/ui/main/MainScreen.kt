@@ -82,7 +82,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cheezy.freedom.R
 import com.cheezy.freedom.account.AppDeps
 import com.cheezy.freedom.clash.ClashState
-import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
 import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnDialog
@@ -209,7 +208,7 @@ fun MainScreen(
         ClashState.setError(null)
         val prep = VpnService.prepare(context)
         if (prep != null) prepareVpn.launch(prep)
-        else ClashVpnService.start(context)
+        else viewModel.startVpnService()
     }
 
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
@@ -376,7 +375,7 @@ fun MainScreen(
                             onRefresh = { viewModel.refresh() },
                             onVpnToggle = {
                                 if (running) {
-                                    ClashVpnService.stop(context)
+                                    viewModel.stopVpnService()
                                 } else if (!ConfigManager.hasConfig(context)) {
                                     ClashState.setError(noConfigMsg)
                                 } else if (localNetworkPermName != null && !localNetworkGranted()) {

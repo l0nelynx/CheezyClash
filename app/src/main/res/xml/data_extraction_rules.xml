@@ -1,19 +1,29 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mirrors backup_rules.xml for API 31+ cloud backup and device transfer.
+  Sensitive prefs and profile YAML must not leave the device.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="cheezy.device.xml"/>
+        <exclude domain="sharedpref" path="cheezy.profiles.xml"/>
+        <exclude domain="sharedpref" path="cheezy.selections.xml"/>
+        <exclude domain="sharedpref" path="cheezy.overrides.xml"/>
+        <exclude domain="sharedpref" path="cheezy.access_control.xml"/>
+        <exclude domain="sharedpref" path="cheezy.updates.xml"/>
+        <exclude domain="sharedpref" path="cheezy.proxy_cache.xml"/>
+        <exclude domain="file" path="profiles"/>
+        <exclude domain="file" path="clash"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="cheezy.device.xml"/>
+        <exclude domain="sharedpref" path="cheezy.profiles.xml"/>
+        <exclude domain="sharedpref" path="cheezy.selections.xml"/>
+        <exclude domain="sharedpref" path="cheezy.overrides.xml"/>
+        <exclude domain="sharedpref" path="cheezy.access_control.xml"/>
+        <exclude domain="sharedpref" path="cheezy.updates.xml"/>
+        <exclude domain="sharedpref" path="cheezy.proxy_cache.xml"/>
+        <exclude domain="file" path="profiles"/>
+        <exclude domain="file" path="clash"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

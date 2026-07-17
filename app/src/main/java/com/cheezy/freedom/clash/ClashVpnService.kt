@@ -26,12 +26,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import org.json.JSONObject
 
 class ClashVpnService : VpnService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Dedicated pool for binder stubs — avoids starving the default IO pool / binder threads indefinitely. */
+    private val binderDispatcher = Dispatchers.IO.limitedParallelism(1)
     private var startJob: Job? = null
     private var trafficJob: Job? = null
     private var logJob: Job? = null
@@ -42,6 +47,9 @@ class ClashVpnService : VpnService() {
     private var acEnabled = false
     private var acForceIncluded: Set<String> = emptySet()
     private var acForceExcluded: Set<String> = emptySet()
+
+    /** Proxy selections snapshot from main (group -> proxy), same cross-process rationale as AC. */
+    private var startupSelections: Map<String, String> = emptyMap()
 
     // Directory of the active profile's config (profiles/<id>/). The core HOME
     // stays filesDir/clash (shared static), but the *load* directory is per
@@ -89,7 +97,9 @@ class ClashVpnService : VpnService() {
                 callback.onPhaseChanged(ClashState.phase.value.ordinal)
                 callback.onActiveProxyChanged(ClashState.activeProxy.value)
                 callback.onIpAddressesUpdated(ClashState.tunAddress.value, ClashState.localIp.value)
-            } catch (e: RemoteException) {}
+            } catch (e: RemoteException) {
+                Log.w(TAG, "Dead callback during register", e)
+            }
         }
 
         override fun unregisterCallback(callback: IClashCallback) {
@@ -102,37 +112,48 @@ class ClashVpnService : VpnService() {
             stopClash()
         }
 
-        override fun loadConfig(path: String) = runBlocking {
-            // path is the active profile's directory; adopt it and load config.yaml
-            // from there (dedup against the loaded signature).
-            if (path.isNotBlank()) activeConfigDir = File(path)
-            ensureConfigLoaded()
+        override fun loadConfig(path: String) = runBlocking(binderDispatcher) {
+            withTimeout(30_000) {
+                val canonical = path.takeIf { it.isNotBlank() }?.let { File(it).canonicalFile }
+                val profilesRoot = ProfileStore.profilesRoot(this@ClashVpnService).canonicalFile
+                if (canonical != null) {
+                    require(
+                        canonical.path == profilesRoot.path ||
+                            canonical.path.startsWith(profilesRoot.path + File.separator)
+                    ) { "loadConfig path outside profiles root: $path" }
+                    activeConfigDir = canonical
+                }
+                ensureConfigLoaded()
+            }
         }
 
-        override fun queryGroupNames(excludeNotSelectable: Boolean): String = runBlocking {
-            com.github.kr328.clash.core.bridge.Bridge.nativeQueryGroupNames(excludeNotSelectable)
+        override fun queryGroupNames(excludeNotSelectable: Boolean): String = runBlocking(binderDispatcher) {
+            withTimeout(15_000) {
+                com.github.kr328.clash.core.bridge.Bridge.nativeQueryGroupNames(excludeNotSelectable)
+            }
         }
 
-        override fun queryGroup(name: String, sort: String): String? = runBlocking {
-            com.github.kr328.clash.core.bridge.Bridge.nativeQueryGroup(name, sort)
+        override fun queryGroup(name: String, sort: String): String? = runBlocking(binderDispatcher) {
+            withTimeout(15_000) {
+                com.github.kr328.clash.core.bridge.Bridge.nativeQueryGroup(name, sort)
+            }
         }
 
-        override fun patchSelector(group: String, name: String): Boolean = runBlocking {
-            val ok = Clash.patchSelector(group, name)
-            if (ok) {
-                // Save selection in this process so that at next VPN start
-                // SharedPreferences are up-to-date for the :vpn process.
-                ConfigManager.saveSelectedProxy(this@ClashVpnService, group, name)
-                
-                // If the proxy in the first (main) group was changed, update status immediately
-                scope.launch {
-                    val first = Clash.queryGroupNames(true).firstOrNull()
-                    if (group == first) {
-                        ClashState.setActiveProxy(name)
+        override fun patchSelector(group: String, name: String): Boolean = runBlocking(binderDispatcher) {
+            withTimeout(30_000) {
+                val ok = Clash.patchSelector(group, name)
+                if (ok) {
+                    // Selections are persisted only in the main process (see ClashRemoteManager).
+                    // Writing SharedPreferences from :vpn races with the main-process cache.
+                    scope.launch {
+                        val first = Clash.queryGroupNames(true).firstOrNull()
+                        if (group == first) {
+                            ClashState.setActiveProxy(name)
+                        }
                     }
                 }
+                ok
             }
-            ok
         }
 
         override fun healthCheck(name: String) {
@@ -222,6 +243,7 @@ class ClashVpnService : VpnService() {
                 try {
                     action(callbacks.getBroadcastItem(i))
                 } catch (e: RemoteException) {
+                    Log.w(TAG, "Dead callback during broadcast", e)
                 }
             }
         } finally {
@@ -250,6 +272,8 @@ class ClashVpnService : VpnService() {
             acForceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(ctx) else emptySet()
             acForceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(ctx) else emptySet()
         }
+        startupSelections = intent?.getStringExtra(EXTRA_SELECTIONS_JSON)?.let { parseSelectionsJson(it) }
+            ?: ConfigManager.getSavedSelections(this)
         intent?.getStringExtra(EXTRA_ACTIVE_DIR)?.takeIf { it.isNotBlank() }?.let {
             activeConfigDir = File(it)
         }
@@ -270,18 +294,11 @@ class ClashVpnService : VpnService() {
                 activeConfigDir.mkdirs()
                 ensureConfigLoaded()
 
-                // Apply user-saved proxies
+                // Apply user-saved proxies (snapshot from main via Intent extras).
                 val currentGroups = Clash.queryGroupNames(false).toSet()
-                ConfigManager.getSavedSelections(this@ClashVpnService).forEach { (group, proxy) ->
+                startupSelections.forEach { (group, proxy) ->
                     if (group !in currentGroups) return@forEach
-                    runCatching {
-                        if (!Clash.patchSelector(group, proxy)) {
-                            // If the proxy is no longer in the config, remember the one Clash chose (first in the list)
-                            Clash.queryGroup(group)?.now?.let { fallback ->
-                                ConfigManager.saveSelectedProxy(this@ClashVpnService, group, fallback)
-                            }
-                        }
-                    }
+                    runCatching { Clash.patchSelector(group, proxy) }
                 }
 
                 val ctx = this@ClashVpnService
@@ -367,10 +384,13 @@ class ClashVpnService : VpnService() {
         trafficJob = null
         startJob?.cancel()
         startJob = null
-        kotlinx.coroutines.runBlocking {
-            runCatching { Clash.stopTun() }
-            runCatching { Clash.stopHttp() }
-            runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
+        // Bound the native teardown so binder/main callers cannot hang forever.
+        runBlocking(Dispatchers.IO) {
+            withTimeoutOrNull(5_000) {
+                runCatching { Clash.stopTun() }
+                runCatching { Clash.stopHttp() }
+                runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
+            }
         }
         ClashState.setRunning(false)
         ClashState.setPhase(ConnectionPhase.IDLE)
@@ -507,20 +527,37 @@ class ClashVpnService : VpnService() {
         private const val EXTRA_AC_FORCE_INCLUDED = "extra.ac_force_included"
         private const val EXTRA_AC_FORCE_EXCLUDED = "extra.ac_force_excluded"
         private const val EXTRA_ACTIVE_DIR = "extra.active_dir"
+        private const val EXTRA_SELECTIONS_JSON = "extra.selections_json"
+
+        private fun parseSelectionsJson(json: String): Map<String, String> =
+            runCatching {
+                val obj = JSONObject(json)
+                buildMap {
+                    obj.keys().forEach { key -> put(key, obj.getString(key)) }
+                }
+            }.getOrDefault(emptyMap())
+
+        private fun selectionsToJson(map: Map<String, String>): String {
+            val obj = JSONObject()
+            map.forEach { (k, v) -> obj.put(k, v) }
+            return obj.toString()
+        }
 
         fun start(context: Context) {
-            // Read AC settings + active profile dir in the calling (main) process — its
-            // SharedPreferences cache is always up-to-date. The :vpn process has a separate
+            // Read AC settings + selections + active profile dir in the calling (main) process —
+            // its SharedPreferences cache is always up-to-date. The :vpn process has a separate
             // cache that may be stale.
             val acEnabled = ConfigManager.isAccessControlEnabled(context)
             val forceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(context) else emptySet()
             val forceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(context) else emptySet()
+            val selections = ConfigManager.getSavedSelections(context)
 
             val intent = Intent(context, ClashVpnService::class.java).apply {
                 putExtra(EXTRA_AC_ENABLED, acEnabled)
                 putExtra(EXTRA_AC_FORCE_INCLUDED, forceIncluded.toTypedArray())
                 putExtra(EXTRA_AC_FORCE_EXCLUDED, forceExcluded.toTypedArray())
                 putExtra(EXTRA_ACTIVE_DIR, ProfileStore.activeDir(context).absolutePath)
+                putExtra(EXTRA_SELECTIONS_JSON, selectionsToJson(selections))
             }
             if (Build.VERSION.SDK_INT >= 26) {
                 context.startForegroundService(intent)

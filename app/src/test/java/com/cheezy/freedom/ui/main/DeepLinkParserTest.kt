@@ -36,6 +36,11 @@ class DeepLinkParserTest {
     }
 
     @Test
+    fun `http add link is rejected`() {
+        assertNull(parseDeepLink("cheezy://add/http://example.com/sub"))
+    }
+
+    @Test
     fun `foreign scheme is null`() {
         assertNull(parseDeepLink("https://example.com/add/x"))
     }

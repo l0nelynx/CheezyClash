@@ -50,6 +50,7 @@ object ConfigOverrideManager {
      *  or refreshing a profile that is not necessarily the active one). */
     fun rebuild(context: Context, dir: File) {
         ensureBaseExists(dir)
+        LocalProxyOverride.authEntry = LocalProxyOverride.ensureCredentials(context)
         val enabled = registry.filter { isEnabled(context, it.id) }.map { it.id }.toSet()
         rebuildInDir(dir, enabled)
     }
@@ -112,12 +113,21 @@ object ConfigOverrideManager {
         ensureBaseExists(context)
         val config = readMap(File(clashDir(context), CONFIG_FILE_NAME))
         val ports = if (config == null) Ports.EMPTY else extractPorts(config)
+        val enabled = isEnabled(context, LocalProxyOverride.id)
+        val forced = isForcedByBase(context, LocalProxyOverride.id)
+        val creds = if (enabled || forced) {
+            val entry = LocalProxyOverride.ensureCredentials(context)
+            val parts = entry.split(':', limit = 2)
+            parts[0] to parts.getOrElse(1) { "" }
+        } else null
         return ShareVpnInfo(
             mixedPort = ports.mixedPort,
             httpPort = ports.httpPort,
             socksPort = ports.socksPort,
-            localProxyEnabled = isEnabled(context, LocalProxyOverride.id),
-            localProxyForcedByBase = isForcedByBase(context, LocalProxyOverride.id),
+            localProxyEnabled = enabled,
+            localProxyForcedByBase = forced,
+            localProxyUser = creds?.first,
+            localProxyPassword = creds?.second,
         )
     }
 

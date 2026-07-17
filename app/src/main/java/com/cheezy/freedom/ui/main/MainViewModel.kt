@@ -332,7 +332,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onVpnPermissionResult(granted: Boolean) {
-        if (granted) ClashVpnService.start(context)
+        if (granted) startVpnService()
         else ClashState.setError("VPN permission denied")
     }
 
@@ -357,6 +357,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Onboarding / add-subscription dialog confirm: add [url] as a new profile. */
     fun importFromUrl(url: String) = addProfile(url)
+
+    fun startVpnService() {
+        ClashVpnService.start(context)
+    }
+
+    fun stopVpnService() {
+        ClashVpnService.stop(context)
+    }
 
     fun addProfile(url: String) {
         _showUrlDialog.value = false
@@ -678,6 +686,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 reloadProxyGroups()
             } finally {
                 _isPinging.value = false
+            }
+        }
+    }
+
+    fun selectProxy(groupName: String, proxyName: String) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                ClashRemoteManager.patchSelector(groupName, proxyName)
+            }
+            if (ok) reloadProxyGroups()
+        }
+    }
+
+    fun pingGroup(groupName: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(5_000L) {
+                    runCatching { ClashRemoteManager.healthCheck(groupName) }
+                }
+                kotlinx.coroutines.delay(2000)
+                val existing = HashMap(ClashState.pings.value)
+                ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                    group.proxies.forEach { p ->
+                        existing[p.name] = if (p.delay in 1 until 65535) p.delay else -1
+                    }
+                }
+                ClashState.setPings(existing)
+            }
+        }
+    }
+
+    fun pingProxy(groupName: String, proxyName: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(5_000L) {
+                    runCatching { ClashRemoteManager.healthCheck(proxyName) }
+                }
+                kotlinx.coroutines.delay(2000)
+                ClashRemoteManager.queryGroup(groupName)?.let { group ->
+                    val found = group.proxies.firstOrNull { it.name == proxyName }
+                    if (found != null) {
+                        val existing = HashMap(ClashState.pings.value)
+                        existing[found.name] = if (found.delay in 1 until 65535) found.delay else -1
+                        ClashState.setPings(existing)
+                    }
+                }
             }
         }
     }

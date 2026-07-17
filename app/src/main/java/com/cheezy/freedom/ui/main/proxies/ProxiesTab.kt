@@ -41,25 +41,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.circle
 import androidx.graphics.shapes.star
-import com.cheezy.freedom.clash.ClashRemoteManager
 import com.cheezy.freedom.clash.ClashState
-import com.cheezy.freedom.clash.ConfigManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PING_TIMEOUT_VALUE = 65535
-private const val HEALTH_CHECK_TIMEOUT_MS = 5_000L
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -67,7 +57,6 @@ fun ProxiesTab(
     vpnRunning: Boolean,
     viewModel: com.cheezy.freedom.ui.main.MainViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rawGroups by viewModel.proxyGroups.collectAsState()
     val groupIcons by viewModel.groupIcons.collectAsState()
@@ -142,19 +131,7 @@ fun ProxiesTab(
                                             scope.launch {
                                                 pingingGroups[groupName] = true
                                                 try {
-                                                    withContext(Dispatchers.IO) {
-                                                        withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
-                                                            runCatching { ClashRemoteManager.healthCheck(groupName) }
-                                                        }
-                                                        kotlinx.coroutines.delay(2000)
-                                                        val existing = HashMap(ClashState.pings.value)
-                                                        ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                                                            group.proxies.forEach { p ->
-                                                                existing[p.name] = if (p.delay in 1 until PING_TIMEOUT_VALUE) p.delay else -1
-                                                            }
-                                                        }
-                                                        ClashState.setPings(existing)
-                                                    }
+                                                    viewModel.pingGroup(groupName)
                                                 } finally {
                                                     pingingGroups[groupName] = false
                                                 }
@@ -199,12 +176,7 @@ fun ProxiesTab(
                                         ProxyRow(
                                             item = rowItem,
                                             onClick = {
-                                                scope.launch {
-                                                    val ok = withContext(Dispatchers.IO) {
-                                                        ClashRemoteManager.patchSelector(groupName, proxy.name)
-                                                    }
-                                                    if (ok) viewModel.reloadProxyGroups()
-                                                }
+                                                viewModel.selectProxy(groupName, proxy.name)
                                             },
                                             isPinging = pingingProxies[proxy.name] == true,
                                             onPing = if (vpnRunning) {
@@ -212,20 +184,7 @@ fun ProxiesTab(
                                                     scope.launch {
                                                         pingingProxies[proxy.name] = true
                                                         try {
-                                                            withContext(Dispatchers.IO) {
-                                                                withTimeoutOrNull(HEALTH_CHECK_TIMEOUT_MS) {
-                                                                    runCatching { ClashRemoteManager.healthCheck(proxy.name) }
-                                                                }
-                                                                kotlinx.coroutines.delay(2000)
-                                                                ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                                                                    val found = group.proxies.firstOrNull { it.name == proxy.name }
-                                                                    if (found != null) {
-                                                                        val existing = HashMap(ClashState.pings.value)
-                                                                        existing[found.name] = if (found.delay in 1 until PING_TIMEOUT_VALUE) found.delay else -1
-                                                                        ClashState.setPings(existing)
-                                                                    }
-                                                                }
-                                                            }
+                                                            viewModel.pingProxy(groupName, proxy.name)
                                                         } finally {
                                                             pingingProxies[proxy.name] = false
                                                         }

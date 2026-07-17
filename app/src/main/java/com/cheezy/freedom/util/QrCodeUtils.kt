@@ -2,10 +2,13 @@ package com.cheezy.freedom.util
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.Log
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 
 object QrCodeUtils {
+    private const val TAG = "QrCodeUtils"
+
     fun generateQrCode(content: String, size: Int): Bitmap? {
         if (content.isBlank()) return null
         return try {
@@ -21,7 +24,7 @@ object QrCodeUtils {
             }
             bitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Failed to generate QR", e)
             null
         }
     }

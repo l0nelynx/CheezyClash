@@ -25,13 +25,18 @@ fun parseDeepLink(raw: String?): DeepLink? {
     return when {
         raw.startsWith(ADD_PREFIX) ->
             percentDecode(raw.removePrefix(ADD_PREFIX)).trim()
-                .takeIf { it.isNotBlank() }?.let { DeepLink.Add(it) }
+                .takeIf { it.isNotBlank() && isAllowedSubscriptionUrl(it) }
+                ?.let { DeepLink.Add(it) }
         raw.startsWith(LOGIN_PREFIX) ->
             percentDecode(raw.removePrefix(LOGIN_PREFIX)).trim()
                 .takeIf { it.isNotBlank() }?.let { DeepLink.Login(it) }
         else -> null
     }
 }
+
+/** Subscription deep-links must be https to avoid cleartext token leaks. */
+internal fun isAllowedSubscriptionUrl(url: String): Boolean =
+    url.startsWith("https://", ignoreCase = true)
 
 /**
  * Decodes %XX escapes only, leaving `+` untouched (unlike URLDecoder) so base64

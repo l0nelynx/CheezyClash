@@ -69,6 +69,6 @@ class BaselineProfileGenerator {
 
     companion object {
         // applicationId must match :app; flavor direct/gplay = same id.
-        private const val PACKAGE_NAME = "com.cheezy.freedom"
+        private const val PACKAGE_NAME = "com.cheezy.freedom.clash"
     }
 }

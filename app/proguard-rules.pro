@@ -24,3 +24,20 @@
 # Keep the whole package; the library is small enough that this is not a size concern.
 -keep class org.yaml.snakeyaml.** { *; }
 -dontwarn org.yaml.snakeyaml.**
+
+# kotlinx.serialization — keep generated serializers when minify is enabled later.
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keep,includedescriptorclasses class com.cheezy.freedom.**$$serializer { *; }
+-keepclassmembers class com.cheezy.freedom.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.cheezy.freedom.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# AIDL stubs / Parcelable models used across processes.
+-keep class com.cheezy.freedom.clash.IClashInterface { *; }
+-keep class com.cheezy.freedom.clash.IClashCallback { *; }
+-keep class com.cheezy.freedom.clash.ILogcatCallback { *; }
+-keep class com.github.kr328.clash.core.model.** { *; }

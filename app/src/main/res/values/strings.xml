@@ -97,6 +97,8 @@
     <string name="share_unknown">Неизвестно</string>
     <string name="share_enable_local_proxy">Включить локальный прокси</string>
     <string name="share_local_proxy_managed">Параметры локального прокси заданы вашим провайдером.</string>
+    <string name="share_local_proxy_auth">Логин прокси: %1$s / %2$s</string>
+    <string name="share_local_proxy_auth_hint">Нужен устройствам в LAN для подключения к этому телефону.</string>
     <string name="share_port_mixed">Порт (HTTP/SOCKS): %1$d</string>
     <string name="share_port_http">HTTP: %1$d</string>
     <string name="share_port_socks">SOCKS: %1$d</string>
