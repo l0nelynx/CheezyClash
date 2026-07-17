@@ -55,6 +55,8 @@ Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprieta
 3. Rebuild — Gradle applies `google-services` + Crashlytics plugins only when that file exists. Without it, the app builds normally with Firebase omitted.
 
 Crash reporting covers the main process and `:vpn`. No custom analytics events yet (auto-collection only).
+
+**FCM (push):** implemented only in the private CheezyVPN proprietary overlay (`firebase-messaging` + `CheezyFirebaseMessagingService`). Open builds do not include push.
 ### 📄 License
 This project is licensed under the [MIT License](LICENSE).
 ### ⭐ Support
@@ -107,6 +109,8 @@ If you like this project, please give it a **Star**
 3. Пересобрать — плагины `google-services` и Crashlytics подключаются только если файл есть. Без него сборка идёт как обычно, без Firebase.
 
 Краши собираются и в main, и в `:vpn`. Кастомных событий пока нет (только auto-collection).
+
+**FCM (push):** только в private CheezyVPN proprietary overlay (`firebase-messaging` + `CheezyFirebaseMessagingService`). В open-сборках push нет.
 ### 📄 Лицензия
 Этот проект распространяется под лицензией [MIT License](LICENSE).
 ### ⭐ Support
