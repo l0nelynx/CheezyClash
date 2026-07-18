@@ -67,8 +67,13 @@ jobs:
             target: win
           - os: ubuntu-latest
             target: linux
+          # macos-latest is arm64; build x64 via cross-compile + TARGET_ARCH
           - os: macos-latest
             target: mac
+            arch: arm64
+          - os: macos-latest
+            target: mac
+            arch: x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     defaults:
@@ -98,8 +103,12 @@ jobs:
             exit 1
           fi
       - name: Fetch mihomo sidecar
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         run: npm run fetch-core
       - name: Build helper
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
       - name: Icons
         run: npm run icons
@@ -108,7 +117,14 @@ jobs:
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist:${{ matrix.target }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.arch }}" ]; then
+            npm run dist:${{ matrix.target }} -- --${{ matrix.arch }}
+          else
+            npm run dist:${{ matrix.target }}
+          fi
         continue-on-error: ${{ matrix.target != 'win' }}
       - name: Upload Windows desktop artifacts
         if: matrix.target == 'win'
@@ -130,8 +146,10 @@ jobs:
         if: matrix.target == 'mac'
         uses: actions/upload-artifact@v4
         with:
-          name: CheezyClash-desktop-mac
-          path: desktop/release/*
+          name: CheezyClash-desktop-mac-${{ matrix.arch }}
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
           if-no-files-found: ignore
 
   publish:
@@ -169,7 +187,8 @@ jobs:
             release-assets/CheezyClash-APKs/*
             release-assets/CheezyClash-desktop-win/*
             release-assets/CheezyClash-desktop-linux/*
-            release-assets/CheezyClash-desktop-mac/*
+            release-assets/CheezyClash-desktop-mac-arm64/*
+            release-assets/CheezyClash-desktop-mac-x64/*
           body: |
             ## What's New
             ${{ steps.changelog.outputs.CHANGES }}
@@ -180,7 +199,8 @@ jobs:
 
             ### Desktop
             - **Windows:** installer (`.exe`) + portable (`.zip`)
-            - **Linux / macOS:** attached when the matrix job succeeded
+            - **macOS:** `arm64` and `x64` (`.dmg` / `.zip`) when matrix jobs succeed
+            - **Linux:** attached when the matrix job succeeded
           generate_release_notes: true
           fail_on_unmatched_files: false
 

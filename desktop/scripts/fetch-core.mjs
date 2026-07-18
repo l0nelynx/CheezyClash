@@ -6,6 +6,7 @@
  *   mihomo-<go_hash>-<goos>-<goarch>.zip
  * where go_hash matches Android libclash (same Go sources under core/src/main/golang).
  *
+ * Override arch with TARGET_ARCH=x64|arm64|amd64 (for CI cross-compile on macOS).
  * Override release repo with CORE_RELEASE_REPO (default: l0nelynx/CheezyClash).
  * Also fetches wintun.dll on Windows.
  *
@@ -45,6 +46,11 @@ function goos() {
 }
 
 function goarch() {
+  // TARGET_ARCH: electron-builder style (x64|arm64) or Go style (amd64|arm64)
+  const override = (process.env.TARGET_ARCH || process.env.npm_config_arch || '').toLowerCase()
+  if (override === 'x64' || override === 'amd64') return 'amd64'
+  if (override === 'arm64') return 'arm64'
+  if (override === 'ia32' || override === '386') return '386'
   const a = arch()
   if (a === 'arm64') return 'arm64'
   if (a === 'ia32') return '386'

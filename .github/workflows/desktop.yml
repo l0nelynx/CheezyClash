@@ -21,6 +21,10 @@ jobs:
             target: linux
           - os: macos-latest
             target: mac
+            arch: arm64
+          - os: macos-latest
+            target: mac
+            arch: x64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -40,8 +44,12 @@ jobs:
       - name: Sync version
         run: npm run sync-version
       - name: Fetch mihomo sidecar
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         run: npm run fetch-core
       - name: Build helper
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
       - name: Rasterize icons
         run: npm run icons
@@ -55,7 +63,14 @@ jobs:
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist:${{ matrix.target }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.arch }}" ]; then
+            npm run dist:${{ matrix.target }} -- --${{ matrix.arch }}
+          else
+            npm run dist:${{ matrix.target }}
+          fi
         continue-on-error: ${{ matrix.target != 'win' }}
       - name: Upload Windows artifacts
         if: matrix.target == 'win'
@@ -77,6 +92,8 @@ jobs:
         if: matrix.target == 'mac'
         uses: actions/upload-artifact@v4
         with:
-          name: CheezyClash-macos
-          path: desktop/release/*
+          name: CheezyClash-macos-${{ matrix.arch }}
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
           if-no-files-found: ignore

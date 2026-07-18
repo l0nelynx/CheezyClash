@@ -4,7 +4,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { platform } from 'os'
+import { platform, arch as osArch } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -16,11 +16,27 @@ const isWin = platform() === 'win32'
 const outName = isWin ? 'CheezyHelperService.exe' : 'cheezy-helper'
 const outPath = join(outDir, outName)
 
-console.log('Building helper…')
+function goarch() {
+  const override = (process.env.TARGET_ARCH || process.env.npm_config_arch || '').toLowerCase()
+  if (override === 'x64' || override === 'amd64') return 'amd64'
+  if (override === 'arm64') return 'arm64'
+  if (override === 'ia32' || override === '386') return '386'
+  const a = osArch()
+  if (a === 'arm64') return 'arm64'
+  if (a === 'ia32') return '386'
+  return 'amd64'
+}
+
+const goArch = goarch()
+console.log(`Building helper (GOARCH=${goArch})…`)
 execFileSync(
   'go',
   ['build', '-o', outPath, '.'],
-  { cwd: helperDir, stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0' } },
+  {
+    cwd: helperDir,
+    stdio: 'inherit',
+    env: { ...process.env, CGO_ENABLED: '0', GOARCH: goArch },
+  },
 )
 
 const coreName = isWin ? 'mihomo.exe' : 'mihomo'
