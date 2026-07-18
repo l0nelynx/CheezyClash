@@ -1,7 +1,10 @@
 name: Build Clash Core
 
-# Builds libclash.so for all ABIs, caches under libclash-<go_hash>, and publishes
-# libclash-<go_hash>.zip as a GitHub Release asset (cross-repo consumption by CheezyVPN).
+# Builds libclash.so for all ABIs and desktop mihomo sidecars from the same
+# Go sources hash. Publishes under tag libclash-<go_hash>:
+#   - libclash-<hash>.zip
+#   - mihomo-<hash>-<goos>-<goarch>.zip (windows/linux/darwin × amd64/arm64)
+# Consumed by Android CI and desktop `npm run fetch-core`.
 
 on:
   workflow_dispatch:
@@ -32,7 +35,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -74,8 +77,8 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      # Always set up Go: sidecar builds need it even when libclash is cached.
       - name: Set up Go 1.23
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
@@ -121,27 +124,110 @@ jobs:
           zip -r "/tmp/${ZIP}" arm64-v8a armeabi-v7a x86_64
           ls -lh "/tmp/${ZIP}"
 
-      - name: Publish libclash GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Build desktop mihomo sidecars
+        run: |
+          set -euo pipefail
+          HASH="${{ steps.hash.outputs.go_hash }}"
+          GO_DIR="$PWD/core/src/main/golang"
+          OUT_DIR="$PWD/core/build/mihomo-sidecars"
+          mkdir -p "$OUT_DIR"
+
+          TARGETS=(
+            "windows/amd64"
+            "windows/arm64"
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+          )
+
+          for target in "${TARGETS[@]}"; do
+            GOOS="${target%%/*}"
+            GOARCH="${target##*/}"
+            BIN="mihomo"
+            if [ "$GOOS" = "windows" ]; then
+              BIN="mihomo.exe"
+            fi
+            STAGE="$OUT_DIR/stage-${GOOS}-${GOARCH}"
+            mkdir -p "$STAGE"
+            echo "Building mihomo ${GOOS}/${GOARCH}…"
+            (
+              cd "$GO_DIR"
+              CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+                go build -trimpath -ldflags="-s -w" \
+                -o "$STAGE/$BIN" github.com/metacubex/mihomo
+            )
+            ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
+            (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN")
+            ls -lh "${OUT_DIR}/${ZIP}"
+            rm -rf "$STAGE"
+          done
+
+      - name: Publish core GitHub Release
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           HASH="${{ steps.hash.outputs.go_hash }}"
           TAG="libclash-${HASH}"
-          ZIP="libclash-${HASH}.zip"
+          LIBZIP="/tmp/libclash-${HASH}.zip"
+          SIDE_DIR="$PWD/core/build/mihomo-sidecars"
+          NOTES="Prebuilt libclash.so and desktop mihomo sidecars for Go sources hash \`${HASH}\`. Used by CheezyVPN / desktop fetch-core."
+
+          SIDECARS=(
+            "mihomo-${HASH}-windows-amd64.zip"
+            "mihomo-${HASH}-windows-arm64.zip"
+            "mihomo-${HASH}-linux-amd64.zip"
+            "mihomo-${HASH}-linux-arm64.zip"
+            "mihomo-${HASH}-darwin-amd64.zip"
+            "mihomo-${HASH}-darwin-arm64.zip"
+          )
+
+          upload_missing() {
+            local existing
+            existing="$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+            for path in "$@"; do
+              local base
+              base="$(basename "$path")"
+              if echo "$existing" | grep -Fxq "$base"; then
+                echo "Asset $base already on $TAG — skip"
+              else
+                echo "Uploading $base…"
+                gh release upload "$TAG" "$path" --clobber
+              fi
+            done
+          }
+
+          ASSETS=("$LIBZIP")
+          for f in "${SIDECARS[@]}"; do
+            ASSETS+=("${SIDE_DIR}/${f}")
+          done
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — skipping upload"
-            exit 0
+            echo "Release $TAG exists — uploading any missing assets"
+            upload_missing "${ASSETS[@]}"
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              "${ASSETS[@]}" \
+              --title "libclash ${HASH}" \
+              --notes "$NOTES" \
+              --prerelease
           fi
-          gh release create "$TAG" "/tmp/${ZIP}" \
-            --title "libclash ${HASH}" \
-            --notes "Prebuilt libclash.so for Go sources hash \`${HASH}\`. Used by CheezyVPN CI." \
-            --prerelease
 
       - name: Upload libclash workflow artifact
         uses: actions/upload-artifact@v7
         with:
           name: libclash-${{ steps.hash.outputs.go_hash }}
           path: core/build/generatedJniLibs/**/libclash.so
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload mihomo sidecar workflow artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: mihomo-sidecars-${{ steps.hash.outputs.go_hash }}
+          path: core/build/mihomo-sidecars/mihomo-*.zip
           retention-days: 30
           if-no-files-found: error
