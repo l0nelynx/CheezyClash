@@ -132,6 +132,16 @@ jobs:
           OUT_DIR="$PWD/core/build/mihomo-sidecars"
           mkdir -p "$OUT_DIR"
 
+          # Build from the replaced mihomo module dir so the CLI main graph
+          # (e.g. automaxprocs) uses that module's go.sum — cheezy's tidy only
+          # covers packages imported by libclash, not mihomo's main package.
+          (
+            cd "$GO_DIR"
+            go mod download github.com/metacubex/mihomo
+          )
+          MODDIR="$(cd "$GO_DIR" && go list -m -f '{{.Dir}}' github.com/metacubex/mihomo)"
+          echo "mihomo module dir: $MODDIR"
+
           TARGETS=(
             "windows/amd64"
             "windows/arm64"
@@ -151,12 +161,9 @@ jobs:
             STAGE="$OUT_DIR/stage-${GOOS}-${GOARCH}"
             mkdir -p "$STAGE"
             echo "Building mihomo ${GOOS}/${GOARCH}…"
-            (
-              cd "$GO_DIR"
-              CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-                go build -trimpath -ldflags="-s -w" \
-                -o "$STAGE/$BIN" github.com/metacubex/mihomo
-            )
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -C "$MODDIR" -trimpath -ldflags="-s -w" \
+              -o "$STAGE/$BIN" .
             ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
             (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN")
             ls -lh "${OUT_DIR}/${ZIP}"

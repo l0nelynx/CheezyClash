@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Build host-platform mihomo from core/src/main/golang (same go.mod / replace
- * as Android libclash) into resources/core. For local dev when the matching
- * libclash-<hash> release asset is not published yet.
+ * Build host-platform mihomo from the go.mod-resolved mihomo module
+ * (same replace/commit as Android libclash) into resources/core.
+ * For local dev when the matching libclash-<hash> release asset is missing.
  */
 import { mkdirSync, chmodSync } from 'fs'
 import { join, dirname } from 'path'
@@ -36,11 +36,21 @@ const outPath = join(outDir, binName)
 const hash = computeGoHash(goDir)
 
 console.log(`Building mihomo from go.mod (hash ${hash}) for ${goos()}/${goarch()}…`)
+execFileSync('go', ['mod', 'download', 'github.com/metacubex/mihomo'], {
+  cwd: goDir,
+  stdio: 'inherit',
+})
+const modDir = execFileSync('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/metacubex/mihomo'], {
+  cwd: goDir,
+  encoding: 'utf8',
+}).trim()
+
+// Build inside the mihomo module so CLI-only deps (e.g. automaxprocs) resolve
+// from that module's go.sum rather than cheezy's tidy graph.
 execFileSync(
   'go',
-  ['build', '-trimpath', '-ldflags=-s -w', '-o', outPath, 'github.com/metacubex/mihomo'],
+  ['build', '-C', modDir, '-trimpath', '-ldflags=-s -w', '-o', outPath, '.'],
   {
-    cwd: goDir,
     stdio: 'inherit',
     env: {
       ...process.env,
