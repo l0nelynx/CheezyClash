@@ -7,8 +7,18 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="ic_launcher_background">#FFFFFFFF</color>
-    <color name="ic_launcher_mast">#FF000000</color>
-    <color name="ic_launcher_cheese">#D32F2F</color>
-    <color name="ic_launcher_stroke">#FF000000</color>
+
+    <!--
+        Launcher icon palette (no values-night — fixed regardless of system theme).
+        Default here = Proprietary release. Open / debug overrides:
+          Open release:     open/values          — white bg, black mast+cheese
+          Open debug:       openDebug/values     — black bg, white mast+cheese
+          Prop release:     this file / proprietary/values — black bg, white mast, #FFED00 cheese
+          Prop debug:       proprietaryDebug     — white bg, black mast, #FFED00 cheese
+        stroke always transparent.
+    -->
+    <color name="ic_launcher_background">#FF000000</color>
+    <color name="ic_launcher_mast">#FFFFFFFF</color>
+    <color name="ic_launcher_cheese">#FFED00</color>
+    <color name="ic_launcher_stroke">#00000000</color>
 </resources>

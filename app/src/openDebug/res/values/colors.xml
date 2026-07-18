@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Open debug launcher: invert of open release (white on black). -->
 <resources>
     <color name="ic_launcher_background">#FF000000</color>
     <color name="ic_launcher_mast">#FFFFFFFF</color>
-    <color name="ic_launcher_cheese">#D32F2F</color>
+    <color name="ic_launcher_cheese">#FFFFFFFF</color>
     <color name="ic_launcher_stroke">#00000000</color>
 </resources>

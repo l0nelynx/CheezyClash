@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Open release launcher: monochrome black on white. -->
 <resources>
-    <color name="ic_launcher_cheese">#FFBB86FC</color>
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <color name="ic_launcher_mast">#FF000000</color>
+    <color name="ic_launcher_cheese">#FF000000</color>
+    <color name="ic_launcher_stroke">#00000000</color>
 </resources>
