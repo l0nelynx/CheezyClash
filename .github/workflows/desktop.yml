@@ -1,16 +1,61 @@
 name: Desktop CI
 
+# Push/PR: cheap checks only (no electron-builder).
+# Full installers: release.yml on v* tags, or this workflow via workflow_dispatch.
+# Caching prior dist for tags is a poor fit — release commits almost always bump
+# version, so the package must be rebuilt anyway.
+
 on:
   push:
     paths:
       - 'desktop/**'
+      - '.github/workflows/desktop.yml'
   pull_request:
     paths:
       - 'desktop/**'
+      - '.github/workflows/desktop.yml'
   workflow_dispatch:
+    inputs:
+      package:
+        description: "Run full electron-builder matrix (win/linux/mac)"
+        type: boolean
+        default: true
 
 jobs:
-  build:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Install deps
+        run: npm ci || npm install
+      - name: Sync version
+        run: npm run sync-version
+      - name: Fetch mihomo sidecar
+        run: npm run fetch-core
+      - name: Build helper
+        run: npm run build:helper
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Smoke proxy
+        run: npm run smoke
+        continue-on-error: true
+
+  package:
+    if: github.event_name == 'workflow_dispatch' && inputs.package
+    needs: [check]
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +71,7 @@ jobs:
             target: mac
             arch: x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: desktop
@@ -53,13 +99,8 @@ jobs:
         run: npm run build:helper
       - name: Rasterize icons
         run: npm run icons
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build
-        run: npm run build
-      - name: Smoke proxy
-        run: npm run smoke
-        continue-on-error: true
+      - name: Typecheck / build
+        run: npm run typecheck && npm run build
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
