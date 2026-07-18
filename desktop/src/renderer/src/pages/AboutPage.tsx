@@ -37,7 +37,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
 
       <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
         <Row label="Application" value={`${productName} ${appVer}`} />
-        <Row label="Core (mihomo)" value={coreVer} />
+        <Row label="Core (mihomo)" value={coreVer} breakAll />
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Updates</p>
           {!update && <p className="text-sm text-ink-muted">Checking…</p>}
@@ -78,11 +78,23 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
   )
 }
 
-function Row({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Row({
+  label,
+  value,
+  breakAll,
+}: {
+  label: string
+  value: string
+  breakAll?: boolean
+}): React.JSX.Element {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-sm text-ink-muted">{label}</span>
-      <span className="text-sm font-medium text-ink">{value}</span>
+      <span className="shrink-0 text-sm text-ink-muted">{label}</span>
+      <span
+        className={`text-right text-sm font-medium text-ink ${breakAll ? 'break-all' : ''}`}
+      >
+        {value}
+      </span>
     </div>
   )
 }

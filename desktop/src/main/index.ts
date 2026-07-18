@@ -35,6 +35,7 @@ import { coreHome } from './paths'
 import { PRIVATE_IPC } from '../shared/private-api'
 import { getPrivateModule, loadPrivateModule } from './private-module'
 import { syncManagedFromPrivate } from './private-sync'
+import { resolveCoreVersionLabel } from './mihomo-label'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -191,11 +192,16 @@ function registerIpc(): void {
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('core:version', async () => {
+    const labeled = resolveCoreVersionLabel()
+    if (labeled.version !== 'unknown') {
+      return { version: labeled.version, source: labeled.source }
+    }
     try {
       mihomoApi.ensureSecretFromStore()
-      return await mihomoApi.getVersion()
+      const v = await mihomoApi.getVersion()
+      return { version: v.version || 'unknown', source: 'api', meta: v.meta }
     } catch {
-      return { version: 'unknown' }
+      return { version: 'unknown', source: 'none' }
     }
   })
   ipcMain.handle('app:checkUpdate', async () => {

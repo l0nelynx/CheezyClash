@@ -23,6 +23,8 @@ import {
   readdirSync,
   statSync,
   rmSync,
+  writeFileSync,
+  readFileSync,
 } from 'fs'
 import { pipeline } from 'stream/promises'
 import { join, dirname } from 'path'
@@ -30,6 +32,7 @@ import { fileURLToPath } from 'url'
 import { platform, arch } from 'os'
 import { execFileSync } from 'child_process'
 import { computeGoHash } from './go-hash.mjs'
+import { readMihomoVersion } from './mihomo-version.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -182,10 +185,21 @@ async function main() {
   if (existsSync(dest)) unlinkSync(dest)
   renameSync(found, dest)
   unlinkSync(tmp)
+
+  const verFromZip = join(extractDir, 'mihomo-version.txt')
+  const verDest = join(outDir, 'mihomo-version.txt')
+  if (existsSync(verFromZip)) {
+    renameSync(verFromZip, verDest)
+  } else {
+    const mihomoVer = readMihomoVersion(join(goSources, 'go.mod'))
+    writeFileSync(verDest, `${mihomoVer}\n`, 'utf8')
+  }
   rmSync(extractDir, { recursive: true, force: true })
 
   if (os !== 'windows') chmodSync(dest, 0o755)
   console.log('Wrote', dest)
+  console.log('mihomo-version.txt =', readFileSync(verDest, 'utf8').trim())
+
   await fetchWintun()
 }
 

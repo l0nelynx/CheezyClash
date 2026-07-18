@@ -132,9 +132,23 @@ jobs:
           OUT_DIR="$PWD/core/build/mihomo-sidecars"
           mkdir -p "$OUT_DIR"
 
-          # Build from the replaced mihomo module dir so the CLI main graph
-          # (e.g. automaxprocs) uses that module's go.sum — cheezy's tidy only
-          # covers packages imported by libclash, not mihomo's main package.
+          # Android-style label: replace fork@pseudo-version (same as :core:printMihomoVersion)
+          MIHOMO_VER=$(
+            awk '
+              /^replace[ \t]+github\.com\/metacubex\/mihomo[ \t]+=>[ \t]+/ {
+                path=$3; ver=$4
+                if (path == "github.com/metacubex/mihomo") print ver
+                else print path "@" ver
+                found=1; exit
+              }
+              END { if (!found) exit 1 }
+            ' "$GO_DIR/go.mod" \
+            || awk '/github\.com\/metacubex\/mihomo[ \t]/ { print $2; exit }' "$GO_DIR/go.mod" \
+            || echo "unknown"
+          )
+          echo "mihomoVersion=$MIHOMO_VER"
+          printf '%s\n' "$MIHOMO_VER" > "$OUT_DIR/mihomo-version.txt"
+
           (
             cd "$GO_DIR"
             go mod download github.com/metacubex/mihomo
@@ -162,10 +176,13 @@ jobs:
             mkdir -p "$STAGE"
             echo "Building mihomo ${GOOS}/${GOARCH}…"
             CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-              go build -C "$MODDIR" -tags with_gvisor -trimpath -ldflags="-s -w" \
+              go build -C "$MODDIR" -tags with_gvisor -trimpath \
+              -ldflags="-s -w -X github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}" \
               -o "$STAGE/$BIN" .
+            # Bundle version label next to the binary (About reads this file)
+            cp "$OUT_DIR/mihomo-version.txt" "$STAGE/mihomo-version.txt"
             ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
-            (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN")
+            (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN" mihomo-version.txt)
             ls -lh "${OUT_DIR}/${ZIP}"
             rm -rf "$STAGE"
           done
