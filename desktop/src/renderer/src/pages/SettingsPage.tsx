@@ -1,11 +1,14 @@
-import type { AppSettings } from '../../../shared/types'
+import { ExternalLink } from 'lucide-react'
+import type { AppSettings, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
+import { CONTROLLER_HOST, CONTROLLER_PORT } from '../../../shared/types'
 
 interface Props {
   settings: AppSettings
   busy: boolean
   session: PrivateAccountSession | null
   supportsAuth: boolean
+  status: CoreStatus | null
   onPatch: (patch: Partial<AppSettings>) => void
   onTunPrefer: (enabled: boolean) => void
   onLogout: () => void
@@ -17,11 +20,24 @@ export function SettingsPage({
   busy,
   session,
   supportsAuth,
+  status,
   onPatch,
   onTunPrefer,
   onLogout,
   onSyncSubscription,
 }: Props): React.JSX.Element {
+  const openZashboard = () => {
+    const secret = status?.secret || ''
+    const params = new URLSearchParams({
+      hostname: CONTROLLER_HOST,
+      port: String(CONTROLLER_PORT),
+      secret,
+      http: '1',
+    })
+    const url = `http://board.zash.run.place/#/setup?${params.toString()}`
+    void window.cheezy.openExternal(url)
+  }
+
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
@@ -100,6 +116,22 @@ export function SettingsPage({
             <option value="gvisor">gvisor</option>
           </select>
         </label>
+      </Section>
+
+      <Section title="Dashboard">
+        <p className="text-xs text-ink-dim">
+          Open Zashboard in the browser with auto-login to the local mihomo controller
+          ({CONTROLLER_HOST}:{CONTROLLER_PORT}).
+        </p>
+        <button
+          type="button"
+          className="btn inline-flex items-center gap-1.5 text-sm"
+          disabled={busy}
+          onClick={openZashboard}
+        >
+          Open Zashboard
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
       </Section>
     </div>
   )

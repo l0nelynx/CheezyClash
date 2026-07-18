@@ -45,6 +45,17 @@ const api = {
     ipcRenderer.invoke('tun:setEnabled', enabled),
   ensureHelper: (): Promise<TunStatus> => ipcRenderer.invoke('helper:ensure'),
   getLogs: (): Promise<string[]> => ipcRenderer.invoke('logs:get'),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
+  getCoreVersion: (): Promise<{ version?: string; meta?: boolean }> =>
+    ipcRenderer.invoke('core:version'),
+  checkUpdate: (): Promise<{
+    current: string
+    latest: string | null
+    updateAvailable: boolean
+    releasesUrl: string
+    error?: string
+  }> => ipcRenderer.invoke('app:checkUpdate'),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   onLog: (cb: (line: string) => void): (() => void) => {
     const handler = (_: unknown, line: string): void => cb(line)
     ipcRenderer.on('logs:line', handler)

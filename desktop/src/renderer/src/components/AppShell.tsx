@@ -10,6 +10,7 @@ interface Props {
   status: CoreStatus | null
   error: string | null
   onClearError: () => void
+  productName: string
   children: React.ReactNode
 }
 
@@ -19,13 +20,14 @@ export function AppShell({
   status,
   error,
   onClearError,
+  productName,
   children,
 }: Props): React.JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <TitleBar status={status} />
+      <TitleBar status={status} productName={productName} />
       <div className="flex min-h-0 flex-1">
-        <Sidebar tab={tab} onTab={onTab} status={status} />
+        <Sidebar tab={tab} onTab={onTab} status={status} productName={productName} />
         <div className="flex min-w-0 flex-1 flex-col">
           {error && (
             <div className="mx-5 mt-3 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { useCheezyState } from './hooks/useCheezyState'
+import { AboutPage } from './pages/AboutPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { LogsPage } from './pages/LogsPage'
@@ -33,6 +34,10 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     void refreshAuth()
   }, [refreshAuth])
+
+  useEffect(() => {
+    if (caps?.productName) document.title = caps.productName
+  }, [caps?.productName])
 
   const activeProfile =
     state.profiles.find((p) => p.id === state.activeId) ?? state.profiles[0] ?? null
@@ -86,7 +91,14 @@ export default function App(): React.JSX.Element {
   }
 
   return (
-    <AppShell tab={tab} onTab={setTab} status={status} error={error} onClearError={clearError}>
+    <AppShell
+      tab={tab}
+      onTab={setTab}
+      status={status}
+      error={error}
+      onClearError={clearError}
+      productName={caps.productName}
+    >
       {tab === 'home' && (
         <HomePage
           status={status}
@@ -135,6 +147,7 @@ export default function App(): React.JSX.Element {
           busy={busy}
           session={session}
           supportsAuth={caps.supportsAuth}
+          status={status}
           onPatch={(patch) => run(() => window.cheezy.setSettings(patch))}
           onTunPrefer={(enabled) => run(() => window.cheezy.setTunEnabled(enabled))}
           onLogout={() =>
@@ -153,6 +166,8 @@ export default function App(): React.JSX.Element {
       )}
 
       {tab === 'logs' && <LogsPage logs={state.logs} />}
+
+      {tab === 'about' && <AboutPage productName={caps.productName} />}
     </AppShell>
   )
 }

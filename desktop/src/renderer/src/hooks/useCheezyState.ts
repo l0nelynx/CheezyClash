@@ -8,7 +8,7 @@ import type {
   TunStatus,
 } from '../../../shared/types'
 
-export type Tab = 'home' | 'proxies' | 'profiles' | 'settings' | 'logs'
+export type Tab = 'home' | 'proxies' | 'profiles' | 'settings' | 'logs' | 'about'
 
 export function useCheezyState() {
   const [tab, setTab] = useState<Tab>('home')

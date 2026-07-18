@@ -64,6 +64,11 @@ export class MihomoApi {
     }
   }
 
+  async getVersion(): Promise<{ version?: string; meta?: boolean }> {
+    this.ensureSecretFromStore()
+    return this.request('GET', '/version')
+  }
+
   async waitReady(timeoutMs = 15_000): Promise<void> {
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {

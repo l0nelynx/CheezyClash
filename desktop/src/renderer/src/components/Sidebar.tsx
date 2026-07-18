@@ -1,4 +1,4 @@
-import { Home, Layers, ScrollText, Settings, Shield } from 'lucide-react'
+import { Home, Info, Layers, ScrollText, Settings, Shield } from 'lucide-react'
 import type { CoreStatus } from '../../../shared/types'
 import type { Tab } from '../hooks/useCheezyState'
 import logoUrl from '../assets/logo.svg'
@@ -9,20 +9,22 @@ const items: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'profiles', label: 'Profiles', icon: Layers },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'about', label: 'About', icon: Info },
 ]
 
 interface Props {
   tab: Tab
   onTab: (t: Tab) => void
   status: CoreStatus | null
+  productName: string
 }
 
-export function Sidebar({ tab, onTab, status }: Props): React.JSX.Element {
+export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.Element {
   const running = !!status?.running
 
   return (
     <aside className="flex w-[72px] shrink-0 flex-col items-center border-r border-surface-border bg-surface-raised py-3">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center" title="CheezyClash">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center" title={productName}>
         <img src={logoUrl} alt="" className="h-11 w-11" draggable={false} />
       </div>
 

@@ -78,7 +78,7 @@ function loadTrayImage(): Electron.NativeImage {
   return nativeImage.createEmpty()
 }
 
-function createWindow(): void {
+function createWindow(productName: string): void {
   const icon = loadAppIcon()
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -86,7 +86,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 560,
     show: false,
-    title: 'CheezyClash',
+    title: productName,
     backgroundColor: '#0f1117',
     frame: false,
     autoHideMenuBar: true,
@@ -119,12 +119,12 @@ function createWindow(): void {
   }
 }
 
-function createTray(): void {
+function createTray(productName: string): void {
   tray = new Tray(loadTrayImage())
-  tray.setToolTip('CheezyClash')
+  tray.setToolTip(productName)
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Show CheezyClash',
+      label: `Show ${productName}`,
       click: () => {
         mainWindow?.show()
         mainWindow?.focus()
@@ -189,6 +189,57 @@ function registerIpc(): void {
   ipcMain.handle('helper:ensure', () => ensureHelperAndStatus())
   ipcMain.handle('logs:get', () => getLogs())
 
+  ipcMain.handle('app:getVersion', () => app.getVersion())
+  ipcMain.handle('core:version', async () => {
+    try {
+      mihomoApi.ensureSecretFromStore()
+      return await mihomoApi.getVersion()
+    } catch {
+      return { version: 'unknown' }
+    }
+  })
+  ipcMain.handle('app:checkUpdate', async () => {
+    const caps = getPrivateModule().capabilities()
+    const repo = caps.supportsAuth ? 'l0nelynx/CheezyVPN-Releases' : 'l0nelynx/CheezyClash'
+    const releasesUrl = `https://github.com/${repo}/releases`
+    const current = app.getVersion()
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': `${caps.productName}-Desktop`,
+        },
+      })
+      if (!res.ok) {
+        return {
+          current,
+          latest: null,
+          updateAvailable: false,
+          releasesUrl,
+          error: `GitHub ${res.status}`,
+        }
+      }
+      const data = (await res.json()) as { tag_name?: string }
+      const latest = (data.tag_name || '').replace(/^v/i, '')
+      const updateAvailable = !!latest && latest !== current && compareSemver(latest, current) > 0
+      return { current, latest: latest || null, updateAvailable, releasesUrl }
+    } catch (e) {
+      return {
+        current,
+        latest: null,
+        updateAvailable: false,
+        releasesUrl,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  })
+  ipcMain.handle('shell:openExternal', (_e, url: string) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      throw new Error('invalid url')
+    }
+    void shell.openExternal(url)
+  })
+
   ipcMain.handle(PRIVATE_IPC.capabilities, () => getPrivateModule().capabilities())
   ipcMain.handle(PRIVATE_IPC.accountGetSession, () => getPrivateModule().getSession())
   ipcMain.handle(PRIVATE_IPC.accountLogin, async (_e, email: string, password: string) => {
@@ -252,8 +303,8 @@ app.whenReady().then(() => {
   }
 
   registerIpc()
-  createWindow()
-  createTray()
+  createWindow(caps.productName)
+  createTray(caps.productName)
 
   // Best-effort subscription refresh when already logged in
   if (caps.supportsAuth) {
@@ -261,7 +312,7 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
     else mainWindow?.show()
   })
 })
@@ -281,6 +332,18 @@ function mkdirSilent(p: string): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Compare dotted versions; positive if a > b. */
+function compareSemver(a: string, b: string): number {
+  const pa = a.split(/[.+-]/).map((x) => parseInt(x, 10) || 0)
+  const pb = b.split(/[.+-]/).map((x) => parseInt(x, 10) || 0)
+  const n = Math.max(pa.length, pb.length)
+  for (let i = 0; i < n; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0)
+    if (d !== 0) return d
+  }
+  return 0
 }
 
 export function openExternal(url: string): void {

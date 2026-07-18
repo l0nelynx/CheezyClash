@@ -33,6 +33,16 @@ export interface CheezyApi {
   setTunEnabled: (enabled: boolean) => Promise<TunStatus>
   ensureHelper: () => Promise<TunStatus>
   getLogs: () => Promise<string[]>
+  getAppVersion: () => Promise<string>
+  getCoreVersion: () => Promise<{ version?: string; meta?: boolean }>
+  checkUpdate: () => Promise<{
+    current: string
+    latest: string | null
+    updateAvailable: boolean
+    releasesUrl: string
+    error?: string
+  }>
+  openExternal: (url: string) => Promise<void>
   onLog: (cb: (line: string) => void) => () => void
   onStatus: (cb: (status: CoreStatus) => void) => () => void
   windowMinimize: () => Promise<void>

@@ -5,9 +5,10 @@ import logoUrl from '../assets/logo.svg'
 
 interface Props {
   status: CoreStatus | null
+  productName: string
 }
 
-export function TitleBar({ status }: Props): React.JSX.Element {
+export function TitleBar({ status, productName }: Props): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   const running = !!status?.running
 
@@ -20,7 +21,7 @@ export function TitleBar({ status }: Props): React.JSX.Element {
     <header className="flex h-10 shrink-0 select-none items-stretch border-b border-surface-border bg-surface-raised">
       <div className="app-drag flex min-w-0 flex-1 items-center gap-2.5 px-3">
         <img src={logoUrl} alt="" className="h-6 w-6 shrink-0" draggable={false} />
-        <span className="truncate text-sm font-semibold tracking-tight text-ink">CheezyClash</span>
+        <span className="truncate text-sm font-semibold tracking-tight text-ink">{productName}</span>
         <span className="ml-1 inline-flex items-center gap-1.5 text-xs text-ink-muted">
           <span className={`h-1.5 w-1.5 rounded-full ${running ? 'bg-ok' : 'bg-ink-dim'}`} />
           {running ? `Connected · ${status?.mode?.toUpperCase()}` : 'Disconnected'}

@@ -1,14 +1,20 @@
 /**
- * Mirrors Android ConfigManager.openSubscriptionConnection UA format.
+ * Mirrors Android ConfigManager.openSubscriptionConnection UA format:
+ * `$appName/${EDITION}/mihomo/${VERSION_NAME}`
  */
+import { app } from 'electron'
 import { randomUUID } from 'crypto'
 import { platform, release, arch } from 'os'
 import { store } from './store'
+import { getPrivateModule } from './private-module'
 import type { SubscriptionInfo } from '../shared/types'
 
 export function subscriptionUserAgent(): string {
-  const ver = process.env.npm_package_version || '0.1.0'
-  return `CheezyClash/OPEN/mihomo/${ver}`
+  const caps = getPrivateModule().capabilities()
+  const productName = caps.productName || 'CheezyClash'
+  const edition = caps.supportsAuth ? 'PROPRIETARY' : 'OPEN'
+  const ver = app.getVersion() || '0.0.0'
+  return `${productName}/${edition}/mihomo/${ver}`
 }
 
 export function getOrCreateHwid(): string {

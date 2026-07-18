@@ -1,5 +1,5 @@
 /**
- * afterPack: embed CheezyClash icon + version strings into the Windows exe
+ * afterPack: embed product icon + version strings into the Windows exe
  * without electron-builder's winCodeSign (symlink privilege issues).
  */
 import { join } from 'path'
@@ -9,6 +9,7 @@ import { rcedit } from 'rcedit'
 export default async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return
 
+  const productName = context.packager.appInfo.productName || 'CheezyClash'
   const exeName = `${context.packager.appInfo.productFilename}.exe`
   const exePath = join(context.appOutDir, exeName)
   const iconIco = join(context.packager.projectDir, 'build', 'icon.ico')
@@ -23,18 +24,20 @@ export default async function afterPack(context) {
   }
 
   const version = context.packager.appInfo.version
+  const copyright =
+    context.packager.appInfo.copyright || `Copyright © ${productName}`
   await rcedit(exePath, {
     icon: iconIco,
     'file-version': version,
     'product-version': version,
     'version-string': {
-      CompanyName: 'CheezyClash',
-      FileDescription: 'CheezyClash',
-      ProductName: 'CheezyClash',
-      InternalName: 'CheezyClash',
+      CompanyName: productName,
+      FileDescription: productName,
+      ProductName: productName,
+      InternalName: productName,
       OriginalFilename: exeName,
-      LegalCopyright: 'Copyright © CheezyClash',
+      LegalCopyright: copyright,
     },
   })
-  console.log(`afterPack: patched ${exeName} icon + ProductName`)
+  console.log(`afterPack: patched ${exeName} icon + ProductName=${productName}`)
 }
