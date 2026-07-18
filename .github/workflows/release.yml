@@ -9,17 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Acquire libclash
-        id: libclash
         uses: ./.github/actions/libclash
         with:
           allow-build-fallback: 'false'
@@ -54,11 +52,95 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: CheezyClash-APKs
           path: app/build/outputs/apk/directOpen/release/*.apk
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: mac
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Install deps
+        run: npm ci || npm install
+      - name: Sync version
+        run: npm run sync-version
+      - name: Verify version matches tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(node -p "require('./package.json').version")
+          if [ "$VER" != "$TAG" ]; then
+            echo "desktop version $VER != tag $TAG"
+            exit 1
+          fi
+      - name: Fetch mihomo sidecar
+        run: npm run fetch-core
+      - name: Build helper
+        run: npm run build:helper
+      - name: Icons
+        run: npm run icons
+      - name: Typecheck / build
+        run: npm run typecheck && npm run build
+      - name: Package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:${{ matrix.target }}
+        continue-on-error: ${{ matrix.target != 'win' }}
+      - name: Upload Windows desktop artifacts
+        if: matrix.target == 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheezyClash-desktop-win
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.zip
+          if-no-files-found: error
+      - name: Upload Linux desktop artifacts
+        if: matrix.target == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheezyClash-desktop-linux
+          path: desktop/release/*
+          if-no-files-found: ignore
+      - name: Upload macOS desktop artifacts
+        if: matrix.target == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheezyClash-desktop-mac
+          path: desktop/release/*
+          if-no-files-found: ignore
+
+  publish:
+    needs: [android, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate Changelog
         id: changelog
@@ -69,22 +151,40 @@ jobs:
           else
             CHANGES=$(git log --pretty=format:"• %s" $PREV_TAG..${{ github.ref_name }})
           fi
-          echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "CHANGES<<EOF"
+            echo "$CHANGES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
 
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: app/build/outputs/apk/directOpen/release/*.apk
+          files: |
+            release-assets/CheezyClash-APKs/*
+            release-assets/CheezyClash-desktop-win/*
+            release-assets/CheezyClash-desktop-linux/*
+            release-assets/CheezyClash-desktop-mac/*
           body: |
             ## What's New
             ${{ steps.changelog.outputs.CHANGES }}
+
+            ## Downloads
+            ### Android
+            - Direct Open APK(s) attached below
+
+            ### Desktop
+            - **Windows:** installer (`.exe`) + portable (`.zip`)
+            - **Linux / macOS:** attached when the matrix job succeeded
           generate_release_notes: true
+          fail_on_unmatched_files: false
 
       - name: Trigger proprietary release
-        if: success()
         env:
           GH_TOKEN: ${{ secrets.PROPRIETARY_DISPATCH_TOKEN }}
         run: |
@@ -95,11 +195,10 @@ jobs:
           jq -n \
             --arg tag "${{ github.ref_name }}" \
             --arg sha "${{ github.sha }}" \
-            '{event_type:"open_release",client_payload:{tag:$tag,sha:$sha}}' \
+            '{event_type:"open_release",client_payload:{tag:$tag,sha:$sha,desktop:true}}' \
           | gh api --method POST /repos/l0nelynx/CheezyVPN_android/dispatches --input -
 
       - name: Send Telegram Notification
-        if: success()
         continue-on-error: true
         uses: appleboy/telegram-action@221e6b684967abe813051ee4a37dd61770a83ad3
         with:
@@ -109,7 +208,9 @@ jobs:
           message: |
             🚀 *New Release: CheezyClash ${{ github.ref_name }}*
 
+            Android APK + Desktop builds are in the same release.
+
             *Changes:*
             ${{ steps.changelog.outputs.CHANGES }}
 
-            📦 [Download Release ${{ github.ref_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
+            📦 [Download](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})

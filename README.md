@@ -14,6 +14,8 @@
 
 [//]: # (## English)
 **CheezyClash** is a modern and user-friendly graphical interface for **Clash.Meta** (Mihomo) on Android. It aims to provide a seamless proxy management experience with advanced routing capabilities.
+
+**Desktop (experimental):** see [`desktop/`](desktop/) — Electron client with mihomo sidecar from the same go.mod as Android (proxy MVP + TUN helper).
 ### 🌟 Features
 - **Based on Clash.Meta (Mihomo):** Leveraging the powerful core of [Mihomo](https://github.com/MetaCubeX/mihomo).
 - **Smart Group Support:** Intelligent proxy grouping and selection using the [Mihomo fork](https://github.com/vernesong/mihomo) with **LightGBM** model support.

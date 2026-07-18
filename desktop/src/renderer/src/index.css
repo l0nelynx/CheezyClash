@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply h-full m-0 bg-surface text-ink antialiased;
+    font-family: theme('fontFamily.sans');
+    color-scheme: dark;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-surface-border;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-dim;
+  }
+}
+
+@layer components {
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-surface-border
+      bg-surface-raised px-3.5 py-2 text-sm font-medium text-ink transition
+      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply btn border-accent-dim bg-accent text-[#1a1408] font-semibold
+      hover:bg-accent-dim hover:text-[#1a1408] shadow-glow;
+  }
+
+  .btn-danger {
+    @apply btn border-danger/40 text-danger hover:bg-danger/10;
+  }
+
+  .btn-ghost {
+    @apply btn border-transparent bg-transparent hover:bg-surface-overlay;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-ink
+      placeholder:text-ink-dim outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30;
+  }
+
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-ink-dim;
+  }
+}

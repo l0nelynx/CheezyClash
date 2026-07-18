@@ -1,0 +1,64 @@
+appId: com.cheezy.freedom.desktop
+productName: CheezyClash
+executableName: CheezyClash
+copyright: Copyright © CheezyClash
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+afterPack: scripts/after-pack.mjs
+extraResources:
+  - from: resources/core
+    to: core
+    filter:
+      - '**/*'
+  - from: resources/helper
+    to: helper
+    filter:
+      - '**/*'
+  - from: resources/tray.png
+    to: tray.png
+  - from: build/icon.png
+    to: build/icon.png
+  - from: build/icon.ico
+    to: build/icon.ico
+  - from: resources/private
+    to: private
+    filter:
+      - '**/*'
+win:
+  icon: build/icon.ico
+  # Skip winCodeSign; afterPack uses rcedit for icon + ProductName
+  signAndEditExecutable: false
+  target:
+    - nsis
+    - zip
+  artifactName: CheezyClash-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: CheezyClash
+  uninstallDisplayName: CheezyClash
+  include: build/installer.nsh
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Network
+  artifactName: CheezyClash-${version}-linux-${arch}.${ext}
+mac:
+  icon: build/icon.png
+  target:
+    - dmg
+    - zip
+  artifactName: CheezyClash-${version}-mac-${arch}.${ext}
+  category: public.app-category.utilities

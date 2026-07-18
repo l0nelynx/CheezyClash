@@ -15,3 +15,21 @@
 .sources
 .promo
 CLAUDE.md
+
+# Desktop (Electron)
+desktop/node_modules/
+desktop/out/
+desktop/release/
+desktop/resources/core/*
+!desktop/resources/core/.gitkeep
+desktop/resources/helper/*
+!desktop/resources/helper/.gitkeep
+desktop/resources/core/_extract/
+desktop/resources/core/wintun-extract/
+desktop/helper/cheezy-helper
+desktop/helper/CheezyHelperService.exe
+desktop/*.tsbuildinfo
+# Root **/build/ ignores desktop/build; keep NSIS script, regenerate icons in CI
+!desktop/build/
+desktop/build/**
+!desktop/build/installer.nsh
