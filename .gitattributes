@@ -1,0 +1,3 @@
+# Keep Go sources LF so content hashes match Linux CI / libclash-<hash> tags
+# (Windows autocrlf would otherwise change desktop fetch-core hashes).
+core/src/main/golang/** text eol=lf
