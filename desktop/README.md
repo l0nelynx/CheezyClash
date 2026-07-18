@@ -33,8 +33,10 @@ npm run dist:win
 
 Artifacts land in `desktop/release/`:
 
-- `CheezyClash-<version>-win-x64.exe` — NSIS installer (registers helper service)
-- `CheezyClash-<version>-win-x64.zip` — portable
+- `CheezyClash-win-x64.exe` — NSIS installer (registers helper service)
+- `CheezyClash-win-x64.zip` — portable
+
+Filenames omit the version so GitHub `…/releases/latest/download/CheezyClash-win-x64.exe` links stay stable.
 
 On Windows, packaging skips code signing (`signAndEditExecutable: false`) so electron-builder does not need Developer Mode for winCodeSign symlinks. Set `CSC_IDENTITY_AUTO_DISCOVERY=false` if a local cache still tries to extract signing tools.
 

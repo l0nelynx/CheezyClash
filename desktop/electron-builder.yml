@@ -36,7 +36,7 @@ win:
   target:
     - nsis
     - zip
-  artifactName: CheezyClash-${version}-win-${arch}.${ext}
+  artifactName: CheezyClash-win-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -54,11 +54,11 @@ linux:
     - AppImage
     - deb
   category: Network
-  artifactName: CheezyClash-${version}-linux-${arch}.${ext}
+  artifactName: CheezyClash-linux-${arch}.${ext}
 mac:
   icon: build/icon.png
   target:
     - dmg
     - zip
-  artifactName: CheezyClash-${version}-mac-${arch}.${ext}
+  artifactName: CheezyClash-mac-${arch}.${ext}
   category: public.app-category.utilities
