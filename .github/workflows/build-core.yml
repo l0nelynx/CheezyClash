@@ -162,7 +162,7 @@ jobs:
             mkdir -p "$STAGE"
             echo "Building mihomo ${GOOS}/${GOARCH}…"
             CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-              go build -C "$MODDIR" -trimpath -ldflags="-s -w" \
+              go build -C "$MODDIR" -tags with_gvisor -trimpath -ldflags="-s -w" \
               -o "$STAGE/$BIN" .
             ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
             (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN")
@@ -206,16 +206,25 @@ jobs:
             done
           }
 
-          ASSETS=("$LIBZIP")
-          for f in "${SIDECARS[@]}"; do
-            ASSETS+=("${SIDE_DIR}/${f}")
-          done
+          # Mihomo sidecars: always clobber — build flags (e.g. with_gvisor) can
+          # change without a go_hash bump, and stale binaries break WireGuard/TUN.
+          upload_sidecars() {
+            for f in "${SIDECARS[@]}"; do
+              echo "Uploading (clobber) $f…"
+              gh release upload "$TAG" "${SIDE_DIR}/${f}" --clobber
+            done
+          }
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG exists — uploading any missing assets"
-            upload_missing "${ASSETS[@]}"
+            echo "Release $TAG exists — refresh sidecars, fill any missing libclash zip"
+            upload_missing "$LIBZIP"
+            upload_sidecars
           else
             echo "Creating release $TAG"
+            ASSETS=("$LIBZIP")
+            for f in "${SIDECARS[@]}"; do
+              ASSETS+=("${SIDE_DIR}/${f}")
+            done
             gh release create "$TAG" \
               "${ASSETS[@]}" \
               --title "libclash ${HASH}" \

@@ -49,7 +49,7 @@ const modDir = execFileSync('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/m
 // from that module's go.sum rather than cheezy's tidy graph.
 execFileSync(
   'go',
-  ['build', '-C', modDir, '-trimpath', '-ldflags=-s -w', '-o', outPath, '.'],
+  ['build', '-C', modDir, '-tags', 'with_gvisor', '-trimpath', '-ldflags=-s -w', '-o', outPath, '.'],
   {
     stdio: 'inherit',
     env: {
