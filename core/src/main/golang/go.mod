@@ -147,4 +147,4 @@ replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20
 
 replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260312170409-baeb46d2f908
 
-replace github.com/metacubex/mihomo => github.com/vernesong/mihomo v0.0.0-20260717053251-935f415928ab
+replace github.com/metacubex/mihomo => github.com/vernesong/mihomo v0.0.0-20260718003029-edb957735b9a
