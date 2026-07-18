@@ -27,11 +27,19 @@ export default {
       fontFamily: {
         sans: [
           'Inter',
+          'Noto Color Emoji',
           'ui-sans-serif',
           'system-ui',
           '-apple-system',
           'Segoe UI',
           'Roboto',
+          'sans-serif',
+        ],
+        emoji: [
+          'Inter',
+          'Noto Color Emoji',
+          'Segoe UI Emoji',
+          'Apple Color Emoji',
           'sans-serif',
         ],
         mono: ['ui-monospace', 'Cascadia Code', 'Segoe UI Mono', 'Consolas', 'monospace'],

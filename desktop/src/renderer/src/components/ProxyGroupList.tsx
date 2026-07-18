@@ -90,8 +90,8 @@ export function ProxyGroupList({
                   <ChevronRight className="h-4 w-4 shrink-0 text-ink-dim" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-semibold text-ink">{g.name}</h3>
-                  <p className="truncate text-xs text-ink-dim">
+                  <h3 className="truncate text-sm font-semibold text-ink font-emoji">{g.name}</h3>
+                  <p className="truncate text-xs text-ink-dim font-emoji">
                     {g.type} · {g.now || '—'}
                   </p>
                 </div>
@@ -132,7 +132,7 @@ export function ProxyGroupList({
                         >
                           {active && <Check className="h-3 w-3" strokeWidth={3} />}
                         </span>
-                        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium font-emoji">{name}</span>
                         {ms !== undefined && (
                           <span
                             className={`shrink-0 text-xs tabular-nums ${
