@@ -204,11 +204,17 @@ class ClashVpnService : VpnService() {
         activeConfigDir = ProfileStore.activeDir(this)
         ensureChannel()
         
-        // Forward ClashState changes (in this process) to all remote callbacks
+        // Forward ClashState changes (in this process) to all remote callbacks.
+        // lastError must be collected on its own: early start failures never flip
+        // running (stays false), so a running-only collector never pushes the ErrorCard.
         scope.launch {
             ClashState.running.collect { r ->
-                val err = ClashState.lastError.value
-                broadcast { it.onStateChanged(r, err) }
+                broadcast { it.onStateChanged(r, ClashState.lastError.value) }
+            }
+        }
+        scope.launch {
+            ClashState.lastError.collect { err ->
+                broadcast { it.onStateChanged(ClashState.running.value, err) }
             }
         }
         scope.launch {
@@ -372,18 +378,23 @@ class ClashVpnService : VpnService() {
                         android.system.Os.close(jfd)
                     }
                 }
+                // Push error to main UI before teardown (lastError collector → AIDL).
                 ClashState.setError(t.message ?: t.javaClass.simpleName)
-                stopClash()
                 ClashState.setPhase(ConnectionPhase.ERROR)
+                // Do not cancel this startJob from inside itself — that can abort
+                // the catch via CancellationException before phase/error settle.
+                stopClash(cancelStartJob = false)
             }
         }
     }
 
-    private fun stopClash() {
+    private fun stopClash(cancelStartJob: Boolean = true) {
         trafficJob?.cancel()
         trafficJob = null
-        startJob?.cancel()
-        startJob = null
+        if (cancelStartJob) {
+            startJob?.cancel()
+            startJob = null
+        }
         // Bound the native teardown so binder/main callers cannot hang forever.
         runBlocking(Dispatchers.IO) {
             withTimeoutOrNull(5_000) {
@@ -393,7 +404,10 @@ class ClashVpnService : VpnService() {
             }
         }
         ClashState.setRunning(false)
-        ClashState.setPhase(ConnectionPhase.IDLE)
+        // Keep ERROR phase + lastError when tearing down a failed start.
+        if (ClashState.phase.value != ConnectionPhase.ERROR) {
+            ClashState.setPhase(ConnectionPhase.IDLE)
+        }
         ClashState.setTunAddress(null)
         ClashState.setLocalIp(null)
         ClashState.setActiveProxy(null)
