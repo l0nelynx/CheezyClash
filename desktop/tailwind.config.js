@@ -25,9 +25,10 @@ export default {
         danger: '#f07178',
       },
       fontFamily: {
+        // Do NOT put Noto Color Emoji here — it claims ASCII digits / some
+        // Latin glyphs and renders them invisible in Chromium (dots / gaps).
         sans: [
           'Inter',
-          'Noto Color Emoji',
           'ui-sans-serif',
           'system-ui',
           '-apple-system',
@@ -35,11 +36,12 @@ export default {
           'Roboto',
           'sans-serif',
         ],
+        // Only for proxy/group names that may contain emoji.
         emoji: [
           'Inter',
-          'Noto Color Emoji',
           'Segoe UI Emoji',
           'Apple Color Emoji',
+          'Noto Color Emoji',
           'sans-serif',
         ],
         mono: ['ui-monospace', 'Cascadia Code', 'Segoe UI Mono', 'Consolas', 'monospace'],
