@@ -26,3 +26,4 @@ rootProject.name = "CheezyVPN"
 include(":app")
 include(":core")
 include(":baselineprofile")
+include(":desktop")

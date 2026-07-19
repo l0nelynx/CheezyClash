@@ -171,21 +171,35 @@ export class MihomoApi {
     return data || {}
   }
 
+  /** Last /connections totals sample — used to derive B/s without SSE /traffic. */
+  private trafficPrev: { upTotal: number; downTotal: number; atMs: number } | null = null
+
   async getTraffic(): Promise<TrafficSnapshot> {
     // Do NOT call GET /traffic — in mihomo it is an infinite SSE stream and
     // fetch() never resolves (freezes UI busy-state / empty Proxies tab).
+    // Instantaneous rates = delta of uploadTotal/downloadTotal over wall time.
     try {
       const c = await this.request<{ downloadTotal?: number; uploadTotal?: number }>(
         'GET',
         '/connections',
       )
-      return {
-        up: 0,
-        down: 0,
-        upTotal: c.uploadTotal || 0,
-        downTotal: c.downloadTotal || 0,
+      const upTotal = c.uploadTotal || 0
+      const downTotal = c.downloadTotal || 0
+      const atMs = Date.now()
+      let up = 0
+      let down = 0
+      const prev = this.trafficPrev
+      if (prev) {
+        const dtSec = (atMs - prev.atMs) / 1000
+        if (dtSec > 0) {
+          up = Math.max(0, (upTotal - prev.upTotal) / dtSec)
+          down = Math.max(0, (downTotal - prev.downTotal) / dtSec)
+        }
       }
+      this.trafficPrev = { upTotal, downTotal, atMs }
+      return { up, down, upTotal, downTotal }
     } catch {
+      this.trafficPrev = null
       return { up: 0, down: 0, upTotal: 0, downTotal: 0 }
     }
   }

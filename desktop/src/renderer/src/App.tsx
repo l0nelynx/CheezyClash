@@ -104,6 +104,7 @@ export default function App(): React.JSX.Element {
           status={status}
           tun={state.tun}
           traffic={state.traffic}
+          downRateHistory={state.downRateHistory}
           activeProfile={activeProfile}
           busy={busy}
           onConnect={() => run(() => window.cheezy.connect())}

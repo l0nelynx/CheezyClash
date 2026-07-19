@@ -7,6 +7,7 @@ interface Props {
   status: CoreStatus | null
   tun: TunStatus | null
   traffic: TrafficSnapshot | null
+  downRateHistory: number[]
   activeProfile: ProfileMeta | null
   busy: boolean
   onConnect: () => void
@@ -24,6 +25,8 @@ export function HomePage(props: Props): React.JSX.Element {
         status={props.status}
         tun={props.tun}
         busy={props.busy}
+        downRateHistory={props.downRateHistory}
+        downRate={props.traffic?.down ?? 0}
         onConnect={props.onConnect}
         onDisconnect={props.onDisconnect}
         onEnsureHelper={props.onEnsureHelper}
