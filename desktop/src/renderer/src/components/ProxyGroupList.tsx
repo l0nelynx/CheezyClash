@@ -40,7 +40,7 @@ export function ProxyGroupList({
   if (!running) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-ink-muted">Connect first to load proxy groups.</p>
+        <p className="text-sm text-ink-muted">Connect first to see your servers.</p>
       </div>
     )
   }
@@ -48,7 +48,7 @@ export function ProxyGroupList({
   if (groups.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-ink-muted">No selector groups in this profile.</p>
+        <p className="text-sm text-ink-muted">No server groups in this profile.</p>
       </div>
     )
   }
@@ -89,10 +89,13 @@ export function ProxyGroupList({
                 ) : (
                   <ChevronRight className="h-4 w-4 shrink-0 text-ink-dim" />
                 )}
+                <GroupIcon url={g.icon} />
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-semibold text-ink font-emoji">{g.name}</h3>
-                  <p className="truncate text-xs text-ink-dim font-emoji">
-                    {g.type} · {g.now || '—'}
+                  <h3 className="truncate text-sm font-semibold text-ink font-emoji" title={g.name}>
+                    {g.name}
+                  </h3>
+                  <p className="truncate text-xs text-ink-dim font-emoji" title={g.now || undefined}>
+                    {g.now || '—'}
                   </p>
                 </div>
               </button>
@@ -132,7 +135,9 @@ export function ProxyGroupList({
                         >
                           {active && <Check className="h-3 w-3" strokeWidth={3} />}
                         </span>
-                        <span className="min-w-0 flex-1 truncate font-medium font-emoji">{name}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium font-emoji" title={name}>
+                          {name}
+                        </span>
                         {ms !== undefined && (
                           <span
                             className={`shrink-0 text-xs tabular-nums ${
@@ -154,3 +159,18 @@ export function ProxyGroupList({
     </div>
   )
 }
+
+function GroupIcon({ url }: { url?: string }): React.JSX.Element | null {
+  const [failed, setFailed] = useState(false)
+  if (!url || failed) return null
+  return (
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      className="h-5 w-5 shrink-0 object-contain"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+

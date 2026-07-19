@@ -30,16 +30,16 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
   const daysLeft = info.expire > 0 ? Math.floor((info.expire - nowSec) / 86400) : -1
 
   const progressColor =
-    isUnlimited ? 'bg-accent' : progress > 0.9 ? 'bg-danger' : progress > 0.75 ? 'bg-amber-500' : 'bg-accent'
+    isUnlimited ? 'bg-accent' : progress > 0.9 ? 'bg-danger' : progress > 0.75 ? 'bg-accent-dim' : 'bg-accent'
   const progressText =
-    isUnlimited ? 'text-accent' : progress > 0.9 ? 'text-danger' : progress > 0.75 ? 'text-amber-400' : 'text-accent'
+    isUnlimited ? 'text-accent' : progress > 0.9 ? 'text-danger' : progress > 0.75 ? 'text-accent-dim' : 'text-accent'
   const expireColor =
     daysLeft < 0
       ? 'text-ink-muted'
       : daysLeft < 3
         ? 'text-danger font-semibold'
         : daysLeft < 7
-          ? 'text-amber-400 font-semibold'
+          ? 'text-accent-dim font-semibold'
           : 'text-ink-muted'
 
   return (

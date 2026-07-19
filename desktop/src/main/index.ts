@@ -33,6 +33,7 @@ import {
   migrateOrphanDirs,
   rebuildActive,
   getActiveProxyGroupNames,
+  getProxyGroupIcons,
   validateProcessNameRule,
 } from './profiles'
 import { getSettings, setSettings, getOrCreateSecret, getSelections, setSelection } from './store'
@@ -95,7 +96,7 @@ function loadTrayImage(): Electron.NativeImage {
 function createWindow(productName: string): void {
   const icon = loadAppIcon()
   mainWindow = new BrowserWindow({
-    width: 1000,
+    width: 800,
     height: 700,
     minWidth: 800,
     minHeight: 560,
@@ -175,7 +176,14 @@ function registerIpc(): void {
   ipcMain.handle('core:connect', (_e, mode) => connect(mode))
   ipcMain.handle('core:disconnect', () => disconnect())
   ipcMain.handle('core:traffic', () => mihomoApi.getTraffic())
-  ipcMain.handle('proxies:groups', () => mihomoApi.getGroups())
+  ipcMain.handle('proxies:groups', async () => {
+    const groups = await mihomoApi.getGroups()
+    const icons = getProxyGroupIcons()
+    return groups.map((g) => {
+      const icon = icons[g.name]
+      return icon ? { ...g, icon } : g
+    })
+  })
   ipcMain.handle('proxies:select', async (_e, group: string, name: string) => {
     await mihomoApi.selectProxy(group, name)
     setSelection(group, name)

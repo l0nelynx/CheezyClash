@@ -4,6 +4,13 @@ interface Props {
   logs: string[]
 }
 
+function lineClass(line: string): string {
+  const lower = line.toLowerCase()
+  if (lower.includes('error') || lower.includes('fail')) return 'text-danger'
+  if (lower.includes('warn')) return 'text-accent-dim'
+  return 'text-ink-muted'
+}
+
 export function LogsPage({ logs }: Props): React.JSX.Element {
   const [autoScroll, setAutoScroll] = useState(true)
   const endRef = useRef<HTMLDivElement>(null)
@@ -18,7 +25,7 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-ink">Logs</h2>
-          <p className="text-sm text-ink-muted">Recent core and app messages.</p>
+          <p className="text-sm text-ink-muted">Recent activity.</p>
         </div>
         <label className="flex items-center gap-2 text-xs text-ink-muted">
           <input
@@ -30,12 +37,15 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
           Auto-scroll
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-surface-border bg-[#0a0c10] p-4 font-mono text-xs leading-relaxed text-ink-muted">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-surface-border bg-surface-sunken p-4 font-mono text-xs leading-relaxed">
         {visible.length === 0 ? (
           <p className="text-ink-dim">No log lines yet.</p>
         ) : (
           visible.map((line, i) => (
-            <div key={`${i}-${line.slice(0, 24)}`} className="whitespace-pre-wrap break-all">
+            <div
+              key={`${i}-${line.slice(0, 24)}`}
+              className={`whitespace-pre-wrap break-all ${lineClass(line)}`}
+            >
               {line}
             </div>
           ))

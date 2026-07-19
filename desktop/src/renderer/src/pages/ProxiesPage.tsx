@@ -18,9 +18,7 @@ export function ProxiesPage(props: Props): React.JSX.Element {
     <div className="mx-auto max-w-3xl">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-ink">Proxies</h2>
-        <p className="text-sm text-ink-muted">
-          Groups follow core order. Expand a group to pick a server.
-        </p>
+        <p className="text-sm text-ink-muted">Choose a server in a group.</p>
       </div>
       <ProxyGroupList {...props} />
     </div>

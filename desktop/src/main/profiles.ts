@@ -163,6 +163,31 @@ export function getActiveProxyGroupNames(): string[] {
   }
 }
 
+/** Proxy-group icon URLs from active profile base.yaml (`icon: https://...`). */
+export function getProxyGroupIcons(): Record<string, string> {
+  const id = getActiveProfileId()
+  if (!id) return {}
+  const basePath = join(profileDir(id), BASE)
+  if (!existsSync(basePath)) return {}
+  try {
+    const doc = parseClashMapping(readFileSync(basePath, 'utf8'))
+    const groups = doc['proxy-groups']
+    if (!Array.isArray(groups)) return {}
+    const out: Record<string, string> = {}
+    for (const g of groups) {
+      if (!g || typeof g !== 'object') continue
+      const map = g as { name?: unknown; icon?: unknown }
+      const name = typeof map.name === 'string' ? map.name : ''
+      const icon = typeof map.icon === 'string' ? map.icon.trim() : ''
+      if (!name || !/^https:\/\//i.test(icon)) continue
+      out[name] = icon
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
 /** Validate a single PROCESS-NAME rule via YAML round-trip. */
 export function validateProcessNameRule(processName: string, policy: string): string {
   const name = processName.trim()

@@ -29,7 +29,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
   }, [productName])
 
   return (
-    <div className="mx-auto max-w-xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink">About</h2>
         <p className="text-sm text-ink-muted">{productName} desktop client.</p>
@@ -37,7 +37,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
 
       <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
         <Row label="Application" value={`${productName} ${appVer}`} />
-        <Row label="Core (mihomo)" value={coreVer} breakAll />
+        <Row label="Engine" value={coreVer} breakAll />
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Updates</p>
           {!update && <p className="text-sm text-ink-muted">Checking…</p>}

@@ -30,9 +30,9 @@ export function AccessControlModal({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
 
-  // Keep list in sync with parent; do NOT reset the edit form here
-  // (parent refresh after save used to wipe editingId immediately).
   useEffect(() => {
     if (!open) return
     setLocalRules(rules)
@@ -51,7 +51,35 @@ export function AccessControlModal({
       .then(setProcesses)
       .catch(() => setProcesses([]))
       .finally(() => setLoadingProcs(false))
+    requestAnimationFrame(() => closeRef.current?.focus())
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (!busy && !saving) onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, busy, saving, onClose])
 
   const policyOptions = useMemo(() => {
     const set = new Set<string>([...BUILTIN_POLICIES, ...groupNames])
@@ -140,8 +168,14 @@ export function AccessControlModal({
   const disabled = busy || saving
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !disabled) onClose()
+      }}
+    >
       <div
+        ref={dialogRef}
         className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-surface-border bg-surface-raised shadow-xl"
         role="dialog"
         aria-modal="true"
@@ -152,9 +186,16 @@ export function AccessControlModal({
             <h2 id="ac-title" className="text-lg font-semibold text-ink">
               Access Control
             </h2>
-            <p className="text-xs text-ink-dim">PROCESS-NAME rules prepended to the active profile.</p>
+            <p className="text-xs text-ink-dim">Rules for which apps use the VPN.</p>
           </div>
-          <button type="button" className="btn-ghost p-2" onClick={onClose} disabled={disabled}>
+          <button
+            ref={closeRef}
+            type="button"
+            className="btn-ghost p-2"
+            onClick={onClose}
+            disabled={disabled}
+            aria-label="Close"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -254,7 +295,7 @@ export function AccessControlModal({
                         : 'border-surface-border bg-surface'
                     }`}
                   >
-                    <span className="min-w-0 truncate text-ink">
+                    <span className="min-w-0 truncate text-ink" title={`${r.processName} → ${clashToPolicyLabel(r.policy)}`}>
                       <span className="font-medium">{r.processName}</span>
                       <span className="text-ink-dim"> → {clashToPolicyLabel(r.policy)}</span>
                     </span>
@@ -265,6 +306,7 @@ export function AccessControlModal({
                         disabled={disabled}
                         onClick={() => startEdit(r)}
                         title="Edit"
+                        aria-label={`Edit ${r.processName}`}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -274,6 +316,7 @@ export function AccessControlModal({
                         disabled={disabled}
                         onClick={() => void removeRule(r.id)}
                         title="Delete"
+                        aria-label={`Delete ${r.processName}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

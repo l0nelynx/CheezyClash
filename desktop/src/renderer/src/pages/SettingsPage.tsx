@@ -48,10 +48,10 @@ export function SettingsPage({
   const ruleCount = settings.accessControlRules?.length ?? 0
 
   return (
-    <div className="mx-auto max-w-xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink">Settings</h2>
-        <p className="text-sm text-ink-muted">Connection mode, proxy ports, and access control.</p>
+        <p className="text-sm text-ink-muted">Connection, network, and app rules.</p>
       </div>
 
       {supportsAuth && (
@@ -60,7 +60,7 @@ export function SettingsPage({
             <div>
               <p className="text-sm font-medium text-ink">{session?.email || 'Signed in'}</p>
               <p className="text-xs text-ink-dim">
-                {session?.emailVerified === false ? 'Email not verified' : 'CheezyVPN account'}
+                {session?.emailVerified === false ? 'Email not verified' : 'Account'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -78,8 +78,12 @@ export function SettingsPage({
       <Section title="Connection">
         <div>
           <p className="mb-2 text-sm font-medium text-ink">Mode</p>
-          <p className="mb-3 text-xs text-ink-dim">Used by Connect on Home and the tray menu.</p>
-          <div className="inline-flex rounded-lg border border-surface-border p-0.5">
+          <p className="mb-3 text-xs text-ink-dim">Applies when you connect.</p>
+          <div
+            className="inline-flex rounded-lg border border-surface-border p-0.5"
+            role="radiogroup"
+            aria-label="Connection mode"
+          >
             <ModeButton
               label="Proxy"
               active={mode === 'proxy'}
@@ -96,7 +100,7 @@ export function SettingsPage({
         </div>
         <Toggle
           label="System proxy"
-          hint="Point OS proxy at mixed-port while connected (Proxy mode only)"
+          hint="Route system traffic through the app while connected (Proxy mode)"
           checked={settings.systemProxy}
           disabled={busy}
           onChange={(v) => onPatch({ systemProxy: v })}
@@ -121,13 +125,13 @@ export function SettingsPage({
       <Section title="Network">
         <Toggle
           label="Allow LAN"
-          hint="Expose mixed-port to local network"
+          hint="Let other devices on your network use this connection"
           checked={settings.allowLan}
           disabled={busy}
           onChange={(v) => onPatch({ allowLan: v })}
         />
         <label className="block">
-          <span className="mb-1.5 block text-sm text-ink">Mixed port</span>
+          <span className="mb-1.5 block text-sm text-ink">Port</span>
           <input
             type="number"
             className="field max-w-[160px]"
@@ -139,9 +143,7 @@ export function SettingsPage({
       </Section>
 
       <Section title="Access Control">
-        <p className="text-xs text-ink-dim">
-          Route or block apps by process name (PROCESS-NAME rules at the top of the config).
-        </p>
+        <p className="text-xs text-ink-dim">Block or bypass apps by name.</p>
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-ink">
             {ruleCount === 0 ? 'No rules' : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`}
@@ -153,17 +155,14 @@ export function SettingsPage({
       </Section>
 
       <Section title="Dashboard">
-        <p className="text-xs text-ink-dim">
-          Open Zashboard in the browser with auto-login to the local mihomo controller
-          ({CONTROLLER_HOST}:{CONTROLLER_PORT}).
-        </p>
+        <p className="text-xs text-ink-dim">Open the dashboard in your browser.</p>
         <button
           type="button"
           className="btn inline-flex items-center gap-1.5 text-sm"
           disabled={busy}
           onClick={openZashboard}
         >
-          Open Zashboard
+          Open dashboard
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </Section>
@@ -193,10 +192,14 @@ function ModeButton({
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
       disabled={disabled}
       onClick={onClick}
       className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-        active ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
+        active
+          ? 'bg-accent font-semibold text-[#1a1408]'
+          : 'text-ink-muted hover:text-ink'
       }`}
     >
       {label}

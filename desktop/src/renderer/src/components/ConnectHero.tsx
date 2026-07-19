@@ -25,6 +25,7 @@ export function ConnectHero({
   onEnsureHelper,
 }: Props): React.JSX.Element {
   const running = !!status?.running
+  const modeLabel = status?.mode === 'tun' ? 'TUN' : 'Proxy'
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-surface-border bg-gradient-to-br from-surface-raised via-surface-raised to-accent-soft p-8">
@@ -43,8 +44,8 @@ export function ConnectHero({
             </h2>
             <p className="mt-2 max-w-md text-sm text-ink-muted">
               {running
-                ? `Running in ${status?.mode?.toUpperCase()} mode. Switch servers on the Proxies page.`
-                : 'Mode is chosen in Settings → Connection. Proxy needs no admin; TUN uses the Windows helper once.'}
+                ? `${modeLabel} mode. Change servers on the Proxies page.`
+                : 'Choose Proxy or TUN in Settings, then connect.'}
             </p>
           </div>
           {running && downRateHistory.length >= 2 && (
@@ -69,26 +70,24 @@ export function ConnectHero({
           )}
         </div>
 
-        {status?.lastError && (
-          <p className="mt-4 text-sm text-danger">{status.lastError}</p>
-        )}
+        {status?.lastError && <p className="mt-4 text-sm text-danger">{status.lastError}</p>}
 
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-border/60 pt-4 text-xs text-ink-muted">
           <span>
-            Helper:{' '}
+            VPN helper:{' '}
             <span className="text-ink">
-              {tun?.helperRunning ? 'running' : tun?.helperInstalled ? 'installed' : 'missing'}
+              {tun?.helperRunning ? 'running' : tun?.helperInstalled ? 'installed' : 'not installed'}
             </span>
           </span>
           <span>
-            Privileges:{' '}
+            Setup:{' '}
             <span className={tun?.privilegesOk ? 'text-ok' : 'text-ink'}>
-              {tun?.privilegesOk ? 'ok' : 'need setup'}
+              {tun?.privilegesOk ? 'ready' : 'needs setup'}
             </span>
           </span>
           {!tun?.privilegesOk && (
             <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={busy} onClick={onEnsureHelper}>
-              Install / start helper
+              Install helper
             </button>
           )}
         </div>

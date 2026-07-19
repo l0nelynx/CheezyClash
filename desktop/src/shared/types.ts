@@ -53,6 +53,8 @@ export interface ProxyGroupInfo {
   type: string
   now: string
   all: string[]
+  /** Optional group icon URL from YAML `icon:` (https only). */
+  icon?: string
 }
 
 export interface CoreStatus {

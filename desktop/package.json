@@ -25,7 +25,7 @@
     "smoke": "node scripts/smoke-proxy.mjs"
   },
   "dependencies": {
-    "@fontsource/noto-color-emoji": "^5.2.12",
+    "country-flag-emoji-polyfill": "^0.1.8",
     "electron-store": "^8.2.0",
     "js-yaml": "^4.1.0",
     "lucide-react": "^1.25.0",

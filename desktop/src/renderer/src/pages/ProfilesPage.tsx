@@ -17,7 +17,7 @@ export function ProfilesPage(props: Props): React.JSX.Element {
     <div className="mx-auto max-w-3xl">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-ink">Profiles</h2>
-        <p className="text-sm text-ink-muted">Subscriptions and local YAML configs.</p>
+        <p className="text-sm text-ink-muted">Your subscriptions and configs.</p>
       </div>
       <ProfileList {...props} />
     </div>

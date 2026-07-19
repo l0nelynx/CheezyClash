@@ -57,13 +57,10 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
       <div className="mt-auto flex flex-col items-center gap-2 pb-1">
         <span
           className={`h-2.5 w-2.5 rounded-full ${
-            running
-              ? 'bg-ok shadow-[0_0_8px_rgba(61,214,140,0.7)]'
-              : status?.lastError
-                ? 'bg-danger'
-                : 'bg-ink-dim'
+            running ? 'bg-ok shadow-[0_0_8px_rgba(61,214,140,0.7)]' : 'bg-ink-dim'
           }`}
           title={running ? `Connected · ${status?.mode}` : 'Disconnected'}
+          aria-hidden
         />
       </div>
     </aside>

@@ -1,4 +1,4 @@
-import { FileUp, Link2, RefreshCw, Trash2 } from 'lucide-react'
+import { FileUp, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProfileMeta } from '../../../shared/types'
 
@@ -37,6 +37,7 @@ export function ProfileList({
               placeholder="Subscription URL"
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
+              disabled={busy}
             />
           </div>
           <button
@@ -48,6 +49,7 @@ export function ProfileList({
               void onImportUrl(url).then(() => setImportUrl(''))
             }}
           >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Import URL
           </button>
           <button type="button" className="btn" disabled={busy} onClick={onImportFile}>
@@ -59,30 +61,42 @@ export function ProfileList({
 
       <div className="rounded-xl border border-surface-border bg-surface-raised">
         <div className="border-b border-surface-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-ink">Profiles</h2>
           <p className="text-xs text-ink-dim">{profiles.length} configured</p>
         </div>
         {profiles.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-ink-muted">
-            No profiles yet. Import a subscription or YAML file.
+            No profiles yet. Import a subscription or config file.
           </p>
         ) : (
           <ul className="divide-y divide-surface-border">
             {profiles.map((p) => {
               const active = p.id === activeId
               const canUpdate = !!p.url
+              const managed = p.id === 'managed-primary'
               return (
                 <li key={p.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-ink">{p.name}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-medium text-ink" title={p.name}>
+                        {p.name}
+                      </span>
                       {active && (
                         <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
                           Active
                         </span>
                       )}
+                      {managed && (
+                        <span
+                          className="rounded-md bg-surface-overlay px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-dim"
+                          title="Managed by your account"
+                        >
+                          Account
+                        </span>
+                      )}
                     </div>
-                    <p className="truncate text-xs text-ink-dim">{p.url || 'Local file'}</p>
+                    <p className="truncate text-xs text-ink-dim" title={p.url || 'Local file'}>
+                      {p.url || 'Local file'}
+                    </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {!active && (
@@ -107,12 +121,14 @@ export function ProfileList({
                         <RefreshCw className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {p.id !== 'managed-primary' && (
+                    {!managed && (
                       <button
                         type="button"
                         className="btn-danger px-2.5 py-1.5 text-xs"
                         disabled={busy}
-                        onClick={() => onDelete(p.id)}
+                        onClick={() => {
+                          if (window.confirm(`Delete profile “${p.name}”?`)) onDelete(p.id)
+                        }}
                         aria-label={`Delete ${p.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />

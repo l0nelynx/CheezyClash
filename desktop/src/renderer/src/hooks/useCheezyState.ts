@@ -11,6 +11,7 @@ import type {
 export type Tab = 'home' | 'proxies' | 'profiles' | 'settings' | 'logs' | 'about'
 
 const DOWN_RATE_HISTORY = 60
+const NOTICE_MS = 4000
 
 export function useCheezyState() {
   const [tab, setTab] = useState<Tab>('home')
@@ -25,8 +26,11 @@ export function useCheezyState() {
   const [tun, setTun] = useState<TunStatus | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const [busyScope, setBusyScope] = useState<Tab | 'global' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const runningRef = useRef(false)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pushDownRate = useCallback((down: number, running: boolean) => {
     if (!running) {
@@ -38,6 +42,12 @@ export function useCheezyState() {
       if (next.length > DOWN_RATE_HISTORY) next.splice(0, next.length - DOWN_RATE_HISTORY)
       return next
     })
+  }, [])
+
+  const showNotice = useCallback((msg: string) => {
+    setNotice(msg)
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS)
   }, [])
 
   const refresh = useCallback(async () => {
@@ -125,6 +135,7 @@ export function useCheezyState() {
       offLog()
       clearInterval(statusTick)
       clearInterval(trafficTick)
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
   }, [refresh, pushDownRate])
 
@@ -138,26 +149,36 @@ export function useCheezyState() {
   }, [tab, status?.running])
 
   const run = useCallback(
-    async (fn: () => Promise<unknown>): Promise<void> => {
+    async (
+      fn: () => Promise<unknown>,
+      opts?: { success?: string; scope?: Tab | 'global' },
+    ): Promise<void> => {
       setBusy(true)
+      setBusyScope(opts?.scope ?? tab)
       setError(null)
       try {
         await fn()
         await refresh()
+        if (opts?.success) showNotice(opts.success)
       } catch (e) {
         setError(String(e))
       } finally {
         setBusy(false)
+        setBusyScope(null)
       }
     },
-    [refresh],
+    [refresh, showNotice, tab],
   )
 
   const clearError = useCallback(() => setError(null), [])
+  const clearNotice = useCallback(() => setNotice(null), [])
 
   const setGroupLatencies = useCallback((group: string, map: Record<string, number>) => {
     setLatencies((prev) => ({ ...prev, [group]: map }))
   }, [])
+
+  /** Busy only locks the current tab (or global when scope is global). */
+  const tabBusy = busy && (busyScope === 'global' || busyScope === tab)
 
   return {
     tab,
@@ -173,9 +194,12 @@ export function useCheezyState() {
     settings,
     tun,
     logs,
-    busy,
+    busy: tabBusy,
     error,
+    notice,
     clearError,
+    clearNotice,
+    showNotice,
     refresh,
     run,
   }

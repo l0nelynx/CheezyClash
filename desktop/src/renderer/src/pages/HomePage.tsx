@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { X } from 'lucide-react'
 import type { CoreStatus, ProfileMeta, TrafficSnapshot, TunStatus } from '../../../shared/types'
 import { ConnectHero } from '../components/ConnectHero'
 import { SubscriptionCard } from '../components/SubscriptionCard'
@@ -18,6 +20,8 @@ interface Props {
 export function HomePage(props: Props): React.JSX.Element {
   const sub = props.activeProfile?.subscription
   const announce = sub?.announce
+  const [dismissedAnnounce, setDismissedAnnounce] = useState<string | null>(null)
+  const showAnnounce = !!announce && announce !== dismissedAnnounce
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
@@ -32,9 +36,17 @@ export function HomePage(props: Props): React.JSX.Element {
         onEnsureHelper={props.onEnsureHelper}
       />
 
-      {announce && (
-        <div className="rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent">
-          {announce}
+      {showAnnounce && announce && (
+        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent">
+          <p className="min-w-0 flex-1">{announce}</p>
+          <button
+            type="button"
+            className="shrink-0 rounded p-0.5 hover:bg-accent/20"
+            aria-label="Dismiss announcement"
+            onClick={() => setDismissedAnnounce(announce)}
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
