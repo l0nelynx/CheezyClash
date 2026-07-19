@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FolderOpen, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { AccessControlRule } from '../../../shared/types'
 import { clashToPolicyLabel } from '../../../shared/types'
@@ -29,10 +29,17 @@ export function AccessControlModal({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const formRef = useRef<HTMLDivElement>(null)
 
+  // Keep list in sync with parent; do NOT reset the edit form here
+  // (parent refresh after save used to wipe editingId immediately).
   useEffect(() => {
     if (!open) return
     setLocalRules(rules)
+  }, [open, rules])
+
+  useEffect(() => {
+    if (!open) return
     setProcessName('')
     setPolicy('DIRECT')
     setEditingId(null)
@@ -44,12 +51,13 @@ export function AccessControlModal({
       .then(setProcesses)
       .catch(() => setProcesses([]))
       .finally(() => setLoadingProcs(false))
-  }, [open, rules])
+  }, [open])
 
   const policyOptions = useMemo(() => {
     const set = new Set<string>([...BUILTIN_POLICIES, ...groupNames])
+    if (policy) set.add(policy)
     return [...set]
-  }, [groupNames])
+  }, [groupNames, policy])
 
   if (!open) return null
 
@@ -65,6 +73,9 @@ export function AccessControlModal({
     setProcessName(rule.processName)
     setPolicy(clashToPolicyLabel(rule.policy))
     setError(null)
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
   }
 
   const applyRule = async (): Promise<void> => {
@@ -149,68 +160,84 @@ export function AccessControlModal({
         </div>
 
         <div className="space-y-4 overflow-y-auto px-5 py-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-ink">Process</label>
-            <div className="flex gap-2">
-              <input
-                className="field flex-1"
-                placeholder="Discord.exe"
-                value={processName}
-                disabled={disabled}
-                onChange={(e) => setProcessName(e.target.value)}
-              />
-              <button type="button" className="btn shrink-0" disabled={disabled} onClick={() => void browseExe()}>
-                <FolderOpen className="h-4 w-4" />
-                Browse
-              </button>
+          <div ref={formRef} className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-ink">
+                Process{editingId ? ' (editing)' : ''}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className="field flex-1"
+                  placeholder="Discord.exe"
+                  value={processName}
+                  disabled={disabled}
+                  onChange={(e) => setProcessName(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn shrink-0"
+                  disabled={disabled}
+                  onClick={() => void browseExe()}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Browse
+                </button>
+              </div>
+              <label className="block text-xs text-ink-dim">Running processes</label>
+              <select
+                className="field w-full"
+                disabled={disabled || loadingProcs}
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) setProcessName(e.target.value)
+                }}
+              >
+                <option value="">
+                  {loadingProcs ? 'Loading…' : processes.length ? 'Pick a running process…' : 'No processes'}
+                </option>
+                {processes.map((p) => (
+                  <option key={`${p.name}-${p.pid}`} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <label className="block text-xs text-ink-dim">Running processes</label>
-            <select
-              className="field w-full"
-              disabled={disabled || loadingProcs}
-              value=""
-              onChange={(e) => {
-                if (e.target.value) setProcessName(e.target.value)
-              }}
-            >
-              <option value="">
-                {loadingProcs ? 'Loading…' : processes.length ? 'Pick a running process…' : 'No processes'}
-              </option>
-              {processes.map((p) => (
-                <option key={`${p.name}-${p.pid}`} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Rule</label>
+              <select
+                className="field w-full"
+                value={policy}
+                disabled={disabled}
+                onChange={(e) => setPolicy(e.target.value)}
+              >
+                {policyOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {error && <p className="text-sm text-danger">{error}</p>}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-primary min-w-0 flex-1"
+                disabled={disabled}
+                onClick={() => void applyRule()}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {editingId ? 'Update rule' : 'Add rule'}
+              </button>
+              {editingId && (
+                <button type="button" className="btn shrink-0" disabled={disabled} onClick={resetForm}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">Rule</label>
-            <select
-              className="field w-full"
-              value={policy}
-              disabled={disabled}
-              onChange={(e) => setPolicy(e.target.value)}
-            >
-              {policyOptions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {error && <p className="text-sm text-danger">{error}</p>}
-
-          <button
-            type="button"
-            className="btn-primary w-full"
-            disabled={disabled}
-            onClick={() => void applyRule()}
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {editingId ? 'Update rule' : 'Add rule'}
-          </button>
 
           <div className="border-t border-surface-border pt-3">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-dim">Rules</p>
@@ -221,7 +248,11 @@ export function AccessControlModal({
                 {localRules.map((r) => (
                   <li
                     key={r.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm"
+                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
+                      editingId === r.id
+                        ? 'border-accent bg-accent-soft'
+                        : 'border-surface-border bg-surface'
+                    }`}
                   >
                     <span className="min-w-0 truncate text-ink">
                       <span className="font-medium">{r.processName}</span>
