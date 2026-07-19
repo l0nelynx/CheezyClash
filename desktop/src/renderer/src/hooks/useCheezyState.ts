@@ -44,6 +44,19 @@ export function useCheezyState() {
     })
   }, [])
 
+  /** Apply groups and merge core history delays into latency map. */
+  const applyGroups = useCallback((gs: ProxyGroupInfo[]) => {
+    setGroups(gs)
+    setLatencies((prev) => {
+      const next = { ...prev }
+      for (const g of gs) {
+        if (!g.delays || Object.keys(g.delays).length === 0) continue
+        next[g.name] = { ...(next[g.name] || {}), ...g.delays }
+      }
+      return next
+    })
+  }, [])
+
   const showNotice = useCallback((msg: string) => {
     setNotice(msg)
     if (noticeTimer.current) clearTimeout(noticeTimer.current)
@@ -69,7 +82,7 @@ export function useCheezyState() {
       setLogs(logLines)
       if (st.running) {
         try {
-          setGroups(await window.cheezy.getGroups())
+          applyGroups(await window.cheezy.getGroups())
         } catch {
           setGroups([])
         }
@@ -82,13 +95,14 @@ export function useCheezyState() {
         }
       } else {
         setGroups([])
+        setLatencies({})
         setTraffic(null)
         setDownRateHistory([])
       }
     } catch (e) {
       setError(String(e))
     }
-  }, [pushDownRate])
+  }, [applyGroups, pushDownRate])
 
   useEffect(() => {
     void refresh()
@@ -96,9 +110,13 @@ export function useCheezyState() {
       setStatus(s)
       runningRef.current = !!s.running
       if (s.running) {
-        void window.cheezy.getGroups().then(setGroups).catch(() => undefined)
+        void window.cheezy
+          .getGroups()
+          .then(applyGroups)
+          .catch(() => undefined)
       } else {
         setGroups([])
+        setLatencies({})
         setTraffic(null)
         setDownRateHistory([])
       }
@@ -115,6 +133,7 @@ export function useCheezyState() {
         if (!s.running) {
           setTraffic(null)
           setDownRateHistory([])
+          setLatencies({})
         }
       })
       void window.cheezy.getTunStatus().then(setTun).catch(() => undefined)
@@ -137,16 +156,21 @@ export function useCheezyState() {
       clearInterval(trafficTick)
       if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
-  }, [refresh, pushDownRate])
+  }, [refresh, pushDownRate, applyGroups])
 
   useEffect(() => {
-    if (tab === 'proxies' && status?.running) {
+    if (tab !== 'proxies' || !status?.running) return
+    const load = (): void => {
       void window.cheezy
         .getGroups()
-        .then(setGroups)
+        .then(applyGroups)
         .catch(() => undefined)
     }
-  }, [tab, status?.running])
+    load()
+    // url-test / health-check history updates in-core without our ping — poll while tab is open.
+    const tick = setInterval(load, 5000)
+    return () => clearInterval(tick)
+  }, [tab, status?.running, applyGroups])
 
   const run = useCallback(
     async (

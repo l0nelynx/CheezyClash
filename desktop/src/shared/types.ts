@@ -55,6 +55,11 @@ export interface ProxyGroupInfo {
   all: string[]
   /** Optional group icon URL from YAML `icon:` (https only). */
   icon?: string
+  /**
+   * Last known delays from core proxy history (ms).
+   * `-1` = last check failed; omit = never tested.
+   */
+  delays?: Record<string, number>
 }
 
 export interface CoreStatus {

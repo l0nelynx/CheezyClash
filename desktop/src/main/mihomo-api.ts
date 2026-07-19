@@ -4,6 +4,32 @@ import { readFileSync } from 'fs'
 import { log } from './logger'
 import { getOrCreateSecret } from './store'
 
+type DelayHistory = { time?: string; delay?: number }
+
+type MihomoProxy = {
+  type: string
+  now?: string
+  all?: string[]
+  hidden?: boolean
+  testUrl?: string
+  history?: DelayHistory[]
+  extra?: Record<string, { history?: DelayHistory[]; alive?: boolean }>
+}
+
+/** Last delay from core history (ms). `0` → `-1` (fail); empty → undefined. */
+function lastDelayMs(proxy: MihomoProxy | undefined, testUrl?: string): number | undefined {
+  if (!proxy) return undefined
+  const fromExtra =
+    testUrl && proxy.extra?.[testUrl]?.history?.length
+      ? proxy.extra[testUrl]!.history
+      : undefined
+  const hist = fromExtra || proxy.history
+  if (!hist || hist.length === 0) return undefined
+  const delay = hist[hist.length - 1]?.delay
+  if (typeof delay !== 'number') return undefined
+  return delay > 0 ? delay : -1
+}
+
 export class MihomoApi {
   constructor(
     private host = CONTROLLER_HOST,
@@ -102,16 +128,9 @@ export class MihomoApi {
     }
   }
 
-  async getProxies(): Promise<
-    Record<string, { type: string; now?: string; all?: string[]; hidden?: boolean }>
-  > {
+  async getProxies(): Promise<Record<string, MihomoProxy>> {
     this.ensureSecretFromStore()
-    const data = await this.request<{
-      proxies: Record<
-        string,
-        { type: string; now?: string; all?: string[]; hidden?: boolean }
-      >
-    }>('GET', '/proxies')
+    const data = await this.request<{ proxies: Record<string, MihomoProxy> }>('GET', '/proxies')
     return data.proxies || {}
   }
 
@@ -134,11 +153,18 @@ export class MihomoApi {
     const toInfo = (name: string): ProxyGroupInfo | null => {
       const p = proxies[name]
       if (!p || !isGroup(p) || p.hidden === true) return null
+      const all = p.all || []
+      const delays: Record<string, number> = {}
+      for (const member of all) {
+        const d = lastDelayMs(proxies[member], p.testUrl)
+        if (d !== undefined) delays[member] = d
+      }
       return {
         name,
         type: p.type,
         now: p.now || '',
-        all: p.all || [],
+        all,
+        delays: Object.keys(delays).length > 0 ? delays : undefined,
       }
     }
 
@@ -193,7 +219,11 @@ export class MihomoApi {
       undefined,
       30_000,
     )
-    return data || {}
+    const out: Record<string, number> = {}
+    for (const [name, delay] of Object.entries(data || {})) {
+      out[name] = delay > 0 ? delay : -1
+    }
+    return out
   }
 
   /** Last /connections totals sample — used to derive B/s without SSE /traffic. */
