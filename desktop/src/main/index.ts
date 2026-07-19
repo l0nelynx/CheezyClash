@@ -6,8 +6,9 @@ import {
   nativeImage,
   ipcMain,
   shell,
+  dialog,
 } from 'electron'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { existsSync } from 'fs'
 import {
   connect,
@@ -15,6 +16,7 @@ import {
   getStatus,
   getTunStatus,
   setTunEnabled,
+  setConnectionMode,
   ensureHelperAndStatus,
   corePresent,
 } from './core-manager'
@@ -28,8 +30,13 @@ import {
   deleteProfile,
   ensureProfilesRoot,
   migrateOrphanDirs,
+  rebuildActive,
+  getActiveProxyGroupNames,
+  validateProcessNameRule,
 } from './profiles'
 import { getSettings, setSettings, getOrCreateSecret } from './store'
+import { listRunningProcesses } from './processes'
+import type { AccessControlRule, ConnectionMode } from '../shared/types'
 import { getLogs, log } from './logger'
 import { coreHome } from './paths'
 import { PRIVATE_IPC } from '../shared/private-api'
@@ -133,12 +140,8 @@ function createTray(productName: string): void {
     },
     { type: 'separator' },
     {
-      label: 'Connect proxy',
-      click: () => void connect('proxy').catch((e) => log(String(e), 'error')),
-    },
-    {
-      label: 'Connect TUN',
-      click: () => void connect('tun').catch((e) => log(String(e), 'error')),
+      label: 'Connect',
+      click: () => void connect().catch((e) => log(String(e), 'error')),
     },
     {
       label: 'Disconnect',
@@ -187,8 +190,41 @@ function registerIpc(): void {
   ipcMain.handle('settings:set', (_e, patch) => setSettings(patch))
   ipcMain.handle('tun:status', () => getTunStatus())
   ipcMain.handle('tun:setEnabled', (_e, enabled: boolean) => setTunEnabled(enabled))
+  ipcMain.handle('connection:setMode', (_e, mode: ConnectionMode) => setConnectionMode(mode))
   ipcMain.handle('helper:ensure', () => ensureHelperAndStatus())
   ipcMain.handle('logs:get', () => getLogs())
+
+  ipcMain.handle('processes:list', () => listRunningProcesses())
+  ipcMain.handle('profiles:proxyGroupNames', () => getActiveProxyGroupNames())
+  ipcMain.handle('accessControl:validate', (_e, processName: string, policy: string) =>
+    validateProcessNameRule(processName, policy),
+  )
+  ipcMain.handle('accessControl:set', async (_e, rules: AccessControlRule[]) => {
+    for (const r of rules) {
+      validateProcessNameRule(r.processName, r.policy)
+    }
+    const settings = setSettings({ accessControlRules: rules })
+    const path = rebuildActive(settings)
+    const st = await getStatus()
+    if (st.running && path) {
+      await mihomoApi.putConfigs(path).catch((e) => {
+        log(`accessControl reload failed: ${e}`, 'warn')
+      })
+    }
+    return settings
+  })
+  ipcMain.handle('dialog:pickExecutable', async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Select executable',
+      filters: [
+        { name: 'Executable', extensions: ['exe'] },
+        { name: 'All', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return basename(result.filePaths[0])
+  })
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('core:version', async () => {

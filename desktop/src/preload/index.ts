@@ -1,5 +1,6 @@
 import { ipcRenderer, contextBridge } from 'electron'
 import type {
+  AccessControlRule,
   AppSettings,
   ConnectionMode,
   CoreStatus,
@@ -43,8 +44,20 @@ const api = {
   getTunStatus: (): Promise<TunStatus> => ipcRenderer.invoke('tun:status'),
   setTunEnabled: (enabled: boolean): Promise<TunStatus> =>
     ipcRenderer.invoke('tun:setEnabled', enabled),
+  setConnectionMode: (mode: ConnectionMode): Promise<TunStatus> =>
+    ipcRenderer.invoke('connection:setMode', mode),
   ensureHelper: (): Promise<TunStatus> => ipcRenderer.invoke('helper:ensure'),
   getLogs: (): Promise<string[]> => ipcRenderer.invoke('logs:get'),
+  listProcesses: (): Promise<{ name: string; pid: number }[]> =>
+    ipcRenderer.invoke('processes:list'),
+  getProxyGroupNames: (): Promise<string[]> =>
+    ipcRenderer.invoke('profiles:proxyGroupNames'),
+  validateAccessControlRule: (processName: string, policy: string): Promise<string> =>
+    ipcRenderer.invoke('accessControl:validate', processName, policy),
+  setAccessControlRules: (rules: AccessControlRule[]): Promise<AppSettings> =>
+    ipcRenderer.invoke('accessControl:set', rules),
+  pickExecutable: (): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:pickExecutable'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
   getCoreVersion: (): Promise<{ version?: string; meta?: boolean }> =>
     ipcRenderer.invoke('core:version'),

@@ -11,7 +11,13 @@ import { join } from 'path'
 import yaml from 'js-yaml'
 import { v4 as uuidv4 } from 'uuid'
 import { dialog } from 'electron'
-import type { AppSettings, ProfileMeta, SubscriptionInfo } from '../shared/types'
+import type {
+  AccessControlRule,
+  AppSettings,
+  ProfileMeta,
+  SubscriptionInfo,
+} from '../shared/types'
+import { policyToClash } from '../shared/types'
 import { profileDir, profilesRoot } from './paths'
 import { getSettings, store } from './store'
 import { log } from './logger'
@@ -78,6 +84,7 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
 
   applyMixedPortOverride(doc, settings)
   applyTunOverride(doc, settings)
+  applyAccessControlRules(doc, settings.accessControlRules ?? [])
   ensureDns(doc)
 
   // Always bind controller to loopback for the desktop UI.
@@ -98,7 +105,8 @@ function applyMixedPortOverride(doc: Record<string, unknown>, settings: AppSetti
 
 /** B2: desktop enables YAML tun (opposite of Android patchTun). */
 export function applyTunOverride(doc: Record<string, unknown>, settings: AppSettings): void {
-  if (!settings.tunEnabled) {
+  const tunOn = settings.connectionMode === 'tun' || settings.tunEnabled
+  if (!tunOn) {
     doc.tun = { enable: false }
     return
   }
@@ -110,6 +118,69 @@ export function applyTunOverride(doc: Record<string, unknown>, settings: AppSett
     'strict-route': true,
     'dns-hijack': ['any:53', 'tcp://any:53'],
   }
+}
+
+/** Prepend PROCESS-NAME rules at the top of rules (user Access Control). */
+export function applyAccessControlRules(
+  doc: Record<string, unknown>,
+  rules: AccessControlRule[],
+): void {
+  const injected = rules
+    .filter((r) => r.processName?.trim() && r.policy?.trim())
+    .map((r) => `PROCESS-NAME,${r.processName.trim()},${policyToClash(r.policy.trim())}`)
+
+  const existing = Array.isArray(doc.rules)
+    ? (doc.rules as unknown[]).filter((x): x is string => typeof x === 'string')
+    : []
+
+  // Drop previously injected PROCESS-NAME lines that match our format at the head,
+  // then prepend fresh ones so rebuild is idempotent relative to base.yaml content.
+  // Base may also contain PROCESS-NAME; we only prepend store rules each rebuild from base.
+  doc.rules = [...injected, ...existing]
+}
+
+/** Proxy-group names from active profile base.yaml (offline-safe). */
+export function getActiveProxyGroupNames(): string[] {
+  const id = getActiveProfileId()
+  if (!id) return []
+  const basePath = join(profileDir(id), BASE)
+  if (!existsSync(basePath)) return []
+  try {
+    const doc = parseClashMapping(readFileSync(basePath, 'utf8'))
+    const groups = doc['proxy-groups']
+    if (!Array.isArray(groups)) return []
+    const names: string[] = []
+    for (const g of groups) {
+      if (g && typeof g === 'object' && typeof (g as { name?: unknown }).name === 'string') {
+        names.push((g as { name: string }).name)
+      }
+    }
+    return names
+  } catch {
+    return []
+  }
+}
+
+/** Validate a single PROCESS-NAME rule via YAML round-trip. */
+export function validateProcessNameRule(processName: string, policy: string): string {
+  const name = processName.trim()
+  const pol = policyToClash(policy.trim())
+  if (!name || !pol) throw new Error('process name and policy are required')
+  if (name.includes(',') || pol.includes(',')) {
+    throw new Error('process name and policy must not contain commas')
+  }
+  const line = `PROCESS-NAME,${name},${pol}`
+  const parts = line.split(',')
+  if (parts.length !== 3 || parts[0] !== 'PROCESS-NAME' || !parts[1] || !parts[2]) {
+    throw new Error(`invalid rule format: ${line}`)
+  }
+  const probe = { rules: [line] }
+  const dumped = yaml.dump(probe, { lineWidth: -1, noRefs: true })
+  const loaded = yaml.load(dumped)
+  if (!loaded || typeof loaded !== 'object' || !Array.isArray((loaded as { rules?: unknown }).rules)) {
+    throw new Error('YAML round-trip failed for rule')
+  }
+  return line
 }
 
 function ensureDns(doc: Record<string, unknown>): void {
@@ -281,10 +352,10 @@ export function deleteProfile(id: string): void {
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
 }
 
-export function rebuildActive(): string | null {
+export function rebuildActive(settings: AppSettings = getSettings()): string | null {
   const id = getActiveProfileId()
   if (!id) return null
-  return rebuildConfig(id)
+  return rebuildConfig(id, settings)
 }
 
 /** Copy geo assets note: mihomo downloads them on first run into home. */

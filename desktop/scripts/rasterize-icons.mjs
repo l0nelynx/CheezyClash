@@ -1,8 +1,9 @@
 /**
  * Rasterize OS logos (exe / installer / tray) from logo-os.svg.
+ * Crops transparent padding so the mark fills most of each PNG.
  * Does NOT touch in-app assets/logo.svg (colored UI mark).
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { Resvg } from '@resvg/resvg-js'
@@ -11,15 +12,88 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const buildDir = join(root, 'build')
 const resourcesDir = join(root, 'resources')
 
+/** Keep a thin margin around the glyph (fraction of the final canvas). */
+const PAD_RATIO = 0.04
+
 mkdirSync(buildDir, { recursive: true })
 
-function renderSvg(svgPath, size) {
+function contentBBox(pixels, width, height, alphaThreshold = 8) {
+  let minX = width
+  let minY = height
+  let maxX = -1
+  let maxY = -1
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (pixels[(y * width + x) * 4 + 3] > alphaThreshold) {
+        if (x < minX) minX = x
+        if (y < minY) minY = y
+        if (x > maxX) maxX = x
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+  if (maxX < 0) return null
+  return { minX, minY, maxX, maxY, bw: maxX - minX + 1, bh: maxY - minY + 1 }
+}
+
+/**
+ * Render SVG → crop to opaque bounds → scale into a square PNG of `size`.
+ */
+function renderSvgTight(svgPath, size) {
   const svg = readFileSync(svgPath)
-  const resvg = new Resvg(svg, {
+  // Render oversized so crop+scale stays sharp at the target size.
+  const probeSize = Math.max(size * 4, 512)
+  const probe = new Resvg(svg, {
+    fitTo: { mode: 'width', value: probeSize },
+    background: 'rgba(0,0,0,0)',
+  }).render()
+
+  const box = contentBBox(probe.pixels, probe.width, probe.height)
+  if (!box) {
+    throw new Error(`no opaque pixels in ${svgPath}`)
+  }
+
+  const fullPng = probe.asPng()
+  const b64 = fullPng.toString('base64')
+  const inner = size * (1 - 2 * PAD_RATIO)
+  const scale = Math.min(inner / box.bw, inner / box.bh)
+  const dw = box.bw * scale
+  const dh = box.bh * scale
+  const dx = (size - dw) / 2
+  const dy = (size - dh) / 2
+
+  // viewBox crop of the probe PNG, then place centered in the final square.
+  const wrapper = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <image
+    x="${dx}" y="${dy}" width="${dw}" height="${dh}"
+    preserveAspectRatio="xMidYMid meet"
+    xlink:href="data:image/png;base64,${b64}"
+    clip-path="none"
+  />
+</svg>`
+
+  // Use nested SVG with a clipped image via viewBox on a nested svg element —
+  // more reliable than clip on <image> across resvg versions.
+  const nested = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <svg x="${dx}" y="${dy}" width="${dw}" height="${dh}"
+    viewBox="${box.minX} ${box.minY} ${box.bw} ${box.bh}"
+    preserveAspectRatio="xMidYMid meet">
+    <image width="${probe.width}" height="${probe.height}"
+      xlink:href="data:image/png;base64,${b64}"/>
+  </svg>
+</svg>`
+
+  void wrapper
+  return new Resvg(nested, {
     fitTo: { mode: 'width', value: size },
     background: 'rgba(0,0,0,0)',
   })
-  return resvg.render().asPng()
+    .render()
+    .asPng()
 }
 
 function pngToIco(pngBuffers) {
@@ -53,16 +127,30 @@ if (!existsSync(logoOs)) {
   process.exit(1)
 }
 
-const s16 = renderSvg(logoOs, 16)
-const s32 = renderSvg(logoOs, 32)
-const s48 = renderSvg(logoOs, 48)
-const s64 = renderSvg(logoOs, 64)
-const s256 = renderSvg(logoOs, 256)
-const s512 = renderSvg(logoOs, 512)
+const s16 = renderSvgTight(logoOs, 16)
+const s32 = renderSvgTight(logoOs, 32)
+const s48 = renderSvgTight(logoOs, 48)
+const s64 = renderSvgTight(logoOs, 64)
+const s256 = renderSvgTight(logoOs, 256)
+const s512 = renderSvgTight(logoOs, 512)
 
 writeFileSync(join(buildDir, 'icon.png'), s512)
 writeFileSync(join(buildDir, 'icon-256.png'), s256)
 writeFileSync(join(buildDir, 'icon.ico'), pngToIco([s16, s32, s48, s64, s256]))
 writeFileSync(join(resourcesDir, 'tray.png'), s64)
 
-console.log('icons: OS black mark → build/icon.ico, resources/tray.png (64px); in-app logo untouched')
+// Legacy tray rasters under build/ (unused; tray ships from resources/).
+for (const stale of ['tray-16.png', 'tray-128.png', 'tray.png']) {
+  const p = join(buildDir, stale)
+  if (existsSync(p)) {
+    try {
+      unlinkSync(p)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+console.log(
+  'icons: OS black mark → build/icon.ico + resources/tray.png (64px, tight crop ~4% pad); in-app logo untouched',
+)

@@ -9,8 +9,7 @@ interface Props {
   traffic: TrafficSnapshot | null
   activeProfile: ProfileMeta | null
   busy: boolean
-  onConnectProxy: () => void
-  onConnectTun: () => void
+  onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
 }
@@ -25,8 +24,7 @@ export function HomePage(props: Props): React.JSX.Element {
         status={props.status}
         tun={props.tun}
         busy={props.busy}
-        onConnectProxy={props.onConnectProxy}
-        onConnectTun={props.onConnectTun}
+        onConnect={props.onConnect}
         onDisconnect={props.onDisconnect}
         onEnsureHelper={props.onEnsureHelper}
       />

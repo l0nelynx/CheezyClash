@@ -47,7 +47,8 @@ function broadcast(status: CoreStatus): void {
 export async function getStatus(): Promise<CoreStatus> {
   const secret = getOrCreateSecret()
   const helperReady = await pingHelper()
-  const priv = await privilegesOk(getSettings().tunEnabled)
+  const settings = getSettings()
+  const priv = await privilegesOk(settings.connectionMode === 'tun')
   const running = child != null || (helperReady && (await mihomoApi.ping()))
   return {
     running,
@@ -65,7 +66,7 @@ export async function getTunStatus(): Promise<TunStatus> {
   const settings = getSettings()
   const svc = platform() === 'win32' ? await queryWindowsService() : 'none'
   return {
-    enabled: settings.tunEnabled,
+    enabled: settings.connectionMode === 'tun',
     helperInstalled: svc !== 'none' || (await pingHelper()),
     helperRunning: await pingHelper(),
     privilegesOk: await privilegesOk(true),
@@ -162,30 +163,34 @@ export async function connect(requested?: ConnectionMode): Promise<CoreStatus> {
   stopping = false
   lastError = undefined
   const settings = getSettings()
-  mode = requested ?? (settings.tunEnabled ? 'tun' : 'proxy')
+  mode = requested ?? settings.connectionMode
 
   if (!getActiveProfileId()) {
     lastError = 'no active profile'
     throw new Error(lastError)
   }
 
-  // Rebuild config with current overrides (mixed-port / tun / dns)
-  if (mode === 'tun') {
-    setSettings({ tunEnabled: true })
+  // Rebuild config with current overrides (mixed-port / tun / dns / AC)
+  // Do not overwrite user's connectionMode preference on connect.
+  let effectiveMode = mode
+  if (effectiveMode === 'tun') {
     const auth = await authorizeForTun()
     if (!auth) {
       lastError = 'privileges required for TUN'
       log(lastError, 'error')
-      // fallback to proxy
+      effectiveMode = 'proxy'
       mode = 'proxy'
-      setSettings({ tunEnabled: false })
-      log('falling back to mixed-port proxy mode', 'warn')
+      log('falling back to mixed-port proxy mode for this session', 'warn')
     }
-  } else {
-    setSettings({ tunEnabled: false })
   }
 
-  const configPath = rebuildActive()
+  // Temporary session override for rebuild: tun enable follows effectiveMode
+  const rebuildSettings =
+    effectiveMode === 'tun'
+      ? { ...settings, tunEnabled: true, connectionMode: 'tun' as const }
+      : { ...settings, tunEnabled: false, connectionMode: 'proxy' as const }
+
+  const configPath = rebuildActive(rebuildSettings)
   if (!configPath || !existsSync(configPath)) {
     lastError = 'config rebuild failed'
     throw new Error(lastError)
@@ -194,19 +199,18 @@ export async function connect(requested?: ConnectionMode): Promise<CoreStatus> {
   await disconnectInternal(false)
 
   try {
-    if (mode === 'tun' && (await pingHelper())) {
+    if (effectiveMode === 'tun' && (await pingHelper())) {
       await spawnCoreElevated(configPath)
     } else {
       await spawnCoreDirect(configPath)
     }
-    // Ensure config path loaded (in case process started with empty)
     await mihomoApi.putConfigs(configPath).catch(() => undefined)
 
-    if (mode === 'proxy' && settings.systemProxy) {
+    if (effectiveMode === 'proxy' && settings.systemProxy) {
       await setSystemProxy(true, settings.mixedPort)
     }
     crashCount = 0
-    log(`connected mode=${mode}`)
+    log(`connected mode=${effectiveMode}`)
   } catch (e) {
     lastError = String(e)
     log(`connect failed: ${e}`, 'error')
@@ -248,11 +252,15 @@ export async function disconnect(): Promise<CoreStatus> {
 }
 
 export async function setTunEnabled(enabled: boolean): Promise<TunStatus> {
-  setSettings({ tunEnabled: enabled })
+  return setConnectionMode(enabled ? 'tun' : 'proxy')
+}
+
+export async function setConnectionMode(next: ConnectionMode): Promise<TunStatus> {
+  setSettings({ connectionMode: next })
   const running = (await getStatus()).running
   if (running) {
     try {
-      await connect(enabled ? 'tun' : 'proxy')
+      await connect(next)
     } catch (e) {
       lastError = String(e)
     }

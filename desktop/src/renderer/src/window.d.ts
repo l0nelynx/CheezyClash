@@ -1,4 +1,5 @@
 import type {
+  AccessControlRule,
   AppSettings,
   ConnectionMode,
   CoreStatus,
@@ -31,8 +32,14 @@ export interface CheezyApi {
   setSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>
   getTunStatus: () => Promise<TunStatus>
   setTunEnabled: (enabled: boolean) => Promise<TunStatus>
+  setConnectionMode: (mode: ConnectionMode) => Promise<TunStatus>
   ensureHelper: () => Promise<TunStatus>
   getLogs: () => Promise<string[]>
+  listProcesses: () => Promise<{ name: string; pid: number }[]>
+  getProxyGroupNames: () => Promise<string[]>
+  validateAccessControlRule: (processName: string, policy: string) => Promise<string>
+  setAccessControlRules: (rules: AccessControlRule[]) => Promise<AppSettings>
+  pickExecutable: () => Promise<string | null>
   getAppVersion: () => Promise<string>
   getCoreVersion: () => Promise<{ version?: string; meta?: boolean }>
   checkUpdate: () => Promise<{

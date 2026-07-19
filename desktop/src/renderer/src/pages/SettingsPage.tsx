@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
-import type { AppSettings, CoreStatus } from '../../../shared/types'
+import type { AccessControlRule, AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../../../shared/types'
+import { AccessControlModal } from '../components/AccessControlModal'
 
 interface Props {
   settings: AppSettings
@@ -10,7 +12,8 @@ interface Props {
   supportsAuth: boolean
   status: CoreStatus | null
   onPatch: (patch: Partial<AppSettings>) => void
-  onTunPrefer: (enabled: boolean) => void
+  onConnectionMode: (mode: ConnectionMode) => void
+  onAccessControlChange: (rules: AccessControlRule[]) => Promise<void> | void
   onLogout: () => void
   onSyncSubscription: () => void
 }
@@ -22,10 +25,13 @@ export function SettingsPage({
   supportsAuth,
   status,
   onPatch,
-  onTunPrefer,
+  onConnectionMode,
+  onAccessControlChange,
   onLogout,
   onSyncSubscription,
 }: Props): React.JSX.Element {
+  const [acOpen, setAcOpen] = useState(false)
+
   const openZashboard = () => {
     const secret = status?.secret || ''
     const params = new URLSearchParams({
@@ -38,11 +44,14 @@ export function SettingsPage({
     void window.cheezy.openExternal(url)
   }
 
+  const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
+  const ruleCount = settings.accessControlRules?.length ?? 0
+
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink">Settings</h2>
-        <p className="text-sm text-ink-muted">Proxy ports and TUN preferences.</p>
+        <p className="text-sm text-ink-muted">Connection mode, proxy ports, and access control.</p>
       </div>
 
       {supportsAuth && (
@@ -66,14 +75,50 @@ export function SettingsPage({
         </Section>
       )}
 
-      <Section title="Network">
+      <Section title="Connection">
+        <div>
+          <p className="mb-2 text-sm font-medium text-ink">Mode</p>
+          <p className="mb-3 text-xs text-ink-dim">Used by Connect on Home and the tray menu.</p>
+          <div className="inline-flex rounded-lg border border-surface-border p-0.5">
+            <ModeButton
+              label="Proxy"
+              active={mode === 'proxy'}
+              disabled={busy}
+              onClick={() => onConnectionMode('proxy')}
+            />
+            <ModeButton
+              label="TUN"
+              active={mode === 'tun'}
+              disabled={busy}
+              onClick={() => onConnectionMode('tun')}
+            />
+          </div>
+        </div>
         <Toggle
           label="System proxy"
-          hint="Point OS proxy at mixed-port while connected"
+          hint="Point OS proxy at mixed-port while connected (Proxy mode only)"
           checked={settings.systemProxy}
           disabled={busy}
           onChange={(v) => onPatch({ systemProxy: v })}
         />
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-ink">TUN stack</span>
+          <select
+            className="field max-w-[200px]"
+            value={settings.tunStack}
+            disabled={busy || mode !== 'tun'}
+            onChange={(e) =>
+              onPatch({ tunStack: e.target.value as AppSettings['tunStack'] })
+            }
+          >
+            <option value="mixed">mixed</option>
+            <option value="system">system</option>
+            <option value="gvisor">gvisor</option>
+          </select>
+        </label>
+      </Section>
+
+      <Section title="Network">
         <Toggle
           label="Allow LAN"
           hint="Expose mixed-port to local network"
@@ -93,29 +138,18 @@ export function SettingsPage({
         </label>
       </Section>
 
-      <Section title="TUN">
-        <Toggle
-          label="Prefer TUN on connect"
-          hint="Use system TUN mode when available"
-          checked={settings.tunEnabled}
-          disabled={busy}
-          onChange={onTunPrefer}
-        />
-        <label className="block">
-          <span className="mb-1.5 block text-sm text-ink">TUN stack</span>
-          <select
-            className="field max-w-[200px]"
-            value={settings.tunStack}
-            disabled={busy}
-            onChange={(e) =>
-              onPatch({ tunStack: e.target.value as AppSettings['tunStack'] })
-            }
-          >
-            <option value="mixed">mixed</option>
-            <option value="system">system</option>
-            <option value="gvisor">gvisor</option>
-          </select>
-        </label>
+      <Section title="Access Control">
+        <p className="text-xs text-ink-dim">
+          Route or block apps by process name (PROCESS-NAME rules at the top of the config).
+        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-ink">
+            {ruleCount === 0 ? 'No rules' : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`}
+          </p>
+          <button type="button" className="btn text-sm" disabled={busy} onClick={() => setAcOpen(true)}>
+            Manage
+          </button>
+        </div>
       </Section>
 
       <Section title="Dashboard">
@@ -133,7 +167,40 @@ export function SettingsPage({
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </Section>
+
+      <AccessControlModal
+        open={acOpen}
+        rules={settings.accessControlRules ?? []}
+        busy={busy}
+        onClose={() => setAcOpen(false)}
+        onSave={onAccessControlChange}
+      />
     </div>
+  )
+}
+
+function ModeButton({
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  disabled: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+        active ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
+      }`}
+    >
+      {label}
+    </button>
   )
 }
 

@@ -27,12 +27,39 @@ export const store = new Store<StoreSchema>({
   },
 })
 
+/** Normalize legacy tunEnabled → connectionMode and keep tunEnabled in sync. */
+export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
+  const merged: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    ...raw,
+    accessControlRules: Array.isArray(raw.accessControlRules)
+      ? raw.accessControlRules
+      : DEFAULT_SETTINGS.accessControlRules,
+  }
+
+  if (raw.connectionMode === 'proxy' || raw.connectionMode === 'tun') {
+    merged.connectionMode = raw.connectionMode
+  } else if (typeof raw.tunEnabled === 'boolean') {
+    merged.connectionMode = raw.tunEnabled ? 'tun' : 'proxy'
+  }
+
+  merged.tunEnabled = merged.connectionMode === 'tun'
+  return merged
+}
+
 export function getSettings(): AppSettings {
-  return { ...DEFAULT_SETTINGS, ...store.get('settings') }
+  return normalizeSettings(store.get('settings'))
 }
 
 export function setSettings(patch: Partial<AppSettings>): AppSettings {
-  const next = { ...getSettings(), ...patch }
+  const current = getSettings()
+  const nextPatch = { ...patch }
+  if (patch.connectionMode) {
+    nextPatch.tunEnabled = patch.connectionMode === 'tun'
+  } else if (typeof patch.tunEnabled === 'boolean' && patch.connectionMode === undefined) {
+    nextPatch.connectionMode = patch.tunEnabled ? 'tun' : 'proxy'
+  }
+  const next = normalizeSettings({ ...current, ...nextPatch })
   store.set('settings', next)
   return next
 }

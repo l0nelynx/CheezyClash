@@ -1,12 +1,11 @@
-import { Loader2, Power, Shield, Unplug } from 'lucide-react'
+import { Loader2, Power, Unplug } from 'lucide-react'
 import type { CoreStatus, TunStatus } from '../../../shared/types'
 
 interface Props {
   status: CoreStatus | null
   tun: TunStatus | null
   busy: boolean
-  onConnectProxy: () => void
-  onConnectTun: () => void
+  onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
 }
@@ -15,8 +14,7 @@ export function ConnectHero({
   status,
   tun,
   busy,
-  onConnectProxy,
-  onConnectTun,
+  onConnect,
   onDisconnect,
   onEnsureHelper,
 }: Props): React.JSX.Element {
@@ -33,21 +31,15 @@ export function ConnectHero({
       <p className="mt-2 max-w-md text-sm text-ink-muted">
         {running
           ? `Running in ${status?.mode?.toUpperCase()} mode. Switch servers on the Proxies page.`
-          : 'Proxy needs no admin. TUN uses the Windows helper service once for system routing.'}
+          : 'Mode is chosen in Settings → Connection. Proxy needs no admin; TUN uses the Windows helper once.'}
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {!running ? (
-          <>
-            <button type="button" className="btn-primary min-w-[140px]" disabled={busy} onClick={onConnectProxy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-              Connect proxy
-            </button>
-            <button type="button" className="btn min-w-[140px]" disabled={busy} onClick={onConnectTun}>
-              <Shield className="h-4 w-4" />
-              Connect TUN
-            </button>
-          </>
+          <button type="button" className="btn-primary min-w-[140px]" disabled={busy} onClick={onConnect}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+            Connect
+          </button>
         ) : (
           <button type="button" className="btn-danger min-w-[140px]" disabled={busy} onClick={onDisconnect}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}

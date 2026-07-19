@@ -106,8 +106,7 @@ export default function App(): React.JSX.Element {
           traffic={state.traffic}
           activeProfile={activeProfile}
           busy={busy}
-          onConnectProxy={() => run(() => window.cheezy.connect('proxy'))}
-          onConnectTun={() => run(() => window.cheezy.connect('tun'))}
+          onConnect={() => run(() => window.cheezy.connect())}
           onDisconnect={() => run(() => window.cheezy.disconnect())}
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper())}
         />
@@ -149,7 +148,11 @@ export default function App(): React.JSX.Element {
           supportsAuth={caps.supportsAuth}
           status={status}
           onPatch={(patch) => run(() => window.cheezy.setSettings(patch))}
-          onTunPrefer={(enabled) => run(() => window.cheezy.setTunEnabled(enabled))}
+          onConnectionMode={(mode) => run(() => window.cheezy.setConnectionMode(mode))}
+          onAccessControlChange={async (rules) => {
+            await window.cheezy.setAccessControlRules(rules)
+            await state.refresh()
+          }}
           onLogout={() =>
             run(async () => {
               await window.cheezy.privateLogout()
