@@ -8,6 +8,7 @@ interface Props {
   onImportUrl: (url: string) => Promise<void>
   onImportFile: () => void
   onActivate: (id: string) => void
+  onUpdate: (id: string) => void
   onDelete: (id: string) => void
 }
 

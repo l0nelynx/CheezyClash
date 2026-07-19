@@ -36,6 +36,8 @@ const api = {
     ipcRenderer.invoke('profiles:importFile'),
   setActiveProfile: (id: string): Promise<void> =>
     ipcRenderer.invoke('profiles:setActive', id),
+  updateProfile: (id: string): Promise<ProfileMeta> =>
+    ipcRenderer.invoke('profiles:update', id),
   deleteProfile: (id: string): Promise<void> =>
     ipcRenderer.invoke('profiles:delete', id),
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
@@ -78,6 +80,11 @@ const api = {
     const handler = (_: unknown, status: CoreStatus): void => cb(status)
     ipcRenderer.on('core:statusChanged', handler)
     return () => ipcRenderer.removeListener('core:statusChanged', handler)
+  },
+  onProfilesChanged: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('profiles:changed', handler)
+    return () => ipcRenderer.removeListener('profiles:changed', handler)
   },
   windowMinimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   windowMaximizeToggle: (): Promise<boolean> =>

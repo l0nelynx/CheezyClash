@@ -1,4 +1,4 @@
-import { FileUp, Link2, Trash2 } from 'lucide-react'
+import { FileUp, Link2, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProfileMeta } from '../../../shared/types'
 
@@ -9,6 +9,7 @@ interface Props {
   onImportUrl: (url: string) => Promise<void>
   onImportFile: () => void
   onActivate: (id: string) => void
+  onUpdate: (id: string) => void
   onDelete: (id: string) => void
 }
 
@@ -19,6 +20,7 @@ export function ProfileList({
   onImportUrl,
   onImportFile,
   onActivate,
+  onUpdate,
   onDelete,
 }: Props): React.JSX.Element {
   const [importUrl, setImportUrl] = useState('')
@@ -68,6 +70,7 @@ export function ProfileList({
           <ul className="divide-y divide-surface-border">
             {profiles.map((p) => {
               const active = p.id === activeId
+              const canUpdate = !!p.url
               return (
                 <li key={p.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
@@ -90,6 +93,18 @@ export function ProfileList({
                         onClick={() => onActivate(p.id)}
                       >
                         Activate
+                      </button>
+                    )}
+                    {canUpdate && (
+                      <button
+                        type="button"
+                        className="btn px-2.5 py-1.5 text-xs"
+                        disabled={busy}
+                        onClick={() => onUpdate(p.id)}
+                        aria-label={`Update ${p.name}`}
+                        title="Update subscription"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {p.id !== 'managed-primary' && (

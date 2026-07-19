@@ -28,6 +28,7 @@ import {
   importFromFileDialog,
   setActiveProfile,
   deleteProfile,
+  refreshProfile,
   ensureProfilesRoot,
   migrateOrphanDirs,
   rebuildActive,
@@ -43,6 +44,11 @@ import { PRIVATE_IPC } from '../shared/private-api'
 import { getPrivateModule, loadPrivateModule } from './private-module'
 import { syncManagedFromPrivate } from './private-sync'
 import { resolveCoreVersionLabel } from './mihomo-label'
+import {
+  rescheduleSubscriptionUpdates,
+  startSubscriptionUpdater,
+  stopSubscriptionUpdater,
+} from './subscription-updater'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -180,16 +186,26 @@ function registerIpc(): void {
   ipcMain.handle('proxies:health', (_e, group: string) => mihomoApi.healthCheck(group))
   ipcMain.handle('profiles:list', () => listProfiles())
   ipcMain.handle('profiles:active', () => getActiveProfileId())
-  ipcMain.handle('profiles:importUrl', (_e, url: string, name?: string) =>
-    importFromUrl(url, name),
-  )
+  ipcMain.handle('profiles:importUrl', async (_e, url: string, name?: string) => {
+    const meta = await importFromUrl(url, name)
+    rescheduleSubscriptionUpdates()
+    return meta
+  })
   ipcMain.handle('profiles:importFile', () => importFromFileDialog())
   ipcMain.handle('profiles:setActive', async (_e, id: string) => {
     setActiveProfile(id)
     const st = await getStatus()
     if (st.running) await connect(st.mode)
   })
-  ipcMain.handle('profiles:delete', (_e, id: string) => deleteProfile(id))
+  ipcMain.handle('profiles:delete', (_e, id: string) => {
+    deleteProfile(id)
+    rescheduleSubscriptionUpdates()
+  })
+  ipcMain.handle('profiles:update', async (_e, id: string) => {
+    const meta = await refreshProfile(id, { reloadCore: true })
+    rescheduleSubscriptionUpdates()
+    return meta
+  })
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch) => setSettings(patch))
   ipcMain.handle('tun:status', () => getTunStatus())
@@ -361,6 +377,8 @@ app.whenReady().then(() => {
     void syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
   }
 
+  startSubscriptionUpdater()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
     else mainWindow?.show()
@@ -373,6 +391,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   quitting = true
+  stopSubscriptionUpdater()
   void disconnect()
 })
 

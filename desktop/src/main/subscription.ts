@@ -168,6 +168,14 @@ export function subscriptionFromHeaders(headers: Headers): SubscriptionInfo {
   }
 }
 
+/** Android ConfigManager: profile-update-interval as hours; invalid/absent → 0. */
+export function parseUpdateIntervalHours(headers: Headers): number {
+  const raw = headers.get('profile-update-interval')
+  if (!raw) return 0
+  const n = Number.parseInt(raw.trim(), 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 /** Safe display name for already-stored profiles that may still be base64. */
 export function displayProfileName(name: string): string {
   return decodeMaybeBase64Header(name) || name

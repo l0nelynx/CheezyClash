@@ -93,6 +93,10 @@ export function useCheezyState() {
         setDownRateHistory([])
       }
     })
+    const offProfiles = window.cheezy.onProfilesChanged(() => {
+      void window.cheezy.listProfiles().then(setProfiles).catch(() => undefined)
+      void window.cheezy.getActiveProfileId().then(setActiveId).catch(() => undefined)
+    })
     const offLog = window.cheezy.onLog((line) => setLogs((prev) => [...prev.slice(-400), line]))
     const statusTick = setInterval(() => {
       void window.cheezy.getStatus().then((s) => {
@@ -117,6 +121,7 @@ export function useCheezyState() {
     }, 1000)
     return () => {
       offStatus()
+      offProfiles()
       offLog()
       clearInterval(statusTick)
       clearInterval(trafficTick)

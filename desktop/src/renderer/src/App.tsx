@@ -137,6 +137,7 @@ export default function App(): React.JSX.Element {
           }}
           onImportFile={() => run(() => window.cheezy.importProfileFile())}
           onActivate={(id) => run(() => window.cheezy.setActiveProfile(id))}
+          onUpdate={(id) => run(() => window.cheezy.updateProfile(id))}
           onDelete={(id) => run(() => window.cheezy.deleteProfile(id))}
         />
       )}

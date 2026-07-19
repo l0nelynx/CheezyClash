@@ -19,16 +19,18 @@ import type {
 } from '../shared/types'
 import { policyToClash } from '../shared/types'
 import { profileDir, profilesRoot } from './paths'
-import { getSettings, store } from './store'
+import { getSettings, getSelections, store } from './store'
 import { log } from './logger'
 import {
   decodeMaybeBase64Header,
   displayProfileName,
   normalizeSubscriptionBody,
   parseContentDispositionFilename,
+  parseUpdateIntervalHours,
   subscriptionFromHeaders,
   subscriptionHeaders,
 } from './subscription'
+import { mihomoApi } from './mihomo-api'
 
 const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
@@ -212,13 +214,14 @@ export async function importFromUrl(url: string, name?: string): Promise<Profile
   const raw = await res.text()
   const text = normalizeSubscriptionBody(raw)
   const subscription = subscriptionFromHeaders(res.headers)
+  const updateIntervalHours = parseUpdateIntervalHours(res.headers)
   const title =
     name ||
     parseContentDispositionFilename(res.headers.get('content-disposition')) ||
     subscription.title ||
     decodeMaybeBase64Header(res.headers.get('profile-title')) ||
     decodeURIComponent(url.split('/').pop() || 'profile')
-  return createProfileFromYaml(text, title, url, subscription)
+  return createProfileFromYaml(text, title, url, subscription, updateIntervalHours)
 }
 
 export async function importFromFileDialog(): Promise<ProfileMeta | null> {
@@ -265,6 +268,7 @@ export async function upsertManagedProfile(
   parseClashMapping(text)
 
   const fromHeaders = subscriptionFromHeaders(res.headers)
+  const updateIntervalHours = parseUpdateIntervalHours(res.headers)
   const merged: SubscriptionInfo = {
     ...fromHeaders,
     ...subscription,
@@ -295,6 +299,7 @@ export async function upsertManagedProfile(
     createdAt: existing?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     subscription: merged,
+    updateIntervalHours,
   }
   const next = existing ? list.map((p) => (p.id === id ? meta : p)) : [...list, meta]
   store.set('profiles', next)
@@ -308,6 +313,7 @@ function createProfileFromYaml(
   name: string,
   url?: string,
   subscription?: SubscriptionInfo,
+  updateIntervalHours?: number,
 ): ProfileMeta {
   // Validate Clash mapping before writing
   parseClashMapping(text)
@@ -322,6 +328,7 @@ function createProfileFromYaml(
     createdAt: Date.now(),
     updatedAt: Date.now(),
     subscription,
+    updateIntervalHours: updateIntervalHours && updateIntervalHours > 0 ? updateIntervalHours : 0,
   }
   const list = store.get('profiles')
   list.push(meta)
@@ -330,6 +337,77 @@ function createProfileFromYaml(
     store.set('activeProfileId', id)
   }
   rebuildConfig(id)
+  return { ...meta, name: displayProfileName(meta.name) }
+}
+
+/**
+ * Re-fetch subscription URL in place.
+ * When reloadCore is true and this profile is active + running, soft-reload mihomo.
+ * Background auto-update should pass reloadCore: false.
+ */
+export async function refreshProfile(
+  id: string,
+  opts: { reloadCore: boolean },
+): Promise<ProfileMeta> {
+  const list = store.get('profiles')
+  const existing = list.find((p) => p.id === id)
+  if (!existing) throw new Error('unknown profile')
+  const url = existing.url
+  if (!url || !/^https:\/\//i.test(url)) {
+    throw new Error('Profile has no https subscription URL')
+  }
+
+  const headers = subscriptionHeaders()
+  log(`refreshing profile ${id} from ${url} (reloadCore=${opts.reloadCore})`)
+  const res = await fetch(url, { headers, redirect: 'follow' })
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '')
+    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
+  }
+  if (!/^https:/i.test(res.url)) {
+    throw new Error(`Redirect left HTTPS (final URL scheme: ${res.url.split(':')[0]})`)
+  }
+  const raw = await res.text()
+  const text = normalizeSubscriptionBody(raw)
+  parseClashMapping(text)
+
+  const subscription = subscriptionFromHeaders(res.headers)
+  const updateIntervalHours = parseUpdateIntervalHours(res.headers)
+  const title =
+    parseContentDispositionFilename(res.headers.get('content-disposition')) ||
+    subscription.title ||
+    existing.name
+
+  const dir = profileDir(id)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, BASE), text, 'utf8')
+
+  const meta: ProfileMeta = {
+    ...existing,
+    name: displayProfileName(title),
+    url,
+    updatedAt: Date.now(),
+    subscription,
+    updateIntervalHours,
+  }
+  store.set(
+    'profiles',
+    list.map((p) => (p.id === id ? meta : p)),
+  )
+  const configPath = rebuildConfig(id)
+
+  if (opts.reloadCore && getActiveProfileId() === id) {
+    // Dynamic import avoids profiles ↔ core-manager cycle at module load.
+    const { getStatus } = await import('./core-manager')
+    const st = await getStatus()
+    if (st.running) {
+      mihomoApi.ensureSecretFromStore()
+      await mihomoApi.putConfigs(configPath)
+      await mihomoApi.applySelections(getSelections())
+      await mihomoApi.closeAllConnections()
+    }
+  }
+
   return { ...meta, name: displayProfileName(meta.name) }
 }
 

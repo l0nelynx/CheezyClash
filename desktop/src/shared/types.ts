@@ -26,6 +26,8 @@ export interface ProfileMeta {
   updatedAt: number
   createdAt: number
   subscription?: SubscriptionInfo
+  /** From profile-update-interval header (hours). 0 / omit = no auto-update. */
+  updateIntervalHours?: number
 }
 
 export interface SubscriptionInfo {

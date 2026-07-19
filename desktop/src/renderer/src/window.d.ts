@@ -27,6 +27,7 @@ export interface CheezyApi {
   importProfileUrl: (url: string, name?: string) => Promise<ProfileMeta>
   importProfileFile: () => Promise<ProfileMeta | null>
   setActiveProfile: (id: string) => Promise<void>
+  updateProfile: (id: string) => Promise<ProfileMeta>
   deleteProfile: (id: string) => Promise<void>
   getSettings: () => Promise<AppSettings>
   setSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>
@@ -52,6 +53,7 @@ export interface CheezyApi {
   openExternal: (url: string) => Promise<void>
   onLog: (cb: (line: string) => void) => () => void
   onStatus: (cb: (status: CoreStatus) => void) => () => void
+  onProfilesChanged: (cb: () => void) => () => void
   windowMinimize: () => Promise<void>
   windowMaximizeToggle: () => Promise<boolean>
   windowClose: () => Promise<void>
