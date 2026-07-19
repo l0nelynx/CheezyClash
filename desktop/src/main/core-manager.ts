@@ -11,6 +11,8 @@ import {
   corePresent,
   wintunPath,
   bundledCoreDir,
+  mihomoSafePaths,
+  profilesRoot,
 } from './paths'
 import { getOrCreateSecret, getSettings, setSettings, getSelections } from './store'
 import {
@@ -100,6 +102,7 @@ function ensureWintun(): void {
 async function spawnCoreDirect(configPath: string): Promise<void> {
   const home = coreHome()
   mkdirSync(home, { recursive: true })
+  mkdirSync(profilesRoot(), { recursive: true })
   ensureWintun()
   const bin = coreBinaryPath()
   if (!existsSync(bin)) throw new Error(`mihomo binary missing: ${bin}. Run npm run fetch-core.`)
@@ -114,7 +117,7 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
       cwd: bundledCoreDir(),
       env: {
         ...process.env,
-        SAFE_PATHS: home,
+        SAFE_PATHS: mihomoSafePaths(),
       },
       windowsHide: true,
     },
@@ -132,13 +135,14 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
 async function spawnCoreElevated(configPath: string): Promise<void> {
   const home = coreHome()
   mkdirSync(home, { recursive: true })
+  mkdirSync(profilesRoot(), { recursive: true })
   ensureWintun()
   const secret = getOrCreateSecret()
   mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
   // Helper starts bare binary with one arg — pass controller dial via env in helper;
   // we start with -d/-f by encoding in arg string for our Go helper.
   const arg = `-d "${home}" -f "${configPath}"`
-  const ok = await startCoreByHelper(arg, home)
+  const ok = await startCoreByHelper(arg, home, mihomoSafePaths())
   if (!ok) throw new Error('helper failed to start core')
   await mihomoApi.waitReady()
 }

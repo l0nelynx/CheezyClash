@@ -19,6 +19,15 @@ export function coreHome(): string {
   return join(userDataRoot(), 'home')
 }
 
+/**
+ * Paths mihomo may read via PUT /configs?path=… (SAFE_PATHS env).
+ * Includes profile configs so hot-reload by path works after reconnect.
+ */
+export function mihomoSafePaths(): string {
+  const sep = platform() === 'win32' ? ';' : ':'
+  return [coreHome(), profilesRoot()].join(sep)
+}
+
 /** Directory containing bundled mihomo (+ wintun on Windows). */
 export function bundledCoreDir(): string {
   if (app.isPackaged) {

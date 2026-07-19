@@ -113,7 +113,11 @@ async function windowsServiceDir(): Promise<string | null> {
   }
 }
 
-export async function startCoreByHelper(arg: string, homeDir: string): Promise<boolean> {
+export async function startCoreByHelper(
+  arg: string,
+  homeDir: string,
+  safePaths?: string,
+): Promise<boolean> {
   await syncHelperAllowlist()
   const tryStart = async (): Promise<{ ok: boolean; detail: string }> => {
     try {
@@ -124,6 +128,7 @@ export async function startCoreByHelper(arg: string, homeDir: string): Promise<b
           path: coreBinaryPath(),
           arg,
           home_dir: homeDir,
+          safe_paths: safePaths || homeDir,
         }),
         signal: AbortSignal.timeout(15_000),
       })

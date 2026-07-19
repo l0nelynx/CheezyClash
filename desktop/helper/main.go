@@ -24,9 +24,10 @@ const identity = "CheezyHelper/1"
 var TOKEN = "dev-allow-any"
 
 type StartParams struct {
-	Path    string  `json:"path"`
-	Arg     string  `json:"arg"`
-	HomeDir *string `json:"home_dir"`
+	Path      string  `json:"path"`
+	Arg       string  `json:"arg"`
+	HomeDir   *string `json:"home_dir"`
+	SafePaths *string `json:"safe_paths"`
 }
 
 type ReplaceParams struct {
@@ -158,8 +159,14 @@ func handleStart(w http.ResponseWriter, r *http.Request) {
 	// Arg is a full argument string from Electron; split naively for -d/-f.
 	args := splitArgs(p.Arg)
 	cmd := exec.Command(p.Path, args...)
-	if p.HomeDir != nil {
-		cmd.Env = append(os.Environ(), "SAFE_PATHS="+*p.HomeDir)
+	safe := ""
+	if p.SafePaths != nil && *p.SafePaths != "" {
+		safe = *p.SafePaths
+	} else if p.HomeDir != nil {
+		safe = *p.HomeDir
+	}
+	if safe != "" {
+		cmd.Env = append(os.Environ(), "SAFE_PATHS="+safe)
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

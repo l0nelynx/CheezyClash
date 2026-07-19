@@ -1,5 +1,6 @@
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../shared/types'
 import type { ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
+import { readFileSync } from 'fs'
 import { log } from './logger'
 import { getOrCreateSecret } from './store'
 
@@ -78,10 +79,12 @@ export class MihomoApi {
     throw new Error('mihomo controller not ready')
   }
 
-  async putConfigs(path: string): Promise<void> {
+  async putConfigs(configPath: string): Promise<void> {
     this.ensureSecretFromStore()
-    // force reload config from path (rules, groups, etc.)
-    await this.request('PUT', '/configs?force=true', { path })
+    // Prefer payload over path: mihomo only allows path reloads under SAFE_PATHS
+    // (-d home). Our config.yaml lives in profiles/<id>/, outside that allowlist.
+    const payload = readFileSync(configPath, 'utf8')
+    await this.request('PUT', '/configs?force=true', { payload })
   }
 
   async patchConfigs(patch: Record<string, unknown>): Promise<void> {
