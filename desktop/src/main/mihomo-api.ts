@@ -79,12 +79,24 @@ export class MihomoApi {
   }
 
   async putConfigs(path: string): Promise<void> {
-    // force reload config from path
+    this.ensureSecretFromStore()
+    // force reload config from path (rules, groups, etc.)
     await this.request('PUT', '/configs?force=true', { path })
   }
 
   async patchConfigs(patch: Record<string, unknown>): Promise<void> {
+    this.ensureSecretFromStore()
     await this.request('PATCH', '/configs', patch)
+  }
+
+  /** Close all live connections so new proxy/rules take effect immediately. */
+  async closeAllConnections(): Promise<void> {
+    this.ensureSecretFromStore()
+    try {
+      await this.request('DELETE', '/connections')
+    } catch (e) {
+      log(`closeAllConnections failed: ${e}`, 'warn')
+    }
   }
 
   async getProxies(): Promise<
@@ -152,12 +164,22 @@ export class MihomoApi {
   }
 
   async selectProxy(group: string, name: string): Promise<boolean> {
-    try {
-      await this.request('PUT', `/proxies/${encodeURIComponent(group)}`, { name })
-      return true
-    } catch (e) {
-      log(`selectProxy failed: ${e}`, 'warn')
-      return false
+    this.ensureSecretFromStore()
+    await this.request('PUT', `/proxies/${encodeURIComponent(group)}`, { name })
+    return true
+  }
+
+  /** Re-apply stored selector choices after a full config reload. */
+  async applySelections(selections: Record<string, string>): Promise<void> {
+    const entries = Object.entries(selections)
+    if (entries.length === 0) return
+    this.ensureSecretFromStore()
+    for (const [group, name] of entries) {
+      try {
+        await this.request('PUT', `/proxies/${encodeURIComponent(group)}`, { name })
+      } catch (e) {
+        log(`applySelections ${group}→${name} failed: ${e}`, 'warn')
+      }
     }
   }
 

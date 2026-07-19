@@ -73,6 +73,15 @@ export function getOrCreateSecret(): string {
   return s
 }
 
+export function getSelections(): Record<string, string> {
+  return { ...store.get('selections') }
+}
+
+export function setSelection(group: string, proxy: string): void {
+  const next = { ...store.get('selections'), [group]: proxy }
+  store.set('selections', next)
+}
+
 function cryptoRandom(len: number): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let out = ''

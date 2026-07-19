@@ -12,7 +12,7 @@ import {
   wintunPath,
   bundledCoreDir,
 } from './paths'
-import { getOrCreateSecret, getSettings, setSettings } from './store'
+import { getOrCreateSecret, getSettings, setSettings, getSelections } from './store'
 import {
   activeConfigPath,
   rebuildActive,
@@ -205,6 +205,7 @@ export async function connect(requested?: ConnectionMode): Promise<CoreStatus> {
       await spawnCoreDirect(configPath)
     }
     await mihomoApi.putConfigs(configPath).catch(() => undefined)
+    await mihomoApi.applySelections(getSelections())
 
     if (effectiveMode === 'proxy' && settings.systemProxy) {
       await setSystemProxy(true, settings.mixedPort)

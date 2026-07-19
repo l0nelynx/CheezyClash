@@ -34,7 +34,7 @@ import {
   getActiveProxyGroupNames,
   validateProcessNameRule,
 } from './profiles'
-import { getSettings, setSettings, getOrCreateSecret } from './store'
+import { getSettings, setSettings, getOrCreateSecret, getSelections, setSelection } from './store'
 import { listRunningProcesses } from './processes'
 import type { AccessControlRule, ConnectionMode } from '../shared/types'
 import { getLogs, log } from './logger'
@@ -170,9 +170,13 @@ function registerIpc(): void {
   ipcMain.handle('core:disconnect', () => disconnect())
   ipcMain.handle('core:traffic', () => mihomoApi.getTraffic())
   ipcMain.handle('proxies:groups', () => mihomoApi.getGroups())
-  ipcMain.handle('proxies:select', (_e, group: string, name: string) =>
-    mihomoApi.selectProxy(group, name),
-  )
+  ipcMain.handle('proxies:select', async (_e, group: string, name: string) => {
+    await mihomoApi.selectProxy(group, name)
+    setSelection(group, name)
+    // Existing flows keep the old outbound until closed — flush so TUN/proxy pick up the new node.
+    await mihomoApi.closeAllConnections()
+    return true
+  })
   ipcMain.handle('proxies:health', (_e, group: string) => mihomoApi.healthCheck(group))
   ipcMain.handle('profiles:list', () => listProfiles())
   ipcMain.handle('profiles:active', () => getActiveProfileId())
@@ -205,11 +209,15 @@ function registerIpc(): void {
     }
     const settings = setSettings({ accessControlRules: rules })
     const path = rebuildActive(settings)
+    if (!path) return settings
     const st = await getStatus()
-    if (st.running && path) {
-      await mihomoApi.putConfigs(path).catch((e) => {
-        log(`accessControl reload failed: ${e}`, 'warn')
-      })
+    if (st.running) {
+      mihomoApi.ensureSecretFromStore()
+      // Soft apply: force-reload YAML (rules) without restarting the core process.
+      await mihomoApi.putConfigs(path)
+      // Reload resets selectors to profile defaults — restore user choices.
+      await mihomoApi.applySelections(getSelections())
+      await mihomoApi.closeAllConnections()
     }
     return settings
   })
