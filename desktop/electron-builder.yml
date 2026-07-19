@@ -31,9 +31,8 @@ extraResources:
       - '**/*'
 win:
   icon: build/icon.ico
-  # Skip code signing only; afterPack still applies icon + ProductName via rcedit
-  # (avoids winCodeSign symlink issues that signAndEditExecutable:false used to paper over)
-  signExecutable: false
+  # Disable Authenticode signing; afterPack still applies icon + ProductName via rcedit
+  sign: false
   target:
     - nsis
     - zip
