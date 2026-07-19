@@ -1,7 +1,8 @@
 /**
- * Rasterize OS logos (exe / installer / tray) from logo-os.svg.
+ * Rasterize OS logos (exe / installer / tray) from logo-os.svg,
+ * and colored logo-flat.png from logo.svg.
  * Crops transparent padding so the mark fills most of each PNG.
- * Does NOT touch in-app assets/logo.svg (colored UI mark).
+ * Does NOT touch in-app assets/logo.svg (UI mark stays adaptive-padded).
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { dirname, join } from 'path'
@@ -122,8 +123,13 @@ function pngToIco(pngBuffers) {
 }
 
 const logoOs = join(resourcesDir, 'logo-os.svg')
+const logoFlat = join(resourcesDir, 'logo.svg')
 if (!existsSync(logoOs)) {
   console.error('missing resources/logo-os.svg')
+  process.exit(1)
+}
+if (!existsSync(logoFlat)) {
+  console.error('missing resources/logo.svg')
   process.exit(1)
 }
 
@@ -133,10 +139,12 @@ const s48 = renderSvgTight(logoOs, 48)
 const s64 = renderSvgTight(logoOs, 64)
 const s256 = renderSvgTight(logoOs, 256)
 const s512 = renderSvgTight(logoOs, 512)
+const flat512 = renderSvgTight(logoFlat, 512)
 
 writeFileSync(join(buildDir, 'icon.png'), s512)
 writeFileSync(join(buildDir, 'icon-256.png'), s256)
 writeFileSync(join(buildDir, 'icon.ico'), pngToIco([s16, s32, s48, s64, s256]))
+writeFileSync(join(buildDir, 'logo-flat.png'), flat512)
 writeFileSync(join(resourcesDir, 'tray.png'), s64)
 
 // Legacy tray rasters under build/ (unused; tray ships from resources/).
@@ -152,5 +160,5 @@ for (const stale of ['tray-16.png', 'tray-128.png', 'tray.png']) {
 }
 
 console.log(
-  'icons: OS black mark → build/icon.ico + resources/tray.png (64px, tight crop ~4% pad); in-app logo untouched',
+  'icons: OS → build/icon.ico + resources/tray.png; colored → build/logo-flat.png (tight crop ~4% pad)',
 )
