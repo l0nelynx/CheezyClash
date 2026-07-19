@@ -1,7 +1,7 @@
 {
   "name": "cheezyclash-desktop",
   "productName": "CheezyClash",
-  "version": "1.5.26",
+  "version": "1.5.27",
   "description": "CheezyClash desktop client for Mihomo (Clash.Meta)",
   "main": "./out/main/index.js",
   "author": "CheezyClash",
