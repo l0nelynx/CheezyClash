@@ -91,6 +91,9 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
 
   // Always bind controller to loopback for the desktop UI.
   doc['external-controller'] = '127.0.0.1:9090'
+  if (!doc['external-ui-url']) {
+    doc['external-ui-url'] = 'https://metacubex.github.io/metacubexd/'
+  }
   const secret = store.get('controllerSecret')
   if (secret) doc.secret = secret
 
@@ -327,9 +330,14 @@ export async function upsertManagedProfile(
     updateIntervalHours,
   }
   const next = existing ? list.map((p) => (p.id === id ? meta : p)) : [...list, meta]
+  const currentActive = getActiveProfileId()
   store.set('profiles', next)
-  store.set('activeProfileId', id)
-  rebuildConfig(id)
+  if (!currentActive || currentActive === id) {
+    store.set('activeProfileId', id)
+    rebuildConfig(id)
+  } else {
+    rebuildConfig(id)
+  }
   return { ...meta, name: displayProfileName(meta.name) }
 }
 
@@ -442,17 +450,21 @@ export function setActiveProfile(id: string): void {
   rebuildConfig(id)
 }
 
-export function deleteProfile(id: string): void {
+export function deleteProfile(id: string): boolean {
   if (id === MANAGED_PROFILE_ID) {
     throw new Error('Cannot delete the managed CheezyVPN profile')
   }
+  const wasActive = getActiveProfileId() === id
   const list = store.get('profiles').filter((p) => p.id !== id)
   store.set('profiles', list)
-  if (getActiveProfileId() === id) {
+  if (wasActive) {
     store.set('activeProfileId', list[0]?.id ?? null)
+    const nextActive = getActiveProfileId()
+    if (nextActive) rebuildConfig(nextActive)
   }
   const dir = profileDir(id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+  return wasActive
 }
 
 export function rebuildActive(settings: AppSettings = getSettings()): string | null {
