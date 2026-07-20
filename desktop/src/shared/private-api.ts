@@ -47,4 +47,9 @@ export interface PrivateModule {
    * POST /android/auth/app-login/exchange.
    */
   exchangeAppLogin?(token: string): Promise<PrivateAccountSession>
+  /**
+   * If the user is not signed in, return a portal `/claim#url=` handoff URL for
+   * `cheezy://add/...` so account binding happens in the browser. Null = import only.
+   */
+  claimHandoffUrl?(subscriptionUrl: string): string | null
 }

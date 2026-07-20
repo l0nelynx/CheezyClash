@@ -97,6 +97,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _needsAuth = MutableStateFlow(false)
     val needsAuth: StateFlow<Boolean> = _needsAuth.asStateFlow()
+    /**
+     * Set when a claim/login AuthActivity is started via [startActivity] (not the
+     * auth-gate Activity Result launcher). Cleared on Main resume after checking
+     * whether auth/config appeared.
+     */
+    private var _pendingAuthReturn = false
 
     // Tab data
     private val _proxyGroups = MutableStateFlow<List<Pair<String, List<ProxyUiData>>>?>(null)
@@ -440,6 +446,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (claim != null) {
                     // ClaimWizard is AuthActivity with extras — do not also open plain login.
                     _needsAuth.value = false
+                    _pendingAuthReturn = true
                     _effects.tryEmit(MainEffect.LaunchIntent(claim))
                 } else {
                     openUrlDialog(prefill = link.url)
@@ -449,6 +456,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val intent = AppDeps.launchers.loginDeepLinkIntent(context, link.payload)
                 if (intent != null) {
                     _needsAuth.value = false
+                    _pendingAuthReturn = true
                     _effects.tryEmit(MainEffect.LaunchIntent(intent))
                 }
                 // else: unsupported (open / backend not ready) — silently ignore.
@@ -489,6 +497,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             syncSubscriptionState()
             AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
                 .onFailure { Log.e("Auth", "Failed to sync sub", it) }
+        }
+    }
+
+    /** True when cancelling AuthActivity should close the app (nothing usable yet). */
+    fun shouldExitOnAuthCancel(): Boolean {
+        val isAuthed = AppDeps.accountProvider.state.value is AccountState.Authenticated
+        return !isAuthed && !ConfigManager.hasConfig(context)
+    }
+
+    /**
+     * After a claim/login AuthActivity started with startActivity returns to Main,
+     * refresh account state if the user signed in / imported a config; otherwise
+     * re-open the auth gate when the device still has nothing usable.
+     */
+    fun onMainResumed() {
+        if (!_pendingAuthReturn) return
+        _pendingAuthReturn = false
+        viewModelScope.launch {
+            AppDeps.accountProvider.bootstrap(context)
+            val isAuthed = AppDeps.accountProvider.state.value is AccountState.Authenticated
+            val hasConfig = ConfigManager.hasConfig(context)
+            if (isAuthed || hasConfig) {
+                onAuthCompleted()
+            } else {
+                _needsAuth.value = true
+            }
         }
     }
 

@@ -490,6 +490,15 @@ async function handleDeepLink(raw: string): Promise<void> {
       mainWindow?.show()
       mainWindow?.focus()
       mainWindow?.webContents.send('deeplink:imported', { url: sub })
+      // Proprietary: if there is no session yet, open the web claim page so the
+      // user can register/login and hand back via cheezy://login/<token>.
+      const mod = getPrivateModule()
+      if (typeof mod.claimHandoffUrl === 'function') {
+        const handoff = mod.claimHandoffUrl(sub)
+        if (handoff) {
+          await shell.openExternal(handoff)
+        }
+      }
     } catch (e) {
       log(`deeplink add failed: ${e}`, 'warn')
       dialog.showErrorBox('Import failed', e instanceof Error ? e.message : String(e))

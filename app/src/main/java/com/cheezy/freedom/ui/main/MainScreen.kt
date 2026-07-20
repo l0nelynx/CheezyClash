@@ -58,6 +58,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,6 +71,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -155,9 +159,22 @@ fun MainScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.onAuthCompleted()
-        } else {
+        } else if (viewModel.shouldExitOnAuthCancel()) {
+            // Auth gate with nothing usable on device — leave the app.
             activity?.finish()
         }
+        // else: cancelled claim/login while a config or session exists — stay on Main.
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onMainResumed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val subscriptionLauncher = rememberLauncherForActivityResult(
@@ -237,6 +254,9 @@ fun MainScreen(
                     viewModel.dismissUrlDialog()
                 }
                 is MainEffect.LaunchIntent -> {
+                    // AuthActivity is singleTop + CLEAR_TOP: startActivity reuses a
+                    // plain-login instance via onNewIntent (same Activity Result
+                    // contract) instead of stacking a second AuthActivity.
                     runCatching { context.startActivity(effect.intent) }
                 }
                 is MainEffect.OpenUrl -> {
