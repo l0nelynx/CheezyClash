@@ -41,4 +41,10 @@ export interface PrivateModule {
   fetchSubscription(): Promise<PrivateSubscriptionInfo | null>
   /** Refresh /me and return subscription snapshot (may update tokens). */
   syncSubscription(): Promise<PrivateSubscriptionInfo | null>
+  /**
+   * Exchange a one-time `cheezy://login/<token>` for a session.
+   * Open builds omit this (login deeplinks are ignored). Proprietary implements
+   * POST /android/auth/app-login/exchange.
+   */
+  exchangeAppLogin?(token: string): Promise<PrivateAccountSession>
 }

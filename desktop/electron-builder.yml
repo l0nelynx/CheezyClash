@@ -2,6 +2,10 @@ appId: com.cheezy.freedom.desktop
 productName: CheezyClash
 executableName: CheezyClash
 copyright: Copyright © CheezyClash
+protocols:
+  - name: Cheezy
+    schemes:
+      - cheezy
 directories:
   output: release
   buildResources: build

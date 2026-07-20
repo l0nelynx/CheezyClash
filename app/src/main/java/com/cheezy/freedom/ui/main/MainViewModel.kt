@@ -433,7 +433,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Routes an incoming deep link (parsed in MainScreen). */
     fun handleDeepLink(link: DeepLink) {
         when (link) {
-            is DeepLink.Add -> openUrlDialog(prefill = link.url)
+            is DeepLink.Add -> {
+                val claim = AppDeps.launchers.claimDeepLinkIntent(context, link.url)
+                if (claim != null) {
+                    _effects.tryEmit(MainEffect.LaunchIntent(claim))
+                } else {
+                    openUrlDialog(prefill = link.url)
+                }
+            }
             is DeepLink.Login -> {
                 val intent = AppDeps.launchers.loginDeepLinkIntent(context, link.payload)
                 if (intent != null) {

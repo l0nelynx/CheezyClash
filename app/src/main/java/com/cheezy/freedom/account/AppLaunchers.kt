@@ -19,6 +19,14 @@ interface AppLaunchers {
     fun loginDeepLinkIntent(context: Context, payload: String): Intent? = null
 
     /**
+     * Handles a `cheezy://add/<subscription_url>` deep link when the flavor
+     * wants to run an account-claim flow instead of a plain profile import.
+     * Returns an Intent to launch, or null (open, default) — in which case
+     * MainViewModel falls back to the URL-import dialog as before.
+     */
+    fun claimDeepLinkIntent(context: Context, url: String): Intent? = null
+
+    /**
      * Composable-слот для диалога переноса подписки (Telegram/email-URL).
      * Open-вариант возвращает null — диалога нет, кнопки тоже нет (см. capabilities).
      * Proprietary возвращает обёртку над TransferSubscriptionDialog.

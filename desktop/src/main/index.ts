@@ -8,7 +8,7 @@ import {
   shell,
   dialog,
 } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, resolve as resolvePath } from 'path'
 import { existsSync } from 'fs'
 import {
   connect,
@@ -58,6 +58,8 @@ let tray: Tray | null = null
 let quitting = false
 let quitCleanupDone = false
 let trayProductName = 'CheezyClash'
+/** Queued until the window is ready (cold-start deeplink). */
+let pendingDeepLink: string | null = null
 
 function resolveAsset(...parts: string[]): string {
   if (app.isPackaged) {
@@ -450,61 +452,172 @@ function registerIpc(): void {
   })
 }
 
-app.whenReady().then(() => {
-  // Hide File/Edit/View application menu
-  Menu.setApplicationMenu(null)
+function percentDecode(s: string): string {
+  if (!s.includes('%')) return s
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
 
-  const priv = loadPrivateModule()
-  const caps = priv.capabilities()
-  app.setName(caps.productName)
-  if (process.platform === 'win32') {
-    app.setAppUserModelId(
-      caps.supportsAuth ? 'com.cheezy.vpn.desktop' : 'com.cheezy.freedom.desktop',
-    )
+/** Extract a cheezy:// URL from process argv (Windows/Linux second-instance / cold start). */
+function findDeepLinkInArgv(argv: string[]): string | null {
+  for (const arg of argv) {
+    if (typeof arg === 'string' && arg.toLowerCase().startsWith('cheezy://')) return arg
+  }
+  return null
+}
+
+/**
+ * Handle `cheezy://add/<subscription_url>` and `cheezy://login/<token>`.
+ * Mirrors Android DeepLink.kt: raw https after add/ is fine; %XX is decoded when present.
+ */
+async function handleDeepLink(raw: string): Promise<void> {
+  const url = raw.trim()
+  log(`deeplink: ${url.slice(0, 120)}`)
+
+  if (url.toLowerCase().startsWith('cheezy://add/')) {
+    const sub = percentDecode(url.slice('cheezy://add/'.length)).trim()
+    if (!sub.toLowerCase().startsWith('https://')) {
+      log(`deeplink add: rejected non-https payload`, 'warn')
+      return
+    }
+    try {
+      await importFromUrl(sub)
+      rescheduleSubscriptionUpdates()
+      notifyProfilesChanged()
+      mainWindow?.show()
+      mainWindow?.focus()
+      mainWindow?.webContents.send('deeplink:imported', { url: sub })
+    } catch (e) {
+      log(`deeplink add failed: ${e}`, 'warn')
+      dialog.showErrorBox('Import failed', e instanceof Error ? e.message : String(e))
+    }
+    return
   }
 
-  getOrCreateSecret()
-  ensureProfilesRoot()
-  migrateOrphanDirs()
-  mkdirSilent(coreHome())
-
-  if (!corePresent()) {
-    log('mihomo binary not found — run npm run fetch-core', 'warn')
+  if (url.toLowerCase().startsWith('cheezy://login/')) {
+    const token = percentDecode(url.slice('cheezy://login/'.length)).trim()
+    if (!token) return
+    const mod = getPrivateModule()
+    if (typeof mod.exchangeAppLogin !== 'function') {
+      // Open build: login handoff is proprietary-only.
+      log('deeplink login: ignored (no private exchangeAppLogin)', 'warn')
+      return
+    }
+    try {
+      await mod.exchangeAppLogin(token)
+      await syncManagedFromPrivate().catch((err) => log(String(err), 'warn'))
+      notifyProfilesChanged()
+      mainWindow?.show()
+      mainWindow?.focus()
+      mainWindow?.webContents.send('deeplink:loggedIn')
+    } catch (e) {
+      log(`deeplink login failed: ${e}`, 'warn')
+      dialog.showErrorBox('Sign-in failed', e instanceof Error ? e.message : String(e))
+    }
   }
+}
 
-  registerIpc()
-  createWindow(caps.productName)
-  createTray(caps.productName)
-
-  // Best-effort subscription refresh when already logged in
-  if (caps.supportsAuth) {
-    void syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
+function enqueueOrHandleDeepLink(raw: string): void {
+  if (!mainWindow) {
+    pendingDeepLink = raw
+    return
   }
+  void handleDeepLink(raw)
+}
 
-  startSubscriptionUpdater()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
-    else mainWindow?.show()
+// Single-instance + protocol client — must run before ready.
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const link = findDeepLinkInArgv(argv)
+    if (link) enqueueOrHandleDeepLink(link)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
-})
 
-app.on('window-all-closed', () => {
-  /* keep tray alive on Windows/Linux */
-})
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('cheezy', process.execPath, [resolvePath(process.argv[1])])
+    }
+  } else {
+    app.setAsDefaultProtocolClient('cheezy')
+  }
 
-app.on('before-quit', (e) => {
-  if (quitCleanupDone) return
-  e.preventDefault()
-  quitting = true
-  stopSubscriptionUpdater()
-  void disconnect()
-    .catch(() => undefined)
-    .finally(() => {
-      quitCleanupDone = true
-      app.quit()
+  // macOS cold-start / open-url while running
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    enqueueOrHandleDeepLink(url)
+  })
+
+  app.whenReady().then(() => {
+    // Hide File/Edit/View application menu
+    Menu.setApplicationMenu(null)
+
+    const priv = loadPrivateModule()
+    const caps = priv.capabilities()
+    app.setName(caps.productName)
+    if (process.platform === 'win32') {
+      app.setAppUserModelId(
+        caps.supportsAuth ? 'com.cheezy.vpn.desktop' : 'com.cheezy.freedom.desktop',
+      )
+    }
+
+    getOrCreateSecret()
+    ensureProfilesRoot()
+    migrateOrphanDirs()
+    mkdirSilent(coreHome())
+
+    if (!corePresent()) {
+      log('mihomo binary not found — run npm run fetch-core', 'warn')
+    }
+
+    registerIpc()
+    createWindow(caps.productName)
+    createTray(caps.productName)
+
+    // Cold-start deeplink (Windows/Linux put it on argv; macOS may have queued open-url).
+    const coldLink = pendingDeepLink ?? findDeepLinkInArgv(process.argv)
+    pendingDeepLink = null
+    if (coldLink) void handleDeepLink(coldLink)
+
+    // Best-effort subscription refresh when already logged in
+    if (caps.supportsAuth) {
+      void syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
+    }
+
+    startSubscriptionUpdater()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
+      else mainWindow?.show()
     })
-})
+  })
+
+  app.on('window-all-closed', () => {
+    /* keep tray alive on Windows/Linux */
+  })
+
+  app.on('before-quit', (e) => {
+    if (quitCleanupDone) return
+    e.preventDefault()
+    quitting = true
+    stopSubscriptionUpdater()
+    void disconnect()
+      .catch(() => undefined)
+      .finally(() => {
+        quitCleanupDone = true
+        app.quit()
+      })
+  })
+}
 
 function mkdirSilent(p: string): void {
   try {
