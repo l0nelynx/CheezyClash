@@ -50,10 +50,14 @@ import {
   startSubscriptionUpdater,
   stopSubscriptionUpdater,
 } from './subscription-updater'
+import { notifyProfilesChanged } from './profile-events'
+import { setSystemProxy } from './system-proxy'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+let quitCleanupDone = false
+let trayProductName = 'CheezyClash'
 
 function resolveAsset(...parts: string[]): string {
   if (app.isPackaged) {
@@ -135,11 +139,33 @@ function createWindow(productName: string): void {
 }
 
 function createTray(productName: string): void {
+  trayProductName = productName
   tray = new Tray(loadTrayImage())
-  tray.setToolTip(productName)
+  tray.on('double-click', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
+  void refreshTrayMenu()
+}
+
+async function refreshTrayMenu(): Promise<void> {
+  if (!tray) return
+  let running = false
+  let modeLabel = ''
+  try {
+    const st = await getStatus()
+    running = st.running
+    modeLabel = st.mode === 'tun' ? 'TUN' : 'Proxy'
+    tray.setToolTip(
+      running ? `${trayProductName} · Connected (${modeLabel})` : `${trayProductName} · Disconnected`,
+    )
+  } catch {
+    tray.setToolTip(trayProductName)
+  }
+
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: `Show ${productName}`,
+      label: `Show ${trayProductName}`,
       click: () => {
         mainWindow?.show()
         mainWindow?.focus()
@@ -147,34 +173,57 @@ function createTray(productName: string): void {
     },
     { type: 'separator' },
     {
-      label: 'Connect',
-      click: () => void connect().catch((e) => log(String(e), 'error')),
+      label: running ? 'Connected' : 'Connect',
+      enabled: !running,
+      click: () => {
+        void connect()
+          .then(() => refreshTrayMenu())
+          .catch((e) => {
+            dialog.showErrorBox('Connect failed', String(e))
+            void refreshTrayMenu()
+          })
+      },
     },
     {
       label: 'Disconnect',
-      click: () => void disconnect().catch((e) => log(String(e), 'error')),
+      enabled: running,
+      click: () => {
+        void disconnect()
+          .then(() => refreshTrayMenu())
+          .catch((e) => {
+            dialog.showErrorBox('Disconnect failed', String(e))
+            void refreshTrayMenu()
+          })
+      },
     },
     { type: 'separator' },
     {
       label: 'Quit',
-      click: async () => {
+      click: () => {
         quitting = true
-        await disconnect().catch(() => undefined)
-        app.exit(0)
+        app.quit()
       },
     },
   ])
   tray.setContextMenu(contextMenu)
-  tray.on('double-click', () => {
-    mainWindow?.show()
-    mainWindow?.focus()
-  })
 }
 
 function registerIpc(): void {
-  ipcMain.handle('core:status', () => getStatus())
-  ipcMain.handle('core:connect', (_e, mode) => connect(mode))
-  ipcMain.handle('core:disconnect', () => disconnect())
+  ipcMain.handle('core:status', async () => {
+    const st = await getStatus()
+    void refreshTrayMenu()
+    return st
+  })
+  ipcMain.handle('core:connect', async (_e, mode) => {
+    const st = await connect(mode)
+    void refreshTrayMenu()
+    return st
+  })
+  ipcMain.handle('core:disconnect', async () => {
+    const st = await disconnect()
+    void refreshTrayMenu()
+    return st
+  })
   ipcMain.handle('core:traffic', () => mihomoApi.getTraffic())
   ipcMain.handle('proxies:groups', async () => {
     const groups = await mihomoApi.getGroups()
@@ -197,25 +246,67 @@ function registerIpc(): void {
   ipcMain.handle('profiles:importUrl', async (_e, url: string, name?: string) => {
     const meta = await importFromUrl(url, name)
     rescheduleSubscriptionUpdates()
+    notifyProfilesChanged()
     return meta
   })
-  ipcMain.handle('profiles:importFile', () => importFromFileDialog())
+  ipcMain.handle('profiles:importFile', async () => {
+    const meta = await importFromFileDialog()
+    if (meta) notifyProfilesChanged()
+    return meta
+  })
   ipcMain.handle('profiles:setActive', async (_e, id: string) => {
     setActiveProfile(id)
+    notifyProfilesChanged()
     const st = await getStatus()
     if (st.running) await connect(st.mode)
   })
-  ipcMain.handle('profiles:delete', (_e, id: string) => {
-    deleteProfile(id)
+  ipcMain.handle('profiles:delete', async (_e, id: string) => {
+    const wasActive = deleteProfile(id)
     rescheduleSubscriptionUpdates()
+    notifyProfilesChanged()
+    const st = await getStatus()
+    if (!st.running) return
+    if (!getActiveProfileId()) {
+      await disconnect()
+      return
+    }
+    if (wasActive) await connect(st.mode)
   })
   ipcMain.handle('profiles:update', async (_e, id: string) => {
     const meta = await refreshProfile(id, { reloadCore: true })
     rescheduleSubscriptionUpdates()
+    notifyProfilesChanged()
     return meta
   })
   ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:set', (_e, patch) => setSettings(patch))
+  ipcMain.handle('settings:set', async (_e, patch) => {
+    const settings = setSettings(patch)
+    const path = rebuildActive(settings)
+    if (!path) return settings
+    const st = await getStatus()
+    if (!st.running) return settings
+
+    if (patch.systemProxy !== undefined && settings.connectionMode !== 'tun') {
+      await setSystemProxy(settings.systemProxy, settings.mixedPort)
+    }
+
+    const needsReconnect =
+      patch.mixedPort !== undefined ||
+      patch.allowLan !== undefined ||
+      patch.tunStack !== undefined ||
+      patch.connectionMode !== undefined ||
+      patch.tunEnabled !== undefined
+
+    if (needsReconnect) {
+      mihomoApi.ensureSecretFromStore()
+      await mihomoApi.putConfigs(path)
+      await mihomoApi.applySelections(getSelections())
+      if (settings.connectionMode === 'proxy') {
+        await setSystemProxy(settings.systemProxy, settings.mixedPort)
+      }
+    }
+    return settings
+  })
   ipcMain.handle('tun:status', () => getTunStatus())
   ipcMain.handle('tun:setEnabled', (_e, enabled: boolean) => setTunEnabled(enabled))
   ipcMain.handle('connection:setMode', (_e, mode: ConnectionMode) => setConnectionMode(mode))
@@ -319,6 +410,7 @@ function registerIpc(): void {
   ipcMain.handle(PRIVATE_IPC.accountLogin, async (_e, email: string, password: string) => {
     const session = await getPrivateModule().login(email, password)
     await syncManagedFromPrivate().catch((err) => log(String(err), 'warn'))
+    notifyProfilesChanged()
     return session
   })
   ipcMain.handle(PRIVATE_IPC.accountLogout, () => getPrivateModule().logout())
@@ -334,7 +426,11 @@ function registerIpc(): void {
       title: info.title,
     }
   })
-  ipcMain.handle(PRIVATE_IPC.subscriptionSync, () => syncManagedFromPrivate())
+  ipcMain.handle(PRIVATE_IPC.subscriptionSync, async () => {
+    const info = await syncManagedFromPrivate()
+    notifyProfilesChanged()
+    return info
+  })
 
   ipcMain.handle('window:minimize', (e) => {
     BrowserWindow.fromWebContents(e.sender)?.minimize()
@@ -397,10 +493,17 @@ app.on('window-all-closed', () => {
   /* keep tray alive on Windows/Linux */
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (e) => {
+  if (quitCleanupDone) return
+  e.preventDefault()
   quitting = true
   stopSubscriptionUpdater()
   void disconnect()
+    .catch(() => undefined)
+    .finally(() => {
+      quitCleanupDone = true
+      app.quit()
+    })
 })
 
 function mkdirSilent(p: string): void {
