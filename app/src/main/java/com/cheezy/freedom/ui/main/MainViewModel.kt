@@ -174,7 +174,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _configName.value = ProfileStore.active(context)?.name
     }
 
-    fun bootstrap() {
+    fun bootstrap(skipAuthGate: Boolean = false) {
         viewModelScope.launch {
             // Migrate a pre-multiprofile single config into profile #1 (idempotent).
             withContext(Dispatchers.IO) { ProfileManager.migrateLegacyIfNeeded(context) }
@@ -186,8 +186,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val currentState = AppDeps.accountProvider.state.value
             val isAuthed = currentState is AccountState.Authenticated
             val hasConfig = ConfigManager.hasConfig(context)
-            if (!isAuthed && !hasConfig) {
+            if (!isAuthed && !hasConfig && !skipAuthGate) {
                 // In proprietary, this will launch AuthActivity; in open, it launches UrlDialog.
+                // Skipped when a claim/login deeplink already owns the auth UI (avoids stacking
+                // a plain login screen on top of ClaimWizard).
                 _needsAuth.value = true
                 return@launch
             }
@@ -436,6 +438,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is DeepLink.Add -> {
                 val claim = AppDeps.launchers.claimDeepLinkIntent(context, link.url)
                 if (claim != null) {
+                    // ClaimWizard is AuthActivity with extras — do not also open plain login.
+                    _needsAuth.value = false
                     _effects.tryEmit(MainEffect.LaunchIntent(claim))
                 } else {
                     openUrlDialog(prefill = link.url)
@@ -444,6 +448,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             is DeepLink.Login -> {
                 val intent = AppDeps.launchers.loginDeepLinkIntent(context, link.payload)
                 if (intent != null) {
+                    _needsAuth.value = false
                     _effects.tryEmit(MainEffect.LaunchIntent(intent))
                 }
                 // else: unsupported (open / backend not ready) — silently ignore.

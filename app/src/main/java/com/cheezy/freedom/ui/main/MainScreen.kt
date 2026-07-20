@@ -277,7 +277,10 @@ fun MainScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.bootstrap()
+        // If we were opened via cheezy://add|login, skip the generic auth gate so
+        // ClaimWizard is not buried under a second plain AuthActivity.
+        val skipAuthGate = parseDeepLink(deepLinkFlow?.value) != null
+        viewModel.bootstrap(skipAuthGate = skipAuthGate)
         if (Build.VERSION.SDK_INT >= 33) {
             val granted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
