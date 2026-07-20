@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Activity, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
 import { isSelectorGroup } from '../lib/proxy-groups'
@@ -26,14 +26,8 @@ export function ProxyGroupList({
   onHealth,
   onHealthAll,
 }: Props): React.JSX.Element {
-  // Expand selector groups by default for faster server picking.
+  // All groups collapsed by default; each toggles independently.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const defaultExpanded = useMemo(
-    () => new Set(groups.filter((g) => isSelectorGroup(g.type)).map((g) => g.name)),
-    [groups],
-  )
-  const isOpen = (name: string): boolean =>
-    expanded.has(name) || (expanded.size === 0 && defaultExpanded.has(name))
 
   function toggle(name: string): void {
     setExpanded((prev) => {
@@ -77,7 +71,7 @@ export function ProxyGroupList({
       </div>
 
       {groups.map((g) => {
-        const open = isOpen(g.name)
+        const open = expanded.has(g.name)
         const selectable = isSelectorGroup(g.type)
         const delays = latencies[g.name] || {}
         return (

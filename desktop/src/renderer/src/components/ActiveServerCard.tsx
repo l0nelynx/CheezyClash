@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, Search } from 'lucide-react'
+import { Check, ChevronRight, Search } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
 import { isSelectorGroup } from '../lib/proxy-groups'
 
@@ -77,8 +77,8 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
             {group.name}
           </p>
           {selectable ? (
-            <ChevronDown
-              className={`h-3.5 w-3.5 shrink-0 text-ink-dim transition ${open ? 'rotate-180' : ''}`}
+            <ChevronRight
+              className={`h-3.5 w-3.5 shrink-0 text-ink-dim transition ${open ? 'translate-x-0.5' : ''}`}
             />
           ) : (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-dim">Auto</span>
@@ -102,7 +102,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
         <div
           role="listbox"
           aria-label={`Servers in ${group.name}`}
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 max-h-64 overflow-hidden rounded-xl border border-surface-border bg-surface-raised shadow-lg"
+          className="absolute left-full top-0 z-40 ml-2 flex w-72 max-h-[min(20rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised shadow-lg"
         >
           {showSearch && (
             <div className="flex items-center gap-2 border-b border-surface-border px-3 py-2">
@@ -117,7 +117,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
               />
             </div>
           )}
-          <ul className="max-h-52 overflow-y-auto p-1.5">
+          <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
             {filtered.length === 0 ? (
               <li className="px-3 py-2 text-xs text-ink-muted">No matches</li>
             ) : (
