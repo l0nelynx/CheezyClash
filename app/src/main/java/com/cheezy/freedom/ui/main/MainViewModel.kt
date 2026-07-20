@@ -490,6 +490,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // was last bootstrapped as Anonymous (no config existed yet); now a config is on
             // disk, so re-bootstrap to pick up Unregistered/Authenticated.
             AppDeps.accountProvider.bootstrap(context)
+            val auth = AppDeps.accountProvider.state.value as? AccountState.Authenticated
+            if (auth != null) {
+                AppDeps.subscriptionGateway.syncFromBackend(context)
+                AppDeps.accountProvider.bootstrap(context)
+                val refreshed = AppDeps.accountProvider.state.value as? AccountState.Authenticated
+                if (refreshed?.snapshot?.emailVerified == false) {
+                    _effects.emit(MainEffect.LaunchVerify(refreshed.email))
+                    return@launch
+                }
+            }
             // Refresh profile state directly so the connect button enables.
             // In unregistered mode syncFromBackend fails ("No access token") and never
             // reaches handleSyncSuccess, so configName would otherwise stay null.
@@ -510,18 +520,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * After a claim/login AuthActivity started with startActivity returns to Main,
      * refresh account state if the user signed in / imported a config; otherwise
      * re-open the auth gate when the device still has nothing usable.
+     *
+     * Tokens without a verified email must not enter the main UI — re-launch VERIFY.
+     * Config without tokens (Unregistered after claim abandon) is allowed.
      */
     fun onMainResumed() {
         if (!_pendingAuthReturn) return
         _pendingAuthReturn = false
         viewModelScope.launch {
             AppDeps.accountProvider.bootstrap(context)
-            val isAuthed = AppDeps.accountProvider.state.value is AccountState.Authenticated
-            val hasConfig = ConfigManager.hasConfig(context)
-            if (isAuthed || hasConfig) {
-                onAuthCompleted()
-            } else {
-                _needsAuth.value = true
+            when (val st = AppDeps.accountProvider.state.value) {
+                is AccountState.Authenticated -> {
+                    AppDeps.subscriptionGateway.syncFromBackend(context)
+                    AppDeps.accountProvider.bootstrap(context)
+                    val auth = AppDeps.accountProvider.state.value as? AccountState.Authenticated
+                    if (auth?.snapshot?.emailVerified == false) {
+                        _effects.emit(MainEffect.LaunchVerify(auth.email))
+                    } else {
+                        onAuthCompleted()
+                    }
+                }
+                is AccountState.Unregistered -> onAuthCompleted()
+                else -> {
+                    if (ConfigManager.hasConfig(context)) {
+                        onAuthCompleted()
+                    } else {
+                        _needsAuth.value = true
+                    }
+                }
             }
         }
     }
