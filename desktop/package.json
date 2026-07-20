@@ -4,7 +4,11 @@
   "version": "1.5.30",
   "description": "CheezyClash desktop client for Mihomo (Clash.Meta)",
   "main": "./out/main/index.js",
-  "author": "CheezyClash",
+  "homepage": "https://github.com/l0nelynx/CheezyClash",
+  "author": {
+    "name": "l0nelynx",
+    "email": "113856580+l0nelynx@users.noreply.github.com"
+  },
   "license": "GPL-3.0-or-later",
   "private": true,
   "scripts": {
