@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { AccessControlRule, AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
@@ -31,18 +31,24 @@ export function SettingsPage({
   onSyncSubscription,
 }: Props): React.JSX.Element {
   const [acOpen, setAcOpen] = useState(false)
+  const [portDraft, setPortDraft] = useState(String(settings.mixedPort))
 
-  const openZashboard = () => {
-    const secret = status?.secret || ''
-    const params = new URLSearchParams({
-      hostname: CONTROLLER_HOST,
-      port: String(CONTROLLER_PORT),
-      secret,
-      http: '1',
-    })
-    const url = `http://board.zash.run.place/#/setup?${params.toString()}`
-    void window.cheezy.openExternal(url)
+  const openDashboard = () => {
+    void window.cheezy.openExternal(`http://${CONTROLLER_HOST}:${CONTROLLER_PORT}/ui/`)
   }
+
+  const commitPort = (): void => {
+    const next = Number(portDraft)
+    if (!Number.isFinite(next) || next < 1024 || next > 65535) {
+      setPortDraft(String(settings.mixedPort))
+      return
+    }
+    if (next !== settings.mixedPort) onPatch({ mixedPort: next })
+  }
+
+  useEffect(() => {
+    setPortDraft(String(settings.mixedPort))
+  }, [settings.mixedPort])
 
   const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
   const ruleCount = settings.accessControlRules?.length ?? 0
@@ -135,9 +141,13 @@ export function SettingsPage({
           <input
             type="number"
             className="field max-w-[160px]"
-            value={settings.mixedPort}
+            value={portDraft}
             disabled={busy}
-            onChange={(e) => onPatch({ mixedPort: Number(e.target.value) || 7890 })}
+            onChange={(e) => setPortDraft(e.target.value)}
+            onBlur={commitPort}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitPort()
+            }}
           />
         </label>
       </Section>
@@ -155,12 +165,12 @@ export function SettingsPage({
       </Section>
 
       <Section title="Dashboard">
-        <p className="text-xs text-ink-dim">Open the dashboard in your browser.</p>
+        <p className="text-xs text-ink-dim">Open the local Mihomo dashboard (connect first).</p>
         <button
           type="button"
           className="btn inline-flex items-center gap-1.5 text-sm"
-          disabled={busy}
-          onClick={openZashboard}
+          disabled={busy || !status?.running}
+          onClick={openDashboard}
         >
           Open dashboard
           <ExternalLink className="h-3.5 w-3.5" />
