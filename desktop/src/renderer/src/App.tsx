@@ -54,7 +54,9 @@ export default function App(): React.JSX.Element {
   }, [caps?.productName])
 
   const activeProfile =
-    state.profiles.find((p) => p.id === state.activeId) ?? state.profiles[0] ?? null
+    state.activeId != null
+      ? (state.profiles.find((p) => p.id === state.activeId) ?? null)
+      : null
 
   const healthOne = useCallback(
     async (group: string) => {
@@ -131,12 +133,18 @@ export default function App(): React.JSX.Element {
           traffic={state.traffic}
           downRateHistory={state.downRateHistory}
           activeProfile={activeProfile}
+          groups={groups}
+          latencies={state.latencies}
           busy={busy}
           onConnect={() => run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' })}
           onDisconnect={() =>
             run(() => window.cheezy.disconnect(), { success: 'Disconnected', scope: 'home' })
           }
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper(), { scope: 'home' })}
+          onGoProfiles={() => setTab('profiles')}
+          onSelectServer={(group, name) =>
+            run(() => window.cheezy.selectProxy(group, name), { scope: 'home' })
+          }
         />
       )}
 

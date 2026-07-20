@@ -46,7 +46,7 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
               }`}
             >
               <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
-              <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md border border-surface-border bg-surface-overlay px-2 py-1 text-xs text-ink shadow-lg group-hover:block">
+              <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md border border-surface-border bg-surface-overlay px-2 py-1 text-xs text-ink shadow-lg group-hover:block group-focus-visible:block">
                 {label}
               </span>
             </button>

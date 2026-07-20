@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Activity, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
+import { isSelectorGroup } from '../lib/proxy-groups'
 
 interface Props {
   groups: ProxyGroupInfo[]
@@ -25,8 +26,14 @@ export function ProxyGroupList({
   onHealth,
   onHealthAll,
 }: Props): React.JSX.Element {
-  // Collapsed by default — empty set means nothing expanded.
+  // Expand selector groups by default for faster server picking.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const defaultExpanded = useMemo(
+    () => new Set(groups.filter((g) => isSelectorGroup(g.type)).map((g) => g.name)),
+    [groups],
+  )
+  const isOpen = (name: string): boolean =>
+    expanded.has(name) || (expanded.size === 0 && defaultExpanded.has(name))
 
   function toggle(name: string): void {
     setExpanded((prev) => {
@@ -70,7 +77,8 @@ export function ProxyGroupList({
       </div>
 
       {groups.map((g) => {
-        const open = expanded.has(g.name)
+        const open = isOpen(g.name)
+        const selectable = isSelectorGroup(g.type)
         const delays = latencies[g.name] || {}
         return (
           <section
@@ -118,7 +126,7 @@ export function ProxyGroupList({
                     <li key={name}>
                       <button
                         type="button"
-                        disabled={busy || testingAll}
+                        disabled={busy || testingAll || !selectable}
                         onClick={() => onSelect(g.name, name)}
                         className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
                           active

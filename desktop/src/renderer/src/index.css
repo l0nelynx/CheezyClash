@@ -68,25 +68,29 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-surface-border
       bg-surface-raised px-3.5 py-2 text-sm font-medium text-ink transition
-      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45;
+      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-accent-dim
       bg-accent px-3.5 py-2 text-sm font-semibold text-[#1a1408] shadow-glow transition
-      hover:bg-accent-dim hover:text-[#1a1408] disabled:cursor-not-allowed disabled:opacity-45;
+      hover:bg-accent-dim hover:text-[#1a1408] disabled:cursor-not-allowed disabled:opacity-45
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-danger/40
       bg-surface-raised px-3.5 py-2 text-sm font-medium text-danger transition
-      hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-45;
+      hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-45
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40;
   }
 
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent
       bg-transparent px-3.5 py-2 text-sm font-medium text-ink transition
-      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45;
+      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30;
   }
 
   .field {

@@ -7,25 +7,36 @@ interface Props {
   status: CoreStatus | null
   tun: TunStatus | null
   busy: boolean
+  hasProfile: boolean
   downRateHistory: number[]
   downRate: number
+  upRate: number
   onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
+  onGoProfiles?: () => void
 }
 
 export function ConnectHero({
   status,
   tun,
   busy,
+  hasProfile,
   downRateHistory,
   downRate,
+  upRate,
   onConnect,
   onDisconnect,
   onEnsureHelper,
+  onGoProfiles,
 }: Props): React.JSX.Element {
   const running = !!status?.running
   const modeLabel = status?.mode === 'tun' ? 'TUN' : 'Proxy'
+  const lastError = status?.lastError
+    ? status.lastError.includes('no active profile')
+      ? 'Import or activate a profile first.'
+      : status.lastError
+    : null
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-surface-border bg-gradient-to-br from-surface-raised via-surface-raised to-accent-soft p-8">
@@ -44,20 +55,32 @@ export function ConnectHero({
             </h2>
             <p className="mt-2 max-w-md text-sm text-ink-muted">
               {running
-                ? `${modeLabel} mode. Change servers on the Proxies page.`
-                : 'Choose Proxy or TUN in Settings, then connect.'}
+                ? `${modeLabel} mode. Change server below or on Proxies.`
+                : hasProfile
+                  ? 'Choose Proxy or TUN in Settings, then connect.'
+                  : 'Add a subscription or profile file on Profiles, then connect.'}
             </p>
           </div>
-          {running && downRateHistory.length >= 2 && (
-            <p className="shrink-0 text-right text-xs text-ink-dim">
-              <span className="block text-[10px] uppercase tracking-wide">Download</span>
-              <span className="font-medium text-accent">{formatRate(downRate)}</span>
-            </p>
+          {running && (
+            <div className="shrink-0 space-y-1.5 text-right text-xs text-ink-dim">
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide">Download</span>
+                <span className="font-medium tabular-nums text-accent">{formatRate(downRate)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide">Upload</span>
+                <span className="font-medium tabular-nums text-ink-muted">{formatRate(upRate)}</span>
+              </div>
+            </div>
           )}
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          {!running ? (
+          {!hasProfile && onGoProfiles ? (
+            <button type="button" className="btn-primary min-w-[140px]" onClick={onGoProfiles}>
+              Go to Profiles
+            </button>
+          ) : !running ? (
             <button type="button" className="btn-primary min-w-[140px]" disabled={busy} onClick={onConnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
               Connect
@@ -70,7 +93,7 @@ export function ConnectHero({
           )}
         </div>
 
-        {status?.lastError && <p className="mt-4 text-sm text-danger">{status.lastError}</p>}
+        {lastError && <p className="mt-4 text-sm text-danger">{lastError}</p>}
 
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-border/60 pt-4 text-xs text-ink-muted">
           <span>
