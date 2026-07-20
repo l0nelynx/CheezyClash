@@ -11,7 +11,9 @@ interface StoreSchema {
   profiles: ProfileMeta[]
   activeProfileId: string | null
   controllerSecret: string
+  /** @deprecated migrated to selectionsByProfile */
   selections: Record<string, string>
+  selectionsByProfile: Record<string, Record<string, string>>
   desktopHwid: string
 }
 
@@ -23,6 +25,7 @@ export const store = new Store<StoreSchema>({
     activeProfileId: null,
     controllerSecret: '',
     selections: {},
+    selectionsByProfile: {},
     desktopHwid: '',
   },
 })
@@ -73,13 +76,33 @@ export function getOrCreateSecret(): string {
   return s
 }
 
-export function getSelections(): Record<string, string> {
-  return { ...store.get('selections') }
+function activeProfileIdForSelections(profileId?: string | null): string | null {
+  return profileId ?? store.get('activeProfileId')
 }
 
-export function setSelection(group: string, proxy: string): void {
-  const next = { ...store.get('selections'), [group]: proxy }
-  store.set('selections', next)
+export function getSelections(profileId?: string | null): Record<string, string> {
+  const id = activeProfileIdForSelections(profileId)
+  if (!id) return {}
+
+  const byProfile = { ...(store.get('selectionsByProfile') ?? {}) }
+  if (byProfile[id]) return { ...byProfile[id]! }
+
+  const legacy = store.get('selections')
+  if (legacy && Object.keys(legacy).length > 0) {
+    byProfile[id] = { ...legacy }
+    store.set('selectionsByProfile', byProfile)
+    store.set('selections', {})
+    return { ...byProfile[id]! }
+  }
+  return {}
+}
+
+export function setSelection(group: string, proxy: string, profileId?: string | null): void {
+  const id = activeProfileIdForSelections(profileId)
+  if (!id) return
+  const byProfile = { ...(store.get('selectionsByProfile') ?? {}) }
+  byProfile[id] = { ...(byProfile[id] ?? {}), [group]: proxy }
+  store.set('selectionsByProfile', byProfile)
 }
 
 function cryptoRandom(len: number): string {

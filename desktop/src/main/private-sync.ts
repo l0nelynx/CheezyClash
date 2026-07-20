@@ -3,6 +3,7 @@ import { getPrivateModule } from './private-module'
 import { upsertManagedProfile } from './profiles'
 import { log } from './logger'
 import type { SubscriptionInfo } from '../shared/types'
+import { notifyProfilesChanged } from './profile-events'
 import { rescheduleSubscriptionUpdates } from './subscription-updater'
 
 /** After login/sync: import managed subscription URL into profiles. */
@@ -34,5 +35,6 @@ export async function syncManagedFromPrivate(): Promise<PrivateSubscriptionInfo 
 
   await upsertManagedProfile(info.url, info.title || 'CheezyVPN', subMeta)
   rescheduleSubscriptionUpdates()
+  notifyProfilesChanged()
   return info
 }

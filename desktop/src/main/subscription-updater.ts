@@ -1,6 +1,6 @@
-import { BrowserWindow } from 'electron'
 import { listProfiles, refreshProfile } from './profiles'
 import { log } from './logger'
+import { notifyProfilesChanged } from './profile-events'
 
 const MIN_TICK_MS = 15 * 60 * 1000
 const HOUR_MS = 3600_000
@@ -24,12 +24,6 @@ function nextTickMs(): number {
   if (hours.length === 0) return MIN_TICK_MS
   const minHours = Math.min(...hours)
   return Math.max(MIN_TICK_MS, Math.min(minHours * HOUR_MS, 60 * 60 * 1000))
-}
-
-function notifyProfilesChanged(): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('profiles:changed')
-  }
 }
 
 async function tick(): Promise<void> {
