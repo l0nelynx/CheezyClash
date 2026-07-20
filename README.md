@@ -65,7 +65,9 @@
 
 Prebuilt `libclash-<go_hash>.zip` assets are consumed by CheezyVPN CI (proprietary builds). After a successful open release, CI sends `repository_dispatch` (`open_release`) to private CheezyVPN so it can bump `upstream`, tag the same `v*`, and publish the proprietary APK.
 
-**Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`, and `PROPRIETARY_DISPATCH_TOKEN` (PAT with `actions: write` on private `l0nelynx/CheezyVPN_android` — required for the auto proprietary release).
+**Release secrets:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, optional `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
+
+Auto dispatch to the proprietary overlay (private `l0nelynx/CheezyVPN_android`) is best-effort and is skipped when the required CI secret is not configured.
 
 ### Firebase
 
@@ -124,7 +126,9 @@ If you like this project, please give it a **Star** ⭐
 
 Готовые `libclash-<go_hash>.zip` используются CI CheezyVPN (proprietary-сборки). После успешного open-релиза CI шлёт `repository_dispatch` (`open_release`) в приватный CheezyVPN: bump `upstream`, тот же тег `v*`, публикация proprietary APK.
 
-**Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`, и `PROPRIETARY_DISPATCH_TOKEN` (PAT с `actions: write` на приватный `l0nelynx/CheezyVPN_android` — нужен для авто-релиза proprietary).
+**Секреты релиза:** `SIGNING_KEY`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, опционально `TELEGRAM_TOKEN` / `TELEGRAM_TO`.
+
+Авто-dispatch в proprietary overlay (приватный `l0nelynx/CheezyVPN_android`) — best-effort: если CI secret не задан, шаг будет пропущен.
 
 ### Firebase
 

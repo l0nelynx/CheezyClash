@@ -209,8 +209,8 @@ jobs:
           GH_TOKEN: ${{ secrets.PROPRIETARY_DISPATCH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "ERROR: PROPRIETARY_DISPATCH_TOKEN is not set"
-            exit 1
+            echo "Proprietary dispatch token is not set — skipping proprietary overlay dispatch."
+            exit 0
           fi
           jq -n \
             --arg tag "${{ github.ref_name }}" \
