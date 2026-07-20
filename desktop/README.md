@@ -2,6 +2,8 @@
 
 Desktop client for Mihomo (Clash.Meta). Stages A (proxy MVP) and B (TUN + Windows helper).
 
+📚 **Full documentation:** [CheezyClash docs](https://l0nelynx.github.io/CheezyClash-docs/)
+
 ## Stack
 
 - Electron + Vite + React + TypeScript + Tailwind

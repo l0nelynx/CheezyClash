@@ -43,9 +43,9 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
           : 'text-ink-muted'
 
   return (
-    <section className="rounded-2xl border border-surface-border bg-surface-raised px-5 py-4">
+    <section className="h-full rounded-xl border border-surface-border bg-surface-raised px-4 py-3">
       {!isUnlimited && (
-        <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-overlay">
+        <div className="mb-2.5 h-1 overflow-hidden rounded-full bg-surface-overlay">
           <div
             className={`h-full rounded-full transition-all ${progressColor}`}
             style={{ width: `${Math.round(progress * 100)}%` }}
@@ -53,28 +53,28 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
         </div>
       )}
 
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-xs text-ink-dim">Used</p>
-          <p className={`text-lg font-semibold tabular-nums ${progressText}`}>{formatBytes(used)}</p>
+          <p className="text-[11px] text-ink-dim">Used</p>
+          <p className={`text-base font-semibold tabular-nums ${progressText}`}>{formatBytes(used)}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-ink-dim">{isUnlimited ? 'Limit' : 'Remaining'}</p>
-          <p className="text-lg font-semibold tabular-nums text-ink">
+          <p className="text-[11px] text-ink-dim">{isUnlimited ? 'Limit' : 'Remaining'}</p>
+          <p className="text-base font-semibold tabular-nums text-ink">
             {isUnlimited ? 'Unlimited' : formatBytes(remaining)}
           </p>
         </div>
       </div>
 
       {(info.expire > 0 || lastUpdateTime > 0) && (
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-surface-border/60 pt-3">
+        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-surface-border/60 pt-2.5">
           {info.expire > 0 ? (
-            <p className={`text-xs ${expireColor}`}>Expires {formatExpire(info.expire)}</p>
+            <p className={`text-[11px] ${expireColor}`}>Expires {formatExpire(info.expire)}</p>
           ) : (
             <span />
           )}
           {lastUpdateTime > 0 && (
-            <p className="text-right text-[11px] text-ink-dim">{formatLastUpdate(lastUpdateTime)}</p>
+            <p className="text-right text-[10px] text-ink-dim">{formatLastUpdate(lastUpdateTime)}</p>
           )}
         </div>
       )}

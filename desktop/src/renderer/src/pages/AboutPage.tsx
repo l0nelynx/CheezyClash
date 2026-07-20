@@ -39,6 +39,19 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
         <Row label="Application" value={`${productName} ${appVer}`} />
         <Row label="Engine" value={coreVer} breakAll />
         <div className="border-t border-surface-border pt-3">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Documentation</p>
+          <button
+            type="button"
+            className="btn inline-flex items-center gap-1.5 text-xs"
+            onClick={() =>
+              void window.cheezy.openExternal('https://l0nelynx.github.io/CheezyClash-docs/')
+            }
+          >
+            Open docs
+            <ExternalLink className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Updates</p>
           {!update && <p className="text-sm text-ink-muted">Checking…</p>}
           {update?.error && (
