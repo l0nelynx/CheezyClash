@@ -213,6 +213,7 @@ export class MihomoApi {
   }
 
   async healthCheck(group: string): Promise<Record<string, number>> {
+    this.ensureSecretFromStore()
     const data = await this.request<Record<string, number>>(
       'GET',
       `/group/${encodeURIComponent(group)}/delay?timeout=5000&url=${encodeURIComponent('https://www.gstatic.com/generate_204')}`,
