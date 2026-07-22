@@ -29,13 +29,13 @@ export function DownloadRateSparkline({ values, className }: Props): React.JSX.E
     >
       <defs>
         <linearGradient id="dl-spark-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f0b429" stopOpacity="0.38" />
-          <stop offset="100%" stopColor="#f0b429" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="oklch(0.985 0 0)" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="oklch(0.985 0 0)" stopOpacity="0.02" />
         </linearGradient>
         <linearGradient id="dl-spark-stroke" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#f0b429" stopOpacity="0.2" />
-          <stop offset="55%" stopColor="#f0b429" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#f0b429" stopOpacity="0.4" />
+          <stop offset="0%" stopColor="oklch(0.985 0 0)" stopOpacity="0.15" />
+          <stop offset="55%" stopColor="oklch(0.985 0 0)" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="oklch(0.985 0 0)" stopOpacity="0.35" />
         </linearGradient>
       </defs>
       <path d={area} fill="url(#dl-spark-fill)" />

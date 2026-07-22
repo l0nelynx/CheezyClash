@@ -7,8 +7,8 @@ interface Props {
 function lineClass(line: string): string {
   const lower = line.toLowerCase()
   if (lower.includes('error') || lower.includes('fail')) return 'text-danger'
-  if (lower.includes('warn')) return 'text-accent-dim'
-  return 'text-ink-muted'
+  if (lower.includes('warn')) return 'text-muted-foreground'
+  return 'text-muted-foreground'
 }
 
 export function LogsPage({ logs }: Props): React.JSX.Element {
@@ -25,9 +25,9 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-ink">Logs</h2>
-          <p className="text-sm text-ink-muted">Recent activity.</p>
+          <p className="text-sm text-muted-foreground">Recent activity.</p>
         </div>
-        <label className="flex items-center gap-2 text-xs text-ink-muted">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             className="accent-accent"

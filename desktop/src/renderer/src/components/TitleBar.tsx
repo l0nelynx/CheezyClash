@@ -22,7 +22,7 @@ export function TitleBar({ status, productName }: Props): React.JSX.Element {
       <div className="app-drag flex min-w-0 flex-1 items-center gap-2.5 px-3">
         <img src={logoUrl} alt="" className="h-6 w-6 shrink-0" draggable={false} />
         <span className="truncate text-sm font-semibold tracking-tight text-ink">{productName}</span>
-        <span className="ml-1 inline-flex items-center gap-1.5 text-xs text-ink-muted">
+        <span className="ml-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className={`h-1.5 w-1.5 rounded-full ${running ? 'bg-ok' : 'bg-ink-dim'}`} />
           {running ? `Connected · ${status?.mode?.toUpperCase()}` : 'Disconnected'}
         </span>
@@ -75,7 +75,7 @@ function WinBtn({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`flex h-10 w-11 items-center justify-center text-ink-muted transition ${
+      className={`flex h-10 w-11 items-center justify-center text-muted-foreground transition ${
         danger ? 'hover:bg-danger hover:text-white' : 'hover:bg-surface-overlay hover:text-ink'
       }`}
     >

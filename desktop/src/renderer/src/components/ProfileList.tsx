@@ -64,7 +64,7 @@ export function ProfileList({
           <p className="text-xs text-ink-dim">{profiles.length} configured</p>
         </div>
         {profiles.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-ink-muted">
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
             No profiles yet. Import a subscription or config file.
           </p>
         ) : (
@@ -81,7 +81,7 @@ export function ProfileList({
                         {p.name}
                       </span>
                       {active && (
-                        <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                           Active
                         </span>
                       )}

@@ -19,6 +19,7 @@ import {
   activeConfigPath,
   rebuildActive,
   getActiveProfileId,
+  setReloadActiveCoreHook,
 } from './profiles'
 import { mihomoApi } from './mihomo-api'
 import { setSystemProxy } from './system-proxy'
@@ -332,3 +333,13 @@ export function coreBinarySha256(): string | null {
 
 // re-export for index
 export { corePresent }
+
+// Break profiles ↔ core-manager cycle: profiles calls this after a live reload.
+setReloadActiveCoreHook(async (configPath) => {
+  const st = await getStatus()
+  if (!st.running) return
+  mihomoApi.ensureSecretFromStore()
+  await mihomoApi.putConfigs(configPath)
+  await mihomoApi.applySelections(getSelections())
+  await mihomoApi.closeAllConnections()
+})

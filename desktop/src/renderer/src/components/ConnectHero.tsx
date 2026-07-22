@@ -39,8 +39,8 @@ export function ConnectHero({
     : null
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-surface-border bg-gradient-to-br from-surface-raised via-surface-raised to-accent-soft p-8">
-      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
+    <section className="relative overflow-hidden rounded-xl border border-border bg-card p-8">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-muted blur-3xl" />
       <DownloadRateSparkline
         values={downRateHistory}
         className="pointer-events-none absolute inset-0 h-full w-full opacity-90"
@@ -50,10 +50,10 @@ export function ConnectHero({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="section-label mb-3">Connection</p>
-            <h2 className="text-3xl font-semibold tracking-tight text-ink">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
               {running ? 'You are connected' : 'Ready to connect'}
             </h2>
-            <p className="mt-2 max-w-md text-sm text-ink-muted">
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
               {running
                 ? `${modeLabel} mode. Change server below or on Proxies.`
                 : hasProfile
@@ -62,14 +62,14 @@ export function ConnectHero({
             </p>
           </div>
           {running && (
-            <div className="shrink-0 space-y-1.5 text-right text-xs text-ink-dim">
+            <div className="shrink-0 space-y-1.5 text-right text-xs text-muted-foreground">
               <div>
                 <span className="block text-[10px] uppercase tracking-wide">Download</span>
-                <span className="font-medium tabular-nums text-accent">{formatRate(downRate)}</span>
+                <span className="font-medium tabular-nums text-foreground">{formatRate(downRate)}</span>
               </div>
               <div>
                 <span className="block text-[10px] uppercase tracking-wide">Upload</span>
-                <span className="font-medium tabular-nums text-ink-muted">{formatRate(upRate)}</span>
+                <span className="font-medium tabular-nums text-muted-foreground">{formatRate(upRate)}</span>
               </div>
             </div>
           )}
@@ -93,18 +93,18 @@ export function ConnectHero({
           )}
         </div>
 
-        {lastError && <p className="mt-4 text-sm text-danger">{lastError}</p>}
+        {lastError && <p className="mt-4 text-sm text-destructive">{lastError}</p>}
 
-        <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-border/60 pt-4 text-xs text-ink-muted">
+        <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
           <span>
             VPN helper:{' '}
-            <span className="text-ink">
+            <span className="text-foreground">
               {tun?.helperRunning ? 'running' : tun?.helperInstalled ? 'installed' : 'not installed'}
             </span>
           </span>
           <span>
             Setup:{' '}
-            <span className={tun?.privilegesOk ? 'text-ok' : 'text-ink'}>
+            <span className={tun?.privilegesOk ? 'text-ok' : 'text-foreground'}>
               {tun?.privilegesOk ? 'ready' : 'needs setup'}
             </span>
           </span>

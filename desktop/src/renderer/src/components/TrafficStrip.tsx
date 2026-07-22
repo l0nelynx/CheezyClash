@@ -19,7 +19,7 @@ export function TrafficStrip({ traffic, status }: Props): React.JSX.Element | nu
       <p className="mb-2 text-xs text-ink-dim">Session</p>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-medium text-ink">
         <span className="inline-flex items-center gap-1.5 tabular-nums" title={upTotal}>
-          <ArrowUp className="h-3.5 w-3.5 text-accent" aria-hidden />
+          <ArrowUp className="h-3.5 w-3.5 text-primary" aria-hidden />
           {upTotal}
         </span>
         <span className="inline-flex items-center gap-1.5 tabular-nums" title={downTotal}>

@@ -108,7 +108,7 @@ function createWindow(productName: string): void {
     minHeight: 560,
     show: false,
     title: productName,
-    backgroundColor: '#0f1117',
+    backgroundColor: '#212121',
     frame: false,
     autoHideMenuBar: true,
     ...(icon ? { icon } : {}),

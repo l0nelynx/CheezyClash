@@ -35,6 +35,15 @@ import { mihomoApi } from './mihomo-api'
 const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
 
+/** Set from core-manager to avoid a circular profiles ↔ core-manager import. */
+let reloadActiveCore: ((configPath: string) => Promise<void>) | null = null
+
+export function setReloadActiveCoreHook(
+  fn: ((configPath: string) => Promise<void>) | null,
+): void {
+  reloadActiveCore = fn
+}
+
 export function ensureProfilesRoot(): void {
   mkdirSync(profilesRoot(), { recursive: true })
 }
@@ -430,15 +439,7 @@ export async function refreshProfile(
   const configPath = rebuildConfig(id)
 
   if (opts.reloadCore && getActiveProfileId() === id) {
-    // Dynamic import avoids profiles ↔ core-manager cycle at module load.
-    const { getStatus } = await import('./core-manager')
-    const st = await getStatus()
-    if (st.running) {
-      mihomoApi.ensureSecretFromStore()
-      await mihomoApi.putConfigs(configPath)
-      await mihomoApi.applySelections(getSelections())
-      await mihomoApi.closeAllConnections()
-    }
+    await reloadActiveCore?.(configPath)
   }
 
   return { ...meta, name: displayProfileName(meta.name) }

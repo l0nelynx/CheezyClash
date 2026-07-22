@@ -32,7 +32,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink">About</h2>
-        <p className="text-sm text-ink-muted">{productName} desktop client.</p>
+        <p className="text-sm text-muted-foreground">{productName} desktop client.</p>
       </div>
 
       <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
@@ -53,9 +53,9 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
         </div>
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Updates</p>
-          {!update && <p className="text-sm text-ink-muted">Checking…</p>}
+          {!update && <p className="text-sm text-muted-foreground">Checking…</p>}
           {update?.error && (
-            <p className="text-sm text-ink-muted">Could not check: {update.error}</p>
+            <p className="text-sm text-muted-foreground">Could not check: {update.error}</p>
           )}
           {update && !update.error && !update.updateAvailable && (
             <p className="text-sm text-ok">You are on the latest version.</p>
@@ -63,8 +63,8 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
           {update?.updateAvailable && (
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-ink">
-                Update available: <span className="font-medium text-accent">{update.latest}</span>
-                <span className="text-ink-muted"> (current {update.current})</span>
+                Update available: <span className="font-medium text-primary">{update.latest}</span>
+                <span className="text-muted-foreground"> (current {update.current})</span>
               </p>
               <button
                 type="button"
@@ -79,7 +79,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
           {update && !update.updateAvailable && !update.error && (
             <button
               type="button"
-              className="mt-2 text-xs text-accent hover:underline"
+              className="mt-2 text-xs text-primary hover:underline"
               onClick={() => void window.cheezy.openExternal(update.releasesUrl)}
             >
               View releases on GitHub
@@ -102,7 +102,7 @@ function Row({
 }): React.JSX.Element {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="shrink-0 text-sm text-ink-muted">{label}</span>
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
       <span
         className={`text-right text-sm font-medium text-ink ${breakAll ? 'break-all' : ''}`}
       >

@@ -35,7 +35,7 @@ extraResources:
       - '**/*'
 win:
   icon: build/icon.ico
-  # Disable Authenticode signing; afterPack still applies icon + ProductName via rcedit
+  # Disable Authenticode signing; afterPack still applies icon + ProductName via resedit
   sign: false
   target:
     - nsis

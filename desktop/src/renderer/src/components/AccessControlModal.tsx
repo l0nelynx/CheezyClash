@@ -283,7 +283,7 @@ export function AccessControlModal({
           <div className="border-t border-surface-border pt-3">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-dim">Rules</p>
             {localRules.length === 0 ? (
-              <p className="text-sm text-ink-muted">No access control rules yet.</p>
+              <p className="text-sm text-muted-foreground">No access control rules yet.</p>
             ) : (
               <ul className="space-y-2">
                 {localRules.map((r) => (
@@ -291,7 +291,7 @@ export function AccessControlModal({
                     key={r.id}
                     className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
                       editingId === r.id
-                        ? 'border-accent bg-accent-soft'
+                        ? 'border-primary bg-primary/10'
                         : 'border-surface-border bg-surface'
                     }`}
                   >

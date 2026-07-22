@@ -57,7 +57,7 @@ export function SettingsPage({
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink">Settings</h2>
-        <p className="text-sm text-ink-muted">Connection, network, and app rules.</p>
+        <p className="text-sm text-muted-foreground">Connection, network, and app rules.</p>
       </div>
 
       {supportsAuth && (
@@ -208,8 +208,8 @@ function ModeButton({
       onClick={onClick}
       className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
         active
-          ? 'bg-accent font-semibold text-[#1a1408]'
-          : 'text-ink-muted hover:text-ink'
+          ? 'bg-primary font-semibold text-primary-foreground'
+          : 'text-muted-foreground hover:text-ink'
       }`}
     >
       {label}

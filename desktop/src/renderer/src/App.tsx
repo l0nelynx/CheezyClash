@@ -95,7 +95,7 @@ export default function App(): React.JSX.Element {
 
   if (!authReady || !caps) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-ink-muted">Loading…</div>
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
     )
   }
 
@@ -239,7 +239,7 @@ export default function App(): React.JSX.Element {
             }
           />
         ) : (
-          <div className="mx-auto max-w-3xl py-12 text-center text-sm text-ink-muted">Loading settings…</div>
+          <div className="mx-auto max-w-3xl py-12 text-center text-sm text-muted-foreground">Loading settings…</div>
         ))}
 
       {tab === 'logs' && <LogsPage logs={state.logs} />}

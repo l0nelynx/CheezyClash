@@ -90,7 +90,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
         {nowDelay !== undefined && (
           <p
             className={`mt-0.5 text-xs tabular-nums ${
-              nowDelay < 0 ? 'text-danger' : nowDelay < 200 ? 'text-ok' : 'text-ink-muted'
+              nowDelay < 0 ? 'text-danger' : nowDelay < 200 ? 'text-ok' : 'text-muted-foreground'
             }`}
           >
             {nowDelay < 0 ? 'fail' : `${nowDelay} ms`}
@@ -119,7 +119,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
           )}
           <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-xs text-ink-muted">No matches</li>
+              <li className="px-3 py-2 text-xs text-muted-foreground">No matches</li>
             ) : (
               filtered.map((name) => {
                 const active = name === group.now
@@ -134,7 +134,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
                       onClick={() => pick(name)}
                       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
                         active
-                          ? 'bg-accent-soft text-accent'
+                          ? 'bg-primary/10 text-primary'
                           : 'text-ink hover:bg-surface-overlay'
                       }`}
                     >
@@ -147,7 +147,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
                       {ms !== undefined && (
                         <span
                           className={`shrink-0 text-xs tabular-nums ${
-                            ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-ink-muted'
+                            ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-muted-foreground'
                           }`}
                         >
                           {ms < 0 ? 'fail' : `${ms} ms`}

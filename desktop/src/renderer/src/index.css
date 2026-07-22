@@ -3,56 +3,142 @@
 @source "../index.html";
 @source "./**/*.{js,ts,jsx,tsx}";
 
-@theme {
-  --color-surface: #0f1117;
-  --color-surface-raised: #161a22;
-  --color-surface-overlay: #1c2230;
-  --color-surface-border: #2a3140;
-  --color-ink: #e8ecf4;
-  --color-ink-muted: #8b95a8;
-  --color-ink-dim: #5c667a;
-  --color-accent: #f0b429;
-  --color-accent-dim: #c4921f;
-  --color-accent-soft: rgba(240, 180, 41, 0.12);
-  --color-ok: #3dd68c;
-  --color-danger: #f07178;
-  /* Do NOT put Noto Color Emoji in --font-sans — it claims ASCII digits. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+  shadcn dark-neutral tokens (aligned with dashboard / miniapp / web portal).
+  Legacy CheezyClash names (surface/ink/accent) are aliased so existing
+  classNames keep working while we migrate to background/card/primary.
+*/
+:root,
+.dark {
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.24 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.24 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.24 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.65 0 0);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.16 0 0);
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.24 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.65 0 0);
+
+  /* Legacy aliases → new tokens */
+  --surface: var(--background);
+  --surface-raised: var(--card);
+  --surface-overlay: var(--secondary);
+  --surface-border: var(--border);
+  --surface-sunken: oklch(0.1 0 0);
+  --ink: var(--foreground);
+  --ink-muted: var(--muted-foreground);
+  --ink-dim: oklch(0.55 0 0);
+  /* "accent" in old UI meant brand CTA — map to primary (near-white) */
+  --brand: var(--primary);
+  --brand-dim: oklch(0.85 0 0);
+  --brand-soft: oklch(1 0 0 / 10%);
+  --ok: oklch(0.72 0.15 155);
+  --danger: var(--destructive);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Legacy Tailwind color names used across the renderer */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-border: var(--surface-border);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-dim: var(--ink-dim);
+  /* Old "accent" meant brand CTA — keep soft/dim helpers for gradual migration */
+  --color-accent-dim: var(--brand-dim);
+  --color-accent-soft: var(--brand-soft);
+  --color-ok: var(--ok);
+  --color-danger: var(--danger);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Twemoji Country Flags (polyfill) first — Windows/Chromium has no native flag glyphs. */
   --font-emoji: "Twemoji Country Flags", Inter, "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, monospace;
-  --shadow-glow: 0 0 24px rgba(240, 180, 41, 0.15);
-  --color-surface-sunken: #0a0c10;
+
+  --shadow-glow: 0 0 0 0 transparent;
 }
 
 @layer base {
+  * {
+    @apply border-border outline-ring/50 box-border;
+  }
+
   html,
   body,
   #root {
-    @apply h-full m-0 bg-surface text-ink antialiased;
+    @apply m-0 h-full bg-background text-foreground antialiased;
     font-family: var(--font-sans);
     color-scheme: dark;
-  }
-
-  * {
-    @apply box-border;
   }
 
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
-
   ::-webkit-scrollbar-track {
     background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-surface-border;
+    @apply rounded-full bg-border;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-ink-dim;
+    background: oklch(1 0 0 / 22%);
   }
 }
 
@@ -66,39 +152,64 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-surface-border
-      bg-surface-raised px-3.5 py-2 text-sm font-medium text-ink transition
-      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border
+      bg-card px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition
+      hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-accent-dim
-      bg-accent px-3.5 py-2 text-sm font-semibold text-[#1a1408] shadow-glow transition
-      hover:bg-accent-dim hover:text-[#1a1408] disabled:cursor-not-allowed disabled:opacity-45
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent
+      bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition
+      hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-danger/40
-      bg-surface-raised px-3.5 py-2 text-sm font-medium text-danger transition
-      hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-45
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-destructive/40
+      bg-transparent px-3.5 py-2 text-sm font-medium text-destructive transition
+      hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent
-      bg-transparent px-3.5 py-2 text-sm font-medium text-ink transition
-      hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent
+      bg-transparent px-3.5 py-2 text-sm font-medium text-foreground transition
+      hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
   }
 
   .field {
-    @apply w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-ink
-      placeholder:text-ink-dim outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30;
+    @apply w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm
+      placeholder:text-muted-foreground outline-none
+      focus-visible:ring-1 focus-visible:ring-ring;
+  }
+
+  /* Native <select> dropdowns ignore Tailwind on <option> unless we force colors.
+     Transparent field + OS light popup = white-on-white in Electron. */
+  select.field,
+  select {
+    color-scheme: dark;
+    background-color: var(--card);
+    color: var(--foreground);
+  }
+
+  select.field:disabled,
+  select:disabled {
+    opacity: 0.5;
+  }
+
+  select.field option,
+  select option {
+    background-color: var(--card);
+    color: var(--foreground);
   }
 
   .section-label {
-    @apply text-xs font-semibold uppercase tracking-wider text-ink-dim;
+    @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .font-emoji {
+    font-family: var(--font-emoji);
   }
 }

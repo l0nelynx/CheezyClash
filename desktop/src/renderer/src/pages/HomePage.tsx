@@ -55,11 +55,11 @@ export function HomePage(props: Props): React.JSX.Element {
       />
 
       {showAnnounce && announce && (
-        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent">
+        <div className="flex items-start gap-3 rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground">
           <p className="min-w-0 flex-1">{announce}</p>
           <button
             type="button"
-            className="shrink-0 rounded p-0.5 hover:bg-accent/20"
+            className="shrink-0 rounded p-0.5 hover:bg-muted"
             aria-label="Dismiss announcement"
             onClick={() => setDismissedAnnounce(announce)}
           >

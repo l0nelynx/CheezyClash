@@ -41,7 +41,7 @@ export function ProxyGroupList({
   if (!running) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-ink-muted">Connect first to see your servers.</p>
+        <p className="text-sm text-muted-foreground">Connect first to see your servers.</p>
       </div>
     )
   }
@@ -49,7 +49,7 @@ export function ProxyGroupList({
   if (groups.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-ink-muted">No server groups in this profile.</p>
+        <p className="text-sm text-muted-foreground">No server groups in this profile.</p>
       </div>
     )
   }
@@ -124,14 +124,14 @@ export function ProxyGroupList({
                         onClick={() => onSelect(g.name, name)}
                         className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
                           active
-                            ? 'bg-accent-soft text-accent'
+                            ? 'bg-primary/10 text-primary'
                             : 'text-ink hover:bg-surface-overlay'
                         }`}
                       >
                         <span
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                             active
-                              ? 'border-accent bg-accent text-[#1a1408]'
+                              ? 'border-primary bg-primary text-primary-foreground'
                               : 'border-surface-border'
                           }`}
                         >
@@ -143,7 +143,7 @@ export function ProxyGroupList({
                         {ms !== undefined && (
                           <span
                             className={`shrink-0 text-xs tabular-nums ${
-                              ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-ink-muted'
+                              ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-muted-foreground'
                             }`}
                           >
                             {ms < 0 ? 'fail' : `${ms} ms`}
