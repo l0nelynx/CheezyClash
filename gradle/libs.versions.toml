@@ -14,7 +14,7 @@ lifecycleViewmodelCompose = "2.10.0"
 workRuntimeKtx = "2.11.2"
 browser = "1.10.0"
 graphicsShapes = "1.1.0"
-material3 = "1.5.0-alpha19"
+material3 = "1.5.0-alpha24"
 # Baseline Profile генерация (Macrobenchmark) + runtime установка (ProfileInstaller).
 # benchmark.macro версия — последняя стабильная, поддерживает API 28+. Если в проекте
 # AGP 9.x — нужна benchmark 1.4.x; используем 1.4.1 (есть нативная поддержка AGP 9).
