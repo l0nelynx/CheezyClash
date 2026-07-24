@@ -79,7 +79,7 @@ jobs:
 
       # Always set up Go: sidecar builds need it even when libclash is cached.
       - name: Set up Go 1.23
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.23'
           cache-dependency-path: core/src/main/golang/go.sum

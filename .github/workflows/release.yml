@@ -86,7 +86,7 @@ jobs:
           node-version: '22.12'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.22.x'
       - name: Install deps
