@@ -53,7 +53,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CheezyClash-APKs
           path: app/build/outputs/apk/directOpen/release/*.apk
@@ -128,7 +128,7 @@ jobs:
         continue-on-error: ${{ matrix.target != 'win' }}
       - name: Upload Windows desktop artifacts
         if: matrix.target == 'win'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CheezyClash-desktop-win
           path: |
@@ -137,14 +137,14 @@ jobs:
           if-no-files-found: error
       - name: Upload Linux desktop artifacts
         if: matrix.target == 'linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CheezyClash-desktop-linux
           path: desktop/release/*
           if-no-files-found: ignore
       - name: Upload macOS desktop artifacts
         if: matrix.target == 'mac'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CheezyClash-desktop-mac-${{ matrix.arch }}
           path: |
