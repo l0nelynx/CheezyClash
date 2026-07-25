@@ -44,7 +44,18 @@ On Windows, packaging skips code signing (`signAndEditExecutable: false`) so ele
 
 The NSIS installer stops/recreates `CheezyHelperService` from `resources/helper`. First TUN connect still syncs the core SHA256 allowlist via the app (same as `Ensure helper` on Home).
 
-Linux / macOS: `npm run dist:linux` / `npm run dist:mac` (CI builds these; Windows is the primary QA target).
+Linux / macOS: `npm run dist:linux` / `npm run dist:mac`. Linux publishes both
+AppImage and `.deb`; install the `.deb` when you need reliable
+`cheezyclash://` desktop integration. A standalone AppImage needs a desktop
+integration tool before the browser can discover its custom-scheme handler.
+
+## Deep links
+
+- Open Desktop owns only `cheezyclash://add/<encoded HTTPS URL>`.
+- Account-login deep links are intentionally rejected in the Open build.
+- Development runs never register production schemes to `electron.exe`; pass a
+  URL in argv when testing the parser locally.
+- CheezyVPN uses its own `cheezyvpn://` scheme. Android keeps `cheezy://`.
 
 ## Scripts
 

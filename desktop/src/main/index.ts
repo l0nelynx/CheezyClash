@@ -8,7 +8,7 @@ import {
   shell,
   dialog,
 } from 'electron'
-import { join, basename, resolve as resolvePath } from 'path'
+import { join, basename } from 'path'
 import { existsSync } from 'fs'
 import {
   connect,
@@ -41,7 +41,14 @@ import { listRunningProcesses } from './processes'
 import type { AccessControlRule, ConnectionMode } from '../shared/types'
 import { getLogs, log } from './logger'
 import { coreHome } from './paths'
-import { PRIVATE_IPC } from '../shared/private-api'
+import { PRIVATE_IPC, type PrivateCapabilities } from '../shared/private-api'
+import {
+  DEEP_LINK_IPC,
+  deepLinkLogLabel,
+  parseDeepLink,
+  type DeepLinkResult,
+  type DeepLinkResultPayload,
+} from '../shared/deep-link'
 import { getPrivateModule, loadPrivateModule } from './private-module'
 import { syncManagedFromPrivate } from './private-sync'
 import { resolveCoreVersionLabel } from './mihomo-label'
@@ -60,6 +67,9 @@ let quitCleanupDone = false
 let trayProductName = 'CheezyClash'
 /** Queued until the window is ready (cold-start deeplink). */
 let pendingDeepLink: string | null = null
+/** Buffered so a cold-start result cannot race ahead of the renderer listener. */
+let pendingDeepLinkResult: DeepLinkResult | null = null
+let deepLinkResultSequence = 0
 
 function resolveAsset(...parts: string[]): string {
   if (app.isPackaged) {
@@ -140,12 +150,19 @@ function createWindow(productName: string): void {
   }
 }
 
+function revealMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.moveTop()
+  mainWindow.focus()
+}
+
 function createTray(productName: string): void {
   trayProductName = productName
   tray = new Tray(loadTrayImage())
   tray.on('double-click', () => {
-    mainWindow?.show()
-    mainWindow?.focus()
+    revealMainWindow()
   })
   void refreshTrayMenu()
 }
@@ -169,8 +186,7 @@ async function refreshTrayMenu(): Promise<void> {
     {
       label: `Show ${trayProductName}`,
       click: () => {
-        mainWindow?.show()
-        mainWindow?.focus()
+        revealMainWindow()
       },
     },
     { type: 'separator' },
@@ -406,6 +422,11 @@ function registerIpc(): void {
     }
     void shell.openExternal(url)
   })
+  ipcMain.handle(DEEP_LINK_IPC.consumeResult, () => {
+    const result = pendingDeepLinkResult
+    pendingDeepLinkResult = null
+    return result
+  })
 
   ipcMain.handle(PRIVATE_IPC.capabilities, () => getPrivateModule().capabilities())
   ipcMain.handle(PRIVATE_IPC.accountGetSession, () => getPrivateModule().getSession())
@@ -452,80 +473,97 @@ function registerIpc(): void {
   })
 }
 
-function percentDecode(s: string): string {
-  if (!s.includes('%')) return s
-  try {
-    return decodeURIComponent(s)
-  } catch {
-    return s
-  }
-}
-
-/** Extract a cheezy:// URL from process argv (Windows/Linux second-instance / cold start). */
+/** Extract one of our URL schemes from process argv. */
 function findDeepLinkInArgv(argv: string[]): string | null {
   for (const arg of argv) {
-    if (typeof arg === 'string' && arg.toLowerCase().startsWith('cheezy://')) return arg
+    if (
+      typeof arg === 'string' &&
+      /^(?:cheezy|cheezyvpn|cheezyclash):\/\//i.test(arg)
+    ) {
+      return arg
+    }
   }
   return null
 }
 
-/**
- * Handle `cheezy://add/<subscription_url>` and `cheezy://login/<token>`.
- * Mirrors Android DeepLink.kt: raw https after add/ is fine; %XX is decoded when present.
- */
-async function handleDeepLink(raw: string): Promise<void> {
-  const url = raw.trim()
-  log(`deeplink: ${url.slice(0, 120)}`)
+function publishDeepLinkResult(result: DeepLinkResultPayload): void {
+  const sequenced = { ...result, sequence: ++deepLinkResultSequence } as DeepLinkResult
+  pendingDeepLinkResult = sequenced
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(DEEP_LINK_IPC.result, sequenced)
+  }
+}
 
-  if (url.toLowerCase().startsWith('cheezy://add/')) {
-    const sub = percentDecode(url.slice('cheezy://add/'.length)).trim()
-    if (!sub.toLowerCase().startsWith('https://')) {
-      log(`deeplink add: rejected non-https payload`, 'warn')
-      return
-    }
+function loginErrorKind(error: unknown): 'expired' | 'network' | 'server' {
+  const value = error instanceof Error ? `${error.name} ${error.message}` : String(error)
+  if (/401|bad_app_login_token/i.test(value)) return 'expired'
+  if (/abort|timeout|fetch|network|enotfound|econn/i.test(value)) return 'network'
+  return 'server'
+}
+
+async function handleDeepLink(raw: string): Promise<void> {
+  const capabilities = getPrivateModule().capabilities()
+  const action = parseDeepLink(raw, capabilities)
+  if (!action) {
+    log('deeplink rejected', 'warn')
+    return
+  }
+  log(deepLinkLogLabel(action))
+
+  if (action.kind === 'add') {
     try {
-      await importFromUrl(sub)
+      await importFromUrl(action.subscriptionUrl)
       rescheduleSubscriptionUpdates()
       notifyProfilesChanged()
-      mainWindow?.show()
-      mainWindow?.focus()
-      mainWindow?.webContents.send('deeplink:imported', { url: sub })
+      revealMainWindow()
+      publishDeepLinkResult({ kind: 'add', status: 'success' })
       // Proprietary: if there is no session yet, open the web claim page so the
-      // user can register/login and hand back via cheezy://login/<token>.
+      // user can register/login and hand back via the proprietary login scheme.
       const mod = getPrivateModule()
       if (typeof mod.claimHandoffUrl === 'function') {
-        const handoff = mod.claimHandoffUrl(sub)
+        const handoff = mod.claimHandoffUrl(action.subscriptionUrl)
         if (handoff) {
           await shell.openExternal(handoff)
         }
       }
     } catch (e) {
-      log(`deeplink add failed: ${e}`, 'warn')
-      dialog.showErrorBox('Import failed', e instanceof Error ? e.message : String(e))
+      log('deeplink add failed', 'warn')
+      publishDeepLinkResult({
+        kind: 'add',
+        status: 'error',
+        error: loginErrorKind(e) === 'network' ? 'network' : 'server',
+      })
     }
     return
   }
 
-  if (url.toLowerCase().startsWith('cheezy://login/')) {
-    const token = percentDecode(url.slice('cheezy://login/'.length)).trim()
-    if (!token) return
-    const mod = getPrivateModule()
-    if (typeof mod.exchangeAppLogin !== 'function') {
-      // Open build: login handoff is proprietary-only.
-      log('deeplink login: ignored (no private exchangeAppLogin)', 'warn')
-      return
-    }
-    try {
-      await mod.exchangeAppLogin(token)
-      await syncManagedFromPrivate().catch((err) => log(String(err), 'warn'))
-      notifyProfilesChanged()
-      mainWindow?.show()
-      mainWindow?.focus()
-      mainWindow?.webContents.send('deeplink:loggedIn')
-    } catch (e) {
-      log(`deeplink login failed: ${e}`, 'warn')
-      dialog.showErrorBox('Sign-in failed', e instanceof Error ? e.message : String(e))
-    }
+  const mod = getPrivateModule()
+  if (typeof mod.exchangeAppLogin !== 'function') {
+    log('deeplink login rejected by open build', 'warn')
+    return
+  }
+  try {
+    const session = await mod.exchangeAppLogin(action.token)
+    revealMainWindow()
+    publishDeepLinkResult({
+      kind: 'login',
+      status: 'success',
+      session: {
+        email: session.email,
+        emailVerified: session.emailVerified,
+        tgId: session.tgId,
+      },
+    })
+    void syncManagedFromPrivate()
+      .then(() => notifyProfilesChanged())
+      .catch(() => log('subscription sync after login failed', 'warn'))
+  } catch (e) {
+    log('deeplink login failed', 'warn')
+    publishDeepLinkResult({
+      kind: 'login',
+      status: 'error',
+      error: loginErrorKind(e),
+    })
   }
 }
 
@@ -537,7 +575,34 @@ function enqueueOrHandleDeepLink(raw: string): void {
   void handleDeepLink(raw)
 }
 
-// Single-instance + protocol client — must run before ready.
+function configureProtocolClients(capabilities: PrivateCapabilities): void {
+  // Never let `npm run dev` bind a production URL scheme to electron.exe.
+  if (process.defaultApp) return
+
+  // Migrate an Open installation that previously owned the shared legacy key.
+  if (
+    !capabilities.supportsAuth &&
+    (process.platform === 'win32' || process.platform === 'darwin') &&
+    app.isDefaultProtocolClient('cheezy')
+  ) {
+    app.removeAsDefaultProtocolClient('cheezy')
+  }
+
+  // electron-builder writes macOS plist and Linux x-scheme-handler metadata.
+  // Packaged Windows apps must register their executable in the registry.
+  if (process.platform !== 'win32') return
+  const schemes = [
+    capabilities.deepLinkScheme,
+    ...(capabilities.legacyDeepLinkSchemes ?? []),
+  ]
+  for (const scheme of schemes) {
+    if (!app.setAsDefaultProtocolClient(scheme)) {
+      log(`failed to register ${scheme} protocol`, 'warn')
+    }
+  }
+}
+
+// Single-instance handling must run before ready.
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
@@ -545,20 +610,8 @@ if (!gotTheLock) {
   app.on('second-instance', (_event, argv) => {
     const link = findDeepLinkInArgv(argv)
     if (link) enqueueOrHandleDeepLink(link)
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.show()
-      mainWindow.focus()
-    }
+    revealMainWindow()
   })
-
-  if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('cheezy', process.execPath, [resolvePath(process.argv[1])])
-    }
-  } else {
-    app.setAsDefaultProtocolClient('cheezy')
-  }
 
   // macOS cold-start / open-url while running
   app.on('open-url', (event, url) => {
@@ -573,6 +626,7 @@ if (!gotTheLock) {
     const priv = loadPrivateModule()
     const caps = priv.capabilities()
     app.setName(caps.productName)
+    configureProtocolClients(caps)
     if (process.platform === 'win32') {
       app.setAppUserModelId(
         caps.supportsAuth ? 'com.cheezy.vpn.desktop' : 'com.cheezy.freedom.desktop',
@@ -606,7 +660,7 @@ if (!gotTheLock) {
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
-      else mainWindow?.show()
+      else revealMainWindow()
     })
   })
 

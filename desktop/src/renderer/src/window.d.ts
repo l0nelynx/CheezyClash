@@ -13,6 +13,7 @@ import type {
   PrivateCapabilities,
   PrivateSubscriptionInfo,
 } from '../shared/private-api'
+import type { DeepLinkResult } from '../../shared/deep-link'
 
 export interface CheezyApi {
   getStatus: () => Promise<CoreStatus>
@@ -54,6 +55,8 @@ export interface CheezyApi {
   onLog: (cb: (line: string) => void) => () => void
   onStatus: (cb: (status: CoreStatus) => void) => () => void
   onProfilesChanged: (cb: () => void) => () => void
+  consumeDeepLinkResult: () => Promise<DeepLinkResult | null>
+  onDeepLinkResult: (cb: (result: DeepLinkResult) => void) => () => void
   windowMinimize: () => Promise<void>
   windowMaximizeToggle: () => Promise<boolean>
   windowClose: () => Promise<void>

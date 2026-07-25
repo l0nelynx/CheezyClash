@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { TitleBar } from './components/TitleBar'
 import { useCheezyState } from './hooks/useCheezyState'
@@ -10,6 +10,7 @@ import { ProfilesPage } from './pages/ProfilesPage'
 import { ProxiesPage } from './pages/ProxiesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import type { PrivateAccountSession, PrivateCapabilities } from '../../shared/private-api'
+import type { DeepLinkResult } from '../../shared/deep-link'
 
 export default function App(): React.JSX.Element {
   const state = useCheezyState()
@@ -26,12 +27,15 @@ export default function App(): React.JSX.Element {
     showNotice,
     groups,
     setGroupLatencies,
+    refresh,
   } = state
   const [testingAll, setTestingAll] = useState(false)
   const [testProgress, setTestProgress] = useState<{ done: number; total: number } | null>(null)
   const [caps, setCaps] = useState<PrivateCapabilities | null>(null)
   const [session, setSession] = useState<PrivateAccountSession | null>(null)
   const [authReady, setAuthReady] = useState(false)
+  const [authHandoffError, setAuthHandoffError] = useState<string | null>(null)
+  const handledDeepLinkSequence = useRef(0)
 
   const refreshAuth = useCallback(async () => {
     const c = await window.cheezy.privateCapabilities()
@@ -48,6 +52,50 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     void refreshAuth()
   }, [refreshAuth])
+
+  const handleDeepLinkResult = useCallback(
+    (result: DeepLinkResult) => {
+      if (result.sequence <= handledDeepLinkSequence.current) return
+      handledDeepLinkSequence.current = result.sequence
+
+      if (result.kind === 'login') {
+        if (result.status === 'success') {
+          setAuthHandoffError(null)
+          setTab('home')
+          if (result.session?.email) {
+            setSession(result.session)
+            setAuthReady(true)
+          }
+          void refreshAuth()
+            .then(() => refresh())
+            .then(() => showNotice('Signed in successfully'))
+          return
+        }
+        const messages = {
+          expired: 'The browser sign-in link expired. Return to the browser and try again.',
+          network: 'Could not reach the sign-in service. Check your connection and try again.',
+          server: 'Could not complete browser sign-in. Please try again.',
+        }
+        setAuthHandoffError(messages[result.error])
+        return
+      }
+
+      if (result.status === 'success') {
+        void refresh().then(() => showNotice('Subscription imported'))
+      } else {
+        showNotice('Could not import the subscription')
+      }
+    },
+    [refresh, refreshAuth, setTab, showNotice],
+  )
+
+  useEffect(() => {
+    const off = window.cheezy.onDeepLinkResult(handleDeepLinkResult)
+    void window.cheezy.consumeDeepLinkResult().then((result) => {
+      if (result) handleDeepLinkResult(result)
+    })
+    return off
+  }, [handleDeepLinkResult])
 
   useEffect(() => {
     if (caps?.productName) document.title = caps.productName
@@ -106,6 +154,7 @@ export default function App(): React.JSX.Element {
         <div className="min-h-0 flex-1">
           <LoginPage
             productName={caps.productName}
+            handoffError={authHandoffError}
             onLoggedIn={() => {
               void refreshAuth().then(() => state.refresh())
             }}

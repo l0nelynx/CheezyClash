@@ -233,13 +233,21 @@ function ensureDns(doc: Record<string, unknown>): void {
   doc.dns = dns
 }
 
+function subscriptionLogOrigin(url: string): string {
+  try {
+    return new URL(url).origin
+  } catch {
+    return 'invalid-url'
+  }
+}
+
 export async function importFromUrl(url: string, name?: string): Promise<ProfileMeta> {
   ensureProfilesRoot()
   if (!/^https:\/\//i.test(url)) {
     throw new Error('Only https:// subscription URLs are allowed')
   }
   const headers = subscriptionHeaders()
-  log(`importing profile from ${url} (UA=${headers['User-Agent']})`)
+  log(`importing profile from ${subscriptionLogOrigin(url)} (UA=${headers['User-Agent']})`)
   const res = await fetch(url, { headers, redirect: 'follow' })
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')
@@ -291,7 +299,7 @@ export async function upsertManagedProfile(
     throw new Error('Only https:// subscription URLs are allowed')
   }
   const headers = subscriptionHeaders()
-  log(`upserting managed profile from ${url}`)
+  log(`upserting managed profile from ${subscriptionLogOrigin(url)}`)
   const res = await fetch(url, { headers, redirect: 'follow' })
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')
@@ -400,7 +408,9 @@ export async function refreshProfile(
   }
 
   const headers = subscriptionHeaders()
-  log(`refreshing profile ${id} from ${url} (reloadCore=${opts.reloadCore})`)
+  log(
+    `refreshing profile ${id} from ${subscriptionLogOrigin(url)} (reloadCore=${opts.reloadCore})`,
+  )
   const res = await fetch(url, { headers, redirect: 'follow' })
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')

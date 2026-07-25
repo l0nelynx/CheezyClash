@@ -31,6 +31,8 @@ export interface PrivateSubscriptionInfo {
 export interface PrivateCapabilities {
   supportsAuth: boolean
   productName: string
+  deepLinkScheme: string
+  legacyDeepLinkSchemes?: string[]
 }
 
 export interface PrivateModule {
@@ -42,7 +44,7 @@ export interface PrivateModule {
   /** Refresh /me and return subscription snapshot (may update tokens). */
   syncSubscription(): Promise<PrivateSubscriptionInfo | null>
   /**
-   * Exchange a one-time `cheezy://login/<token>` for a session.
+   * Exchange a one-time flavor-specific `...://login/<token>` for a session.
    * Open builds omit this (login deeplinks are ignored). Proprietary implements
    * POST /android/auth/app-login/exchange.
    */

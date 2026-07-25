@@ -10,7 +10,11 @@ import type {
 import { log } from './logger'
 
 const openStub: PrivateModule = {
-  capabilities: () => ({ supportsAuth: false, productName: 'CheezyClash' }),
+  capabilities: () => ({
+    supportsAuth: false,
+    productName: 'CheezyClash',
+    deepLinkScheme: 'cheezyclash',
+  }),
   getSession: async () => null,
   login: async () => {
     throw new Error('Account login is not available in the open build')

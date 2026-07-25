@@ -15,6 +15,7 @@ import {
   type PrivateCapabilities,
   type PrivateSubscriptionInfo,
 } from '../shared/private-api'
+import { DEEP_LINK_IPC, type DeepLinkResult } from '../shared/deep-link'
 
 const api = {
   getStatus: (): Promise<CoreStatus> => ipcRenderer.invoke('core:status'),
@@ -85,6 +86,13 @@ const api = {
     const handler = (): void => cb()
     ipcRenderer.on('profiles:changed', handler)
     return () => ipcRenderer.removeListener('profiles:changed', handler)
+  },
+  consumeDeepLinkResult: (): Promise<DeepLinkResult | null> =>
+    ipcRenderer.invoke(DEEP_LINK_IPC.consumeResult),
+  onDeepLinkResult: (cb: (result: DeepLinkResult) => void): (() => void) => {
+    const handler = (_: unknown, result: DeepLinkResult): void => cb(result)
+    ipcRenderer.on(DEEP_LINK_IPC.result, handler)
+    return () => ipcRenderer.removeListener(DEEP_LINK_IPC.result, handler)
   },
   windowMinimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   windowMaximizeToggle: (): Promise<boolean> =>

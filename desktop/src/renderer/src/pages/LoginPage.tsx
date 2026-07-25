@@ -4,9 +4,14 @@ import { Loader2 } from 'lucide-react'
 interface Props {
   productName: string
   onLoggedIn: () => void
+  handoffError?: string | null
 }
 
-export function LoginPage({ productName, onLoggedIn }: Props): React.JSX.Element {
+export function LoginPage({
+  productName,
+  onLoggedIn,
+  handoffError,
+}: Props): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -36,9 +41,9 @@ export function LoginPage({ productName, onLoggedIn }: Props): React.JSX.Element
           <h1 className="text-xl font-semibold text-ink">{productName}</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to sync your subscription.</p>
         </div>
-        {error && (
+        {(error || handoffError) && (
           <p className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
+            {error || handoffError}
           </p>
         )}
         <label className="block">

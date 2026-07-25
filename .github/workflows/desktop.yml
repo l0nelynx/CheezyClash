@@ -47,6 +47,8 @@ jobs:
         run: npm run build:helper
       - name: Typecheck
         run: npm run typecheck
+      - name: Deep-link matrix / privacy
+        run: npm run test:deeplink
       - name: Build
         run: npm run build
       - name: Smoke proxy
@@ -113,6 +115,51 @@ jobs:
             npm run dist:${{ matrix.target }}
           fi
         continue-on-error: ${{ matrix.target != 'win' }}
+      - name: Validate Windows protocol handler
+        if: matrix.target == 'win'
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "release/win-unpacked/CheezyClash.exe").Path
+          if (Test-Path "release/win-unpacked/resources/private") {
+            throw "Open artifact contains proprietary resources"
+          }
+          $process = Start-Process $exe -ArgumentList "--disable-gpu" -PassThru
+          try {
+            $command = $null
+            for ($i = 0; $i -lt 20 -and -not $command; $i++) {
+              Start-Sleep -Milliseconds 500
+              $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(
+                "Software\Classes\cheezyclash\shell\open\command"
+              )
+              if ($key) {
+                $command = [string]$key.GetValue("")
+                $key.Dispose()
+              }
+            }
+            if (-not $command -or $command -notmatch "CheezyClash\.exe" -or $command -match "electron\.exe") {
+              throw "Invalid cheezyclash handler: $command"
+            }
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+      - name: Validate Linux protocol metadata
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          test ! -d release/linux-unpacked/resources/private
+          DEB=$(find release -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$DEB"
+          OUT=$(mktemp -d)
+          dpkg-deb -x "$DEB" "$OUT"
+          grep -R -q 'x-scheme-handler/cheezyclash' "$OUT/usr/share/applications"
+      - name: Validate macOS protocol metadata
+        if: matrix.target == 'mac'
+        shell: bash
+        run: |
+          APP=$(find release -maxdepth 2 -name 'CheezyClash.app' -print -quit)
+          test -n "$APP"
+          test ! -d "$APP/Contents/Resources/private"
+          plutil -p "$APP/Contents/Info.plist" | grep -q 'cheezyclash'
       - name: Upload Windows artifacts
         if: matrix.target == 'win'
         uses: actions/upload-artifact@v4
