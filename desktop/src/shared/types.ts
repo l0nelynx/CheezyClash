@@ -28,6 +28,8 @@ export interface ProfileMeta {
   subscription?: SubscriptionInfo
   /** From profile-update-interval header (hours). 0 / omit = no auto-update. */
   updateIntervalHours?: number
+  /** Stable account-managed identity. Omitted for manual/imported profiles. */
+  managedKey?: string
 }
 
 export interface SubscriptionInfo {

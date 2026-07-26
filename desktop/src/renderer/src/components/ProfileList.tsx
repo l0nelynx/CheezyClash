@@ -1,4 +1,4 @@
-import { FileUp, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { ExternalLink, FileUp, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProfileMeta } from '../../../shared/types'
 
@@ -72,7 +72,7 @@ export function ProfileList({
             {profiles.map((p) => {
               const active = p.id === activeId
               const canUpdate = !!p.url
-              const managed = p.id === 'managed-primary'
+              const managed = !!p.managedKey || p.id === 'managed-primary'
               return (
                 <li key={p.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
@@ -94,8 +94,8 @@ export function ProfileList({
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-xs text-ink-dim" title={p.url || 'Local file'}>
-                      {p.url || 'Local file'}
+                    <p className="truncate text-xs text-ink-dim" title={managed ? undefined : p.url || 'Local file'}>
+                      {managed ? 'Account subscription' : p.url || 'Local file'}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
@@ -119,6 +119,18 @@ export function ProfileList({
                         title="Update subscription"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canUpdate && (
+                      <button
+                        type="button"
+                        className="btn px-2.5 py-1.5 text-xs"
+                        disabled={busy}
+                        onClick={() => void window.cheezy.openExternal(p.url!)}
+                        aria-label={`Manage ${p.name}`}
+                        title="Manage subscription in browser"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {!managed && (

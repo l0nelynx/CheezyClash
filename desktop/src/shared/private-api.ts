@@ -20,6 +20,9 @@ export interface PrivateAccountSession {
 }
 
 export interface PrivateSubscriptionInfo {
+  /** Stable server-side subscription identity (Remnawave numeric id). */
+  managedId?: string
+  isPrimary?: boolean
   url: string
   title?: string
   expire?: number
@@ -43,6 +46,8 @@ export interface PrivateModule {
   fetchSubscription(): Promise<PrivateSubscriptionInfo | null>
   /** Refresh /me and return subscription snapshot (may update tokens). */
   syncSubscription(): Promise<PrivateSubscriptionInfo | null>
+  /** Multi-profile sync. Older overlays may omit it and use syncSubscription. */
+  syncSubscriptions?(): Promise<PrivateSubscriptionInfo[]>
   /**
    * Exchange a one-time flavor-specific `...://login/<token>` for a session.
    * Open builds omit this (login deeplinks are ignored). Proprietary implements

@@ -67,7 +67,7 @@ export interface CheezyApi {
   privateLogin: (email: string, password: string) => Promise<PrivateAccountSession>
   privateLogout: () => Promise<void>
   privateFetchSubscription: () => Promise<PrivateSubscriptionInfo | null>
-  privateSyncSubscription: () => Promise<PrivateSubscriptionInfo | null>
+  privateSyncSubscription: () => Promise<PrivateSubscriptionInfo[]>
 }
 
 declare global {

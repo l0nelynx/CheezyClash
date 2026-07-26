@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
  * core HOME (`filesDir/clash/`) keeps shared static data (geodata, cache.db).
  */
 object ProfileManager {
-    /** Stable id for the backend-owned profile in the proprietary flavor. */
+    /** Legacy id retained while an existing single managed profile is adopted. */
     const val MANAGED_ID = "managed-primary"
 
     private const val WORK_NAME = "config_update"
@@ -71,21 +71,29 @@ object ProfileManager {
     }
 
     /**
-     * Proprietary entry point: upsert the backend-owned subscription as a single
-     * managed profile with a stable id. Does NOT steal focus from a user-chosen
+     * Proprietary entry point: upsert one backend-owned subscription using its
+     * stable managed key. Does NOT steal focus from a user-chosen
      * profile — it only becomes active if nothing is active yet.
      */
     suspend fun upsertManaged(
         context: Context,
         url: String,
+        managedKey: String = "primary",
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): Profile {
-        val id = MANAGED_ID
+        val safeKey = managedKey.lowercase()
+            .replace(Regex("[^a-z0-9_-]"), "-")
+            .take(64)
+            .ifBlank { "primary" }
+        val existing = ProfileStore.list(context).firstOrNull { it.managedKey == managedKey }
+            ?: ProfileStore.list(context).firstOrNull {
+                it.id == MANAGED_ID && it.managedKey == null && it.url == url
+            }
+        val id = existing?.id ?: if (safeKey == "primary") MANAGED_ID else "managed-$safeKey"
         val dir = ProfileStore.dir(context, id)
         val meta = ConfigManager.downloadBase(context, url, dir, validateHeaders)
         ConfigOverrideManager.rebuild(context, dir)
 
-        val existing = ProfileStore.get(context, id)
         val profile = Profile(
             id = id,
             name = meta.name,
@@ -94,6 +102,7 @@ object ProfileManager {
             lastUpdateTime = System.currentTimeMillis(),
             updateIntervalHours = meta.intervalHours,
             managed = true,
+            managedKey = managedKey,
             order = existing?.order ?: 0L,
         )
         ProfileStore.upsert(context, profile)

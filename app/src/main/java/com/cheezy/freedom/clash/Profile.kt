@@ -20,6 +20,8 @@ data class Profile(
     val lastUpdateTime: Long = 0L,
     val updateIntervalHours: Int = 0,
     val managed: Boolean = false,
+    /** Stable backend identity; null for user-imported profiles and legacy data. */
+    val managedKey: String? = null,
     /** Monotonic insertion order, used to keep the list stable across edits. */
     val order: Long = 0L,
 )

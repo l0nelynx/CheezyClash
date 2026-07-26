@@ -114,7 +114,7 @@ const api = {
   privateLogout: (): Promise<void> => ipcRenderer.invoke(PRIVATE_IPC.accountLogout),
   privateFetchSubscription: (): Promise<PrivateSubscriptionInfo | null> =>
     ipcRenderer.invoke(PRIVATE_IPC.subscriptionFetch),
-  privateSyncSubscription: (): Promise<PrivateSubscriptionInfo | null> =>
+  privateSyncSubscription: (): Promise<PrivateSubscriptionInfo[]> =>
     ipcRenderer.invoke(PRIVATE_IPC.subscriptionSync),
 }
 
