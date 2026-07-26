@@ -286,13 +286,19 @@ export async function importFromFileDialog(): Promise<ProfileMeta | null> {
 
 export const MANAGED_PROFILE_ID = 'managed-primary'
 
+function managedProfileId(key: string): string {
+  const safe = key.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 64)
+  return safe && safe !== 'primary' ? `managed-${safe}` : MANAGED_PROFILE_ID
+}
+
 /**
- * Upsert the single managed CheezyVPN profile (stable id), download YAML from URL.
+ * Upsert one account-managed CheezyVPN profile, downloading YAML from its URL.
  */
 export async function upsertManagedProfile(
   url: string,
   name: string,
   subscription?: SubscriptionInfo,
+  managedKey = 'primary',
 ): Promise<ProfileMeta> {
   ensureProfilesRoot()
   if (!/^https:\/\//i.test(url)) {
@@ -330,13 +336,17 @@ export async function upsertManagedProfile(
     merged.title ||
     'CheezyVPN'
 
-  const id = MANAGED_PROFILE_ID
+  const list = store.get('profiles')
+  // Adopt the legacy single-profile entry when its URL matches, so upgrades
+  // do not leave a duplicate profile behind after the first multi-sync.
+  const existing =
+    list.find((p) => p.managedKey === managedKey) ??
+    list.find((p) => p.id === MANAGED_PROFILE_ID && !p.managedKey && p.url === url)
+  const id = existing?.id ?? managedProfileId(managedKey)
   const dir = profileDir(id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, BASE), text, 'utf8')
 
-  const list = store.get('profiles')
-  const existing = list.find((p) => p.id === id)
   const meta: ProfileMeta = {
     id,
     name: displayProfileName(title),
@@ -345,6 +355,7 @@ export async function upsertManagedProfile(
     updatedAt: Date.now(),
     subscription: merged,
     updateIntervalHours,
+    managedKey,
   }
   const next = existing ? list.map((p) => (p.id === id ? meta : p)) : [...list, meta]
   const currentActive = getActiveProfileId()
@@ -462,7 +473,8 @@ export function setActiveProfile(id: string): void {
 }
 
 export function deleteProfile(id: string): boolean {
-  if (id === MANAGED_PROFILE_ID) {
+  const target = store.get('profiles').find((p) => p.id === id)
+  if (target?.managedKey || id === MANAGED_PROFILE_ID) {
     throw new Error('Cannot delete the managed CheezyVPN profile')
   }
   const wasActive = getActiveProfileId() === id
