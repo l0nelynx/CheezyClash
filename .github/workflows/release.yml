@@ -4,12 +4,27 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing CheezyClash tag to dispatch to CheezyVPN'
+        required: true
+        type: string
+      sha:
+        description: 'CheezyClash commit SHA for the upstream submodule'
+        required: true
+        type: string
+
+concurrency:
+  group: open-release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   android:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -57,24 +72,55 @@ jobs:
         with:
           name: CheezyClash-APKs
           path: app/build/outputs/apk/directOpen/release/*.apk
+          retention-days: 3
+
+  desktop-check:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Sync and verify version
+        shell: bash
+        run: |
+          npm run sync-version
+          test "$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME#v}"
+      - name: Typecheck and deep-link tests
+        run: npm run typecheck && npm run test:deeplink
 
   desktop:
+    if: github.event_name == 'push'
+    needs: [desktop-check]
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             target: win
+            optional: false
           - os: ubuntu-latest
             target: linux
+            optional: true
           # macos-latest is arm64; build x64 via cross-compile + TARGET_ARCH
           - os: macos-latest
             target: mac
             arch: arm64
+            optional: true
           - os: macos-latest
             target: mac
             arch: x64
+            optional: true
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional }}
     timeout-minutes: 45
     defaults:
       run:
@@ -90,7 +136,7 @@ jobs:
         with:
           go-version: '1.22.x'
       - name: Install deps
-        run: npm ci || npm install
+        run: npm ci
       - name: Sync version
         run: npm run sync-version
       - name: Verify version matches tag
@@ -110,10 +156,6 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
-      - name: Icons
-        run: npm run icons
-      - name: Typecheck / build
-        run: npm run typecheck && npm run test:deeplink && npm run build
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -125,7 +167,6 @@ jobs:
           else
             npm run dist:${{ matrix.target }}
           fi
-        continue-on-error: ${{ matrix.target != 'win' }}
       - name: Validate Windows protocol handler
         if: matrix.target == 'win'
         shell: pwsh
@@ -180,13 +221,17 @@ jobs:
             desktop/release/*.exe
             desktop/release/*.zip
           if-no-files-found: error
+          retention-days: 3
       - name: Upload Linux desktop artifacts
         if: matrix.target == 'linux'
         uses: actions/upload-artifact@v4
         with:
           name: CheezyClash-desktop-linux
-          path: desktop/release/*
+          path: |
+            desktop/release/*.AppImage
+            desktop/release/*.deb
           if-no-files-found: ignore
+          retention-days: 3
       - name: Upload macOS desktop artifacts
         if: matrix.target == 'mac'
         uses: actions/upload-artifact@v4
@@ -196,8 +241,10 @@ jobs:
             desktop/release/*.dmg
             desktop/release/*.zip
           if-no-files-found: ignore
+          retention-days: 3
 
   publish:
+    if: github.event_name == 'push'
     needs: [android, desktop]
     runs-on: ubuntu-latest
     steps:
@@ -261,7 +308,7 @@ jobs:
             --arg tag "${{ github.ref_name }}" \
             --arg sha "${{ github.sha }}" \
             '{event_type:"open_release",client_payload:{tag:$tag,sha:$sha,desktop:true}}' \
-          | gh api --method POST /repos/l0nelynx/CheezyVPN_android/dispatches --input -
+          | gh api --method POST /repos/CheezyNetworks/CheezyVPN_android/dispatches --input -
 
       - name: Send Telegram Notification
         continue-on-error: true
@@ -279,3 +326,20 @@ jobs:
             ${{ steps.changelog.outputs.CHANGES }}
 
             📦 [Download](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})
+
+  dispatch-proprietary:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger proprietary release
+        env:
+          GH_TOKEN: ${{ secrets.PROPRIETARY_DISPATCH_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          test -n "$GH_TOKEN"
+          jq -n \
+            --arg tag "$TAG" \
+            --arg sha "$SHA" \
+            '{event_type:"open_release",client_payload:{tag:$tag,sha:$sha,desktop:true}}' \
+          | gh api --method POST /repos/CheezyNetworks/CheezyVPN_android/dispatches --input -

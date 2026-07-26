@@ -1,8 +1,7 @@
 name: Bump Mihomo
 
 # Runs manually. Updates go.mod / go.sum to a fresh ref of the
-# required Go package (default: mihomo@Alpha), attempts to build
-# libclash.so locally in this run, and opens a PR into main.
+# required Go package (default: mihomo@Alpha) and opens a PR into main.
 # The merge itself is done by a human.
 #
 # Pushing to the feature branch triggers build-core.yml (on pull_request),
@@ -103,20 +102,6 @@ jobs:
           echo "::notice::Already at the latest version mihomo@${{ inputs.ref }}: ${{ steps.old.outputs.old_version }}"
           exit 0
 
-      # Smoke-build arm64 libclash here so that a PR is not opened if the code doesn't compile.
-      # For three ABIs we use a separate build-core workflow (triggered by the PR).
-      - name: Install Android SDK + NDK
-        if: steps.diff.outputs.changed == 'true'
-        uses: android-actions/setup-android@v4
-        with:
-          packages: "ndk;28.2.13676358 cmake;3.22.1"
-
-      - name: Smoke-build arm64 libclash
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon :core:buildGoClashArm64V8a
-
       - name: Compute branch and PR metadata
         if: steps.diff.outputs.changed == 'true'
         id: meta
@@ -159,8 +144,7 @@ jobs:
             echo "New: $NEW_VERSION"
             echo
             echo "Triggered by Bump Mihomo workflow (run $RUN_ID)."
-            echo "Smoke-build of :core:buildGoClashArm64V8a succeeded in this run;"
-            echo "full three-ABI build will run via build-core.yml on the PR."
+            echo "Full three-ABI validation runs via build-core.yml on the PR."
           } > /tmp/commit_msg.txt
           git commit -F /tmp/commit_msg.txt
           git push origin "$BRANCH"

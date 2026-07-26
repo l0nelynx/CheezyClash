@@ -3,11 +3,16 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths:
+      - 'app/**'
+      - 'baselineprofile/**'
+      - 'core/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/pr-check.yml'
+      - '.github/actions/libclash/**'
 
 concurrency:
   group: pr-${{ github.workflow }}-${{ github.ref }}
@@ -42,16 +47,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Assemble Direct Open Debug
+      - name: Assemble, test and lint Direct Open Debug
         run: |
-          ./gradlew --no-daemon assembleDirectOpenDebug \
+          ./gradlew --no-daemon \
+            assembleDirectOpenDebug \
+            testDirectOpenDebugUnitTest \
+            lintDirectOpenDebug \
             -x :core:buildGoClashArm64V8a \
             -x :core:buildGoClashArmeabiV7a \
             -x :core:buildGoClashX86_64 \
             -x :core:assembleGoJniLibs
-
-      - name: Unit tests
-        run: ./gradlew --no-daemon testDirectOpenDebugUnitTest
-
-      - name: Lint
-        run: ./gradlew --no-daemon lintDirectOpenDebug

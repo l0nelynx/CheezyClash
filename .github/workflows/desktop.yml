@@ -6,11 +6,8 @@ name: Desktop CI
 # version, so the package must be rebuilt anyway.
 
 on:
-  push:
-    paths:
-      - 'desktop/**'
-      - '.github/workflows/desktop.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'desktop/**'
       - '.github/workflows/desktop.yml'
@@ -20,6 +17,10 @@ on:
         description: "Run full electron-builder matrix (win/linux/mac)"
         type: boolean
         default: true
+
+concurrency:
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -38,7 +39,7 @@ jobs:
         with:
           go-version: '1.22.x'
       - name: Install deps
-        run: npm ci || npm install
+        run: npm ci
       - name: Sync version
         run: npm run sync-version
       - name: Fetch mihomo sidecar
@@ -51,10 +52,6 @@ jobs:
         run: npm run test:deeplink
       - name: Build
         run: npm run build
-      - name: Smoke proxy
-        run: npm run smoke
-        continue-on-error: true
-
   package:
     if: github.event_name == 'workflow_dispatch' && inputs.package
     needs: [check]
@@ -88,9 +85,7 @@ jobs:
         with:
           go-version: '1.22.x'
       - name: Install deps
-        run: npm ci || npm install
-      - name: Sync version
-        run: npm run sync-version
+        run: npm ci
       - name: Fetch mihomo sidecar
         env:
           TARGET_ARCH: ${{ matrix.arch }}
@@ -99,10 +94,6 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
-      - name: Rasterize icons
-        run: npm run icons
-      - name: Typecheck / build
-        run: npm run typecheck && npm run build
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

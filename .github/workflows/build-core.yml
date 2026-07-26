@@ -32,6 +32,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -125,6 +129,7 @@ jobs:
           ls -lh "/tmp/${ZIP}"
 
       - name: Build desktop mihomo sidecars
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           HASH="${{ steps.hash.outputs.go_hash }}"
@@ -250,17 +255,10 @@ jobs:
           fi
 
       - name: Upload libclash workflow artifact
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: libclash-${{ steps.hash.outputs.go_hash }}
           path: core/build/generatedJniLibs/**/libclash.so
-          retention-days: 30
-          if-no-files-found: error
-
-      - name: Upload mihomo sidecar workflow artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: mihomo-sidecars-${{ steps.hash.outputs.go_hash }}
-          path: core/build/mihomo-sidecars/mihomo-*.zip
-          retention-days: 30
+          retention-days: 3
           if-no-files-found: error
