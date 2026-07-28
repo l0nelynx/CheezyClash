@@ -95,7 +95,7 @@ jobs:
           npm run sync-version
           test "$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME#v}"
       - name: Typecheck and deep-link tests
-        run: npm run typecheck && npm run test:deeplink
+        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract
 
   desktop:
     if: github.event_name == 'push'

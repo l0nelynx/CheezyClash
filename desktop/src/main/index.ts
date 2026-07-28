@@ -31,6 +31,7 @@ import {
   refreshProfile,
   ensureProfilesRoot,
   migrateOrphanDirs,
+  rebuildConfig,
   rebuildActive,
   getActiveProxyGroupNames,
   getProxyGroupIcons,
@@ -276,7 +277,8 @@ function registerIpc(): void {
     setActiveProfile(id)
     notifyProfilesChanged()
     const st = await getStatus()
-    if (st.running) await connect(st.mode)
+    if (st.running) await connect(st.mode, 'profile-switch')
+    else rebuildConfig(id)
   })
   ipcMain.handle('profiles:delete', async (_e, id: string) => {
     const wasActive = deleteProfile(id)

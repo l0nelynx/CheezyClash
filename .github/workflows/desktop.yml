@@ -49,7 +49,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Deep-link matrix / privacy
-        run: npm run test:deeplink
+        run: npm run test:deeplink && npm run test:core-contract
       - name: Build
         run: npm run build
   package:

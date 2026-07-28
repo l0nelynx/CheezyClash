@@ -31,6 +31,8 @@ function lastDelayMs(proxy: MihomoProxy | undefined, testUrl?: string): number |
 }
 
 export class MihomoApi {
+  private groupsInFlight: Promise<ProxyGroupInfo[]> | null = null
+
   constructor(
     private host = CONTROLLER_HOST,
     private port = CONTROLLER_PORT,
@@ -135,6 +137,14 @@ export class MihomoApi {
   }
 
   async getGroups(): Promise<ProxyGroupInfo[]> {
+    if (this.groupsInFlight) return this.groupsInFlight
+    this.groupsInFlight = this.loadGroups().finally(() => {
+      this.groupsInFlight = null
+    })
+    return this.groupsInFlight
+  }
+
+  private async loadGroups(): Promise<ProxyGroupInfo[]> {
     const proxies = await this.getProxies()
     const isGroup = (p: { type?: string; all?: string[] }): boolean => {
       if (!p.all || p.all.length === 0) return false

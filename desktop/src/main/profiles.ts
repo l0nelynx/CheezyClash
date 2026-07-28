@@ -469,7 +469,6 @@ export async function refreshProfile(
 export function setActiveProfile(id: string): void {
   if (!listProfiles().some((p) => p.id === id)) throw new Error('unknown profile')
   store.set('activeProfileId', id)
-  rebuildConfig(id)
 }
 
 export function deleteProfile(id: string): boolean {

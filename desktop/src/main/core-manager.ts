@@ -16,7 +16,6 @@ import {
 } from './paths'
 import { getOrCreateSecret, getSettings, setSettings, getSelections } from './store'
 import {
-  activeConfigPath,
   rebuildActive,
   getActiveProfileId,
   setReloadActiveCoreHook,
@@ -41,6 +40,8 @@ let lastError: string | undefined
 let crashCount = 0
 let stopping = false
 let connectChain: Promise<CoreStatus> | null = null
+
+type ConfigApplyReason = 'cold-start' | 'profile-switch'
 
 function broadcast(status: CoreStatus): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -197,13 +198,17 @@ async function onCrash(): Promise<void> {
   }
 }
 
-async function connectInternal(requested?: ConnectionMode): Promise<CoreStatus> {
+async function connectInternal(
+  requested?: ConnectionMode,
+  reason: ConfigApplyReason = 'cold-start',
+): Promise<CoreStatus> {
   stopping = false
   lastError = undefined
   const settings = getSettings()
   mode = requested ?? settings.connectionMode
 
-  if (!getActiveProfileId()) {
+  const profileId = getActiveProfileId()
+  if (!profileId) {
     lastError = 'no active profile'
     throw new Error(lastError)
   }
@@ -239,14 +244,14 @@ async function connectInternal(requested?: ConnectionMode): Promise<CoreStatus> 
   await disconnectInternal(false, true)
 
   try {
+    log(`applying config profile=${profileId} reason=${reason}`)
     if (effectiveMode === 'tun' && (await pingHelper())) {
       await spawnCoreElevated(configPath)
     } else {
       await spawnCoreDirect(configPath)
     }
     stopping = false
-    await mihomoApi.putConfigs(configPath).catch(() => undefined)
-    await mihomoApi.applySelections(getSelections())
+    await mihomoApi.applySelections(getSelections(profileId))
 
     if (effectiveMode === 'proxy' && settings.systemProxy) {
       await setSystemProxy(true, settings.mixedPort)
@@ -266,9 +271,12 @@ async function connectInternal(requested?: ConnectionMode): Promise<CoreStatus> 
   return status
 }
 
-export async function connect(requested?: ConnectionMode): Promise<CoreStatus> {
+export async function connect(
+  requested?: ConnectionMode,
+  reason: ConfigApplyReason = 'cold-start',
+): Promise<CoreStatus> {
   if (connectChain) return connectChain
-  connectChain = connectInternal(requested).finally(() => {
+  connectChain = connectInternal(requested, reason).finally(() => {
     connectChain = null
   })
   return connectChain
@@ -338,8 +346,11 @@ export { corePresent }
 setReloadActiveCoreHook(async (configPath) => {
   const st = await getStatus()
   if (!st.running) return
+  const profileId = getActiveProfileId()
+  if (!profileId) return
+  log(`applying config profile=${profileId} reason=live-reload`)
   mihomoApi.ensureSecretFromStore()
   await mihomoApi.putConfigs(configPath)
-  await mihomoApi.applySelections(getSelections())
+  await mihomoApi.applySelections(getSelections(profileId))
   await mihomoApi.closeAllConnections()
 })
