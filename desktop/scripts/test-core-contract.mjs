@@ -32,4 +32,30 @@ assert.match(
 assert.ok(api.includes('groupsInFlight'), 'getGroups must be single-flight')
 assert.match(api, /if \(this\.groupsInFlight\) return this\.groupsInFlight/)
 
+assert.match(
+  coreManager,
+  /let effectiveMode = configuredMode\(profileId, target\.mode\)/,
+  'launch mode must be resolved from the effective profile config',
+)
+assert.match(
+  coreManager,
+  /if \(!settings\.networkOverrideEnabled\) throw new Error\(lastError\)/,
+  'YAML-managed TUN must not silently fall back to Proxy mode',
+)
+assert.match(
+  coreManager,
+  /settings\.networkOverrideEnabled[\s\S]*effectiveMode === 'proxy'[\s\S]*setManagedSystemProxy/,
+  'system proxy must only be enabled while Desktop owns network settings',
+)
+assert.match(
+  liveReload,
+  /network\.mode !== mode[\s\S]*lifecycle\.request/,
+  'a subscription mode change must restart through the lifecycle coordinator',
+)
+assert.match(
+  index,
+  /changesOverride \|\| changesMode[\s\S]*await connect\(/,
+  'changing network ownership or mode must restart a running core',
+)
+
 console.log('desktop core lifecycle contract tests passed')

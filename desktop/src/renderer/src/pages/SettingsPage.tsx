@@ -32,6 +32,7 @@ export function SettingsPage({
 }: Props): React.JSX.Element {
   const [acOpen, setAcOpen] = useState(false)
   const [portDraft, setPortDraft] = useState(String(settings.mixedPort))
+  const [mtuDraft, setMtuDraft] = useState(String(settings.tunMtu))
 
   const openDashboard = () => {
     void window.cheezy.openExternal(`http://${CONTROLLER_HOST}:${CONTROLLER_PORT}/ui/`)
@@ -46,11 +47,25 @@ export function SettingsPage({
     if (next !== settings.mixedPort) onPatch({ mixedPort: next })
   }
 
+  const commitMtu = (): void => {
+    const next = Number(mtuDraft)
+    if (!Number.isInteger(next) || next < 576 || next > 9000) {
+      setMtuDraft(String(settings.tunMtu))
+      return
+    }
+    if (next !== settings.tunMtu) onPatch({ tunMtu: next })
+  }
+
   useEffect(() => {
     setPortDraft(String(settings.mixedPort))
   }, [settings.mixedPort])
 
+  useEffect(() => {
+    setMtuDraft(String(settings.tunMtu))
+  }, [settings.tunMtu])
+
   const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
+  const networkLocked = busy || !settings.networkOverrideEnabled
   const ruleCount = settings.accessControlRules?.length ?? 0
 
   return (
@@ -82,6 +97,19 @@ export function SettingsPage({
       )}
 
       <Section title="Connection">
+        <Toggle
+          label="Override YAML network settings"
+          hint="Use the Desktop mode, proxy, TUN, and network values instead of the profile YAML"
+          checked={settings.networkOverrideEnabled}
+          disabled={busy}
+          onChange={(v) => onPatch({ networkOverrideEnabled: v })}
+        />
+        {!settings.networkOverrideEnabled && (
+          <p className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-ink-dim">
+            Network settings are controlled by the profile YAML. The saved Desktop values below
+            are not applied.
+          </p>
+        )}
         <div>
           <p className="mb-2 text-sm font-medium text-ink">Mode</p>
           <p className="mb-3 text-xs text-ink-dim">Applies when you connect.</p>
@@ -93,13 +121,13 @@ export function SettingsPage({
             <ModeButton
               label="Proxy"
               active={mode === 'proxy'}
-              disabled={busy}
+              disabled={networkLocked}
               onClick={() => onConnectionMode('proxy')}
             />
             <ModeButton
               label="TUN"
               active={mode === 'tun'}
-              disabled={busy}
+              disabled={networkLocked}
               onClick={() => onConnectionMode('tun')}
             />
           </div>
@@ -108,7 +136,7 @@ export function SettingsPage({
           label="System proxy"
           hint="Route system traffic through the app while connected (Proxy mode)"
           checked={settings.systemProxy}
-          disabled={busy}
+          disabled={networkLocked}
           onChange={(v) => onPatch({ systemProxy: v })}
         />
         <label className="block">
@@ -116,7 +144,7 @@ export function SettingsPage({
           <select
             className="field max-w-[200px]"
             value={settings.tunStack}
-            disabled={busy || mode !== 'tun'}
+            disabled={networkLocked || mode !== 'tun'}
             onChange={(e) =>
               onPatch({ tunStack: e.target.value as AppSettings['tunStack'] })
             }
@@ -126,6 +154,24 @@ export function SettingsPage({
             <option value="gvisor">gvisor</option>
           </select>
         </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-ink">TUN MTU</span>
+          <input
+            type="number"
+            min={576}
+            max={9000}
+            step={1}
+            className="field max-w-[160px]"
+            value={mtuDraft}
+            disabled={networkLocked || mode !== 'tun'}
+            onChange={(e) => setMtuDraft(e.target.value)}
+            onBlur={commitMtu}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitMtu()
+            }}
+          />
+          <span className="mt-1 block text-xs text-ink-dim">576–9000; default 1500</span>
+        </label>
       </Section>
 
       <Section title="Network">
@@ -133,7 +179,7 @@ export function SettingsPage({
           label="Allow LAN"
           hint="Let other devices on your network use this connection"
           checked={settings.allowLan}
-          disabled={busy}
+          disabled={networkLocked}
           onChange={(v) => onPatch({ allowLan: v })}
         />
         <label className="block">
@@ -142,7 +188,7 @@ export function SettingsPage({
             type="number"
             className="field max-w-[160px]"
             value={portDraft}
-            disabled={busy}
+            disabled={networkLocked}
             onChange={(e) => setPortDraft(e.target.value)}
             onBlur={commitPort}
             onKeyDown={(e) => {

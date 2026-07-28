@@ -15,6 +15,10 @@ export interface AppSettings {
   tunEnabled: boolean
   connectionMode: ConnectionMode
   tunStack: 'system' | 'gvisor' | 'mixed'
+  /** Override profile YAML network and TUN settings with Desktop values. */
+  networkOverrideEnabled: boolean
+  /** TUN interface MTU used when Desktop network override is enabled. */
+  tunMtu: number
   autoStart: boolean
   accessControlRules: AccessControlRule[]
 }
@@ -90,8 +94,38 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tunEnabled: false,
   connectionMode: 'proxy',
   tunStack: 'mixed',
+  networkOverrideEnabled: false,
+  tunMtu: 1500,
   autoStart: false,
   accessControlRules: [],
+}
+
+/** Normalize persisted settings and migrate legacy tunEnabled values. */
+export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
+  const merged: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    ...raw,
+    accessControlRules: Array.isArray(raw.accessControlRules)
+      ? raw.accessControlRules
+      : DEFAULT_SETTINGS.accessControlRules,
+  }
+
+  if (raw.connectionMode === 'proxy' || raw.connectionMode === 'tun') {
+    merged.connectionMode = raw.connectionMode
+  } else if (typeof raw.tunEnabled === 'boolean') {
+    merged.connectionMode = raw.tunEnabled ? 'tun' : 'proxy'
+  }
+
+  merged.tunEnabled = merged.connectionMode === 'tun'
+  merged.networkOverrideEnabled = raw.networkOverrideEnabled === true
+  merged.tunMtu =
+    typeof raw.tunMtu === 'number' &&
+    Number.isInteger(raw.tunMtu) &&
+    raw.tunMtu >= 576 &&
+    raw.tunMtu <= 9000
+      ? raw.tunMtu
+      : DEFAULT_SETTINGS.tunMtu
+  return merged
 }
 
 export const HELPER_PORT = 47991

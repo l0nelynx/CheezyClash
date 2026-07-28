@@ -2,9 +2,12 @@ import Store from 'electron-store'
 import { randomFillSync } from 'crypto'
 import {
   DEFAULT_SETTINGS,
+  normalizeSettings,
   type AppSettings,
   type ProfileMeta,
 } from '../shared/types'
+
+export { normalizeSettings } from '../shared/types'
 
 interface StoreSchema {
   settings: AppSettings
@@ -15,6 +18,8 @@ interface StoreSchema {
   selections: Record<string, string>
   selectionsByProfile: Record<string, Record<string, string>>
   desktopHwid: string
+  /** True only after this app successfully enabled the OS proxy. */
+  systemProxyOwned: boolean
 }
 
 export const store = new Store<StoreSchema>({
@@ -27,28 +32,9 @@ export const store = new Store<StoreSchema>({
     selections: {},
     selectionsByProfile: {},
     desktopHwid: '',
+    systemProxyOwned: false,
   },
 })
-
-/** Normalize legacy tunEnabled → connectionMode and keep tunEnabled in sync. */
-export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
-  const merged: AppSettings = {
-    ...DEFAULT_SETTINGS,
-    ...raw,
-    accessControlRules: Array.isArray(raw.accessControlRules)
-      ? raw.accessControlRules
-      : DEFAULT_SETTINGS.accessControlRules,
-  }
-
-  if (raw.connectionMode === 'proxy' || raw.connectionMode === 'tun') {
-    merged.connectionMode = raw.connectionMode
-  } else if (typeof raw.tunEnabled === 'boolean') {
-    merged.connectionMode = raw.tunEnabled ? 'tun' : 'proxy'
-  }
-
-  merged.tunEnabled = merged.connectionMode === 'tun'
-  return merged
-}
 
 export function getSettings(): AppSettings {
   return normalizeSettings(store.get('settings'))
@@ -65,6 +51,14 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
   const next = normalizeSettings({ ...current, ...nextPatch })
   store.set('settings', next)
   return next
+}
+
+export function isSystemProxyOwned(): boolean {
+  return store.get('systemProxyOwned') === true
+}
+
+export function setSystemProxyOwned(owned: boolean): void {
+  store.set('systemProxyOwned', owned)
 }
 
 export function getOrCreateSecret(): string {

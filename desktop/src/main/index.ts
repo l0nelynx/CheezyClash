@@ -18,6 +18,7 @@ import {
   setTunEnabled,
   setConnectionMode,
   switchProfile,
+  syncManagedSystemProxy,
   ensureHelperAndStatus,
   corePresent,
 } from './core-manager'
@@ -59,7 +60,6 @@ import {
   stopSubscriptionUpdater,
 } from './subscription-updater'
 import { notifyProfilesChanged } from './profile-events'
-import { setSystemProxy } from './system-proxy'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -299,29 +299,39 @@ function registerIpc(): void {
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', async (_e, patch) => {
     const settings = setSettings(patch)
-    const path = rebuildActive(settings)
-    if (!path) return settings
     const st = await getStatus()
-    if (!st.running) return settings
-
-    if (patch.systemProxy !== undefined && settings.connectionMode !== 'tun') {
-      await setSystemProxy(settings.systemProxy, settings.mixedPort)
+    const changesMode =
+      settings.networkOverrideEnabled &&
+      (patch.connectionMode !== undefined || patch.tunEnabled !== undefined)
+    const changesOverride = patch.networkOverrideEnabled !== undefined
+    if (changesOverride || changesMode) {
+      if (st.running) {
+        await connect(settings.connectionMode, 'cold-start', getActiveProfileId())
+      } else {
+        rebuildActive(settings)
+      }
+      const current = await getStatus()
+      await syncManagedSystemProxy(current.running)
+      return settings
     }
 
-    const needsReconnect =
-      patch.mixedPort !== undefined ||
-      patch.allowLan !== undefined ||
-      patch.tunStack !== undefined ||
-      patch.connectionMode !== undefined ||
-      patch.tunEnabled !== undefined
+    const needsLiveReload =
+      settings.networkOverrideEnabled &&
+      (patch.mixedPort !== undefined ||
+        patch.allowLan !== undefined ||
+        patch.tunStack !== undefined ||
+        patch.tunMtu !== undefined)
 
-    if (needsReconnect) {
-      mihomoApi.ensureSecretFromStore()
-      await mihomoApi.putConfigs(path)
-      await mihomoApi.applySelections(getSelections())
-      if (settings.connectionMode === 'proxy') {
-        await setSystemProxy(settings.systemProxy, settings.mixedPort)
+    if (needsLiveReload) {
+      const path = rebuildActive(settings)
+      if (path && st.running) {
+        mihomoApi.ensureSecretFromStore()
+        await mihomoApi.putConfigs(path)
+        await mihomoApi.applySelections(getSelections())
       }
+    }
+    if (patch.systemProxy !== undefined || (needsLiveReload && patch.mixedPort !== undefined)) {
+      await syncManagedSystemProxy(st.running)
     }
     return settings
   })

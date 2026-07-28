@@ -31,6 +31,11 @@ import {
   subscriptionHeaders,
 } from './subscription'
 import { mihomoApi } from './mihomo-api'
+import {
+  applyNetworkSettings,
+  effectiveNetworkFromDocument,
+  type EffectiveNetworkConfig,
+} from './network-config'
 
 const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
@@ -83,7 +88,7 @@ function parseClashMapping(raw: string): Record<string, unknown> {
   return loaded as Record<string, unknown>
 }
 
-/** Rebuild config.yaml = base.yaml + enabled overrides (mixed-port, tun, dns). */
+/** Rebuild config.yaml = base.yaml + enabled overrides/defaults. */
 export function rebuildConfig(profileId: string, settings: AppSettings = getSettings()): string {
   const dir = profileDir(profileId)
   const basePath = join(dir, BASE)
@@ -93,8 +98,7 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
   const raw = readFileSync(basePath, 'utf8')
   const doc = parseClashMapping(raw)
 
-  applyMixedPortOverride(doc, settings)
-  applyTunOverride(doc, settings)
+  applyNetworkSettings(doc, settings)
   applyAccessControlRules(doc, settings.accessControlRules ?? [])
   ensureDns(doc)
 
@@ -111,27 +115,24 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
   return join(dir, CONFIG)
 }
 
-function applyMixedPortOverride(doc: Record<string, unknown>, settings: AppSettings): void {
-  doc['mixed-port'] = settings.mixedPort
-  doc['allow-lan'] = settings.allowLan
-  if (!doc['bind-address']) doc['bind-address'] = settings.allowLan ? '*' : '127.0.0.1'
+/** Resolve launch requirements from base.yaml without writing config.yaml. */
+export function resolveProfileNetwork(
+  profileId: string,
+  settings: AppSettings = getSettings(),
+): EffectiveNetworkConfig {
+  const basePath = join(profileDir(profileId), BASE)
+  if (!existsSync(basePath)) throw new Error(`missing ${BASE} for profile ${profileId}`)
+  const doc = parseClashMapping(readFileSync(basePath, 'utf8'))
+  return applyNetworkSettings(doc, settings)
 }
 
-/** B2: desktop enables YAML tun (opposite of Android patchTun). */
-export function applyTunOverride(doc: Record<string, unknown>, settings: AppSettings): void {
-  const tunOn = settings.connectionMode === 'tun' || settings.tunEnabled
-  if (!tunOn) {
-    doc.tun = { enable: false }
-    return
-  }
-  doc.tun = {
-    enable: true,
-    stack: settings.tunStack,
-    'auto-route': true,
-    'auto-detect-interface': true,
-    'strict-route': true,
-    'dns-hijack': ['any:53', 'tcp://any:53'],
-  }
+/** Read effective values from an already generated config.yaml. */
+export function readEffectiveNetworkConfig(
+  configPath: string,
+  overrideEnabled = getSettings().networkOverrideEnabled,
+): EffectiveNetworkConfig {
+  const doc = parseClashMapping(readFileSync(configPath, 'utf8'))
+  return effectiveNetworkFromDocument(doc, overrideEnabled)
 }
 
 /** Prepend PROCESS-NAME rules at the top of rules (user Access Control). */

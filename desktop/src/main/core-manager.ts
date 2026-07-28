@@ -14,10 +14,19 @@ import {
   mihomoSafePaths,
   profilesRoot,
 } from './paths'
-import { getOrCreateSecret, getSettings, setSettings, getSelections } from './store'
+import {
+  getOrCreateSecret,
+  getSettings,
+  setSettings,
+  getSelections,
+  isSystemProxyOwned,
+  setSystemProxyOwned,
+} from './store'
 import {
   rebuildConfig,
   getActiveProfileId,
+  readEffectiveNetworkConfig,
+  resolveProfileNetwork,
   setReloadActiveCoreHook,
 } from './profiles'
 import { mihomoApi } from './mihomo-api'
@@ -41,7 +50,7 @@ let lastError: string | undefined
 let crashCount = 0
 const intentionalStops = new WeakSet<ChildProcess>()
 
-type ConfigApplyReason = 'cold-start' | 'profile-switch'
+type ConfigApplyReason = 'cold-start' | 'profile-switch' | 'live-reload'
 
 interface LifecycleTarget {
   running: boolean
@@ -50,6 +59,24 @@ interface LifecycleTarget {
   reason: ConfigApplyReason
   rebuildWhenStopped?: boolean
   clearProxy?: boolean
+  preparedConfigPath?: string
+}
+
+async function setManagedSystemProxy(port: number): Promise<void> {
+  await setSystemProxy(true, port)
+  setSystemProxyOwned(true)
+}
+
+async function clearManagedSystemProxy(): Promise<void> {
+  if (!isSystemProxyOwned()) return
+  await setSystemProxy(false, getSettings().mixedPort)
+  setSystemProxyOwned(false)
+}
+
+function configuredMode(profileId: string | null, requested: ConnectionMode): ConnectionMode {
+  const settings = getSettings()
+  if (settings.networkOverrideEnabled || !profileId) return requested
+  return resolveProfileNetwork(profileId, settings).mode
 }
 
 function broadcast(status: CoreStatus): void {
@@ -67,16 +94,29 @@ export async function getStatus(): Promise<CoreStatus> {
   mihomoApi.ensureSecretFromStore()
   const helperReady = await pingHelper()
   const settings = getSettings()
-  const priv = await privilegesOk(settings.connectionMode === 'tun')
   let running = false
   if (childAlive()) {
     running = true
   } else if (helperReady) {
     running = await mihomoApi.ping()
   }
+  const desired = lifecycle.desiredTarget
+  let statusMode = running && childAlive() ? mode : settings.connectionMode
+  try {
+    statusMode = running && childAlive()
+      ? mode
+      : configuredMode(
+          desired?.profileId ?? getActiveProfileId(),
+          settings.connectionMode,
+        )
+  } catch {
+    // Config validation is reported during rebuild/connect; keep status available.
+  }
+  if (running && !childAlive()) mode = statusMode
+  const priv = await privilegesOk(statusMode === 'tun')
   return {
     running,
-    mode,
+    mode: statusMode,
     pid: child?.pid,
     controller: `${CONTROLLER_HOST}:${CONTROLLER_PORT}`,
     secret,
@@ -90,8 +130,22 @@ export async function getTunStatus(): Promise<TunStatus> {
   const settings = getSettings()
   const svc = platform() === 'win32' ? await queryWindowsService() : 'none'
   const helperRunning = await pingHelper()
+  mihomoApi.ensureSecretFromStore()
+  const running = childAlive() || (helperRunning && (await mihomoApi.ping()))
+  const desired = lifecycle.desiredTarget
+  let effectiveMode = running ? mode : settings.connectionMode
+  try {
+    if (!running) {
+      effectiveMode = configuredMode(
+        desired?.profileId ?? getActiveProfileId(),
+        settings.connectionMode,
+      )
+    }
+  } catch {
+    // Config validation is reported during rebuild/connect; keep status available.
+  }
   return {
-    enabled: settings.connectionMode === 'tun',
+    enabled: effectiveMode === 'tun',
     helperInstalled: svc !== 'none' || helperRunning,
     helperRunning,
     privilegesOk: await privilegesOk(true),
@@ -182,7 +236,7 @@ async function cleanupCore(clearProxy: boolean): Promise<void> {
   }
   if (clearProxy) {
     try {
-      await setSystemProxy(false, getSettings().mixedPort)
+      await clearManagedSystemProxy()
     } catch {
       /* ignore */
     }
@@ -236,12 +290,13 @@ async function reconcileLifecycle(
     throw new Error(lastError)
   }
 
-  let effectiveMode = target.mode
+  let effectiveMode = configuredMode(profileId, target.mode)
   if (effectiveMode === 'tun') {
     const auth = await authorizeForTun()
     if (!auth) {
       lastError = 'privileges required for TUN'
       log(lastError, 'error')
+      if (!settings.networkOverrideEnabled) throw new Error(lastError)
       effectiveMode = 'proxy'
       log('falling back to mixed-port proxy mode for this session', 'warn')
     }
@@ -252,18 +307,26 @@ async function reconcileLifecycle(
     throw new Error(lastError)
   }
 
-  const rebuildSettings =
-    effectiveMode === 'tun'
+  const rebuildSettings = settings.networkOverrideEnabled
+    ? effectiveMode === 'tun'
       ? { ...settings, tunEnabled: true, connectionMode: 'tun' as const }
       : { ...settings, tunEnabled: false, connectionMode: 'proxy' as const }
+    : settings
 
-  const configPath = rebuildConfig(profileId, rebuildSettings)
+  const configPath =
+    target.preparedConfigPath && !settings.networkOverrideEnabled
+      ? target.preparedConfigPath
+      : rebuildConfig(profileId, rebuildSettings)
   if (!existsSync(configPath)) {
     lastError = 'config rebuild failed'
     throw new Error(lastError)
   }
 
   await cleanupCore(false)
+  if (!isCurrent()) return
+  if (!settings.networkOverrideEnabled || effectiveMode === 'tun') {
+    await clearManagedSystemProxy()
+  }
   if (!isCurrent()) return
 
   try {
@@ -281,8 +344,12 @@ async function reconcileLifecycle(
     await mihomoApi.applySelections(getSelections(profileId))
     if (!isCurrent()) return
 
-    if (effectiveMode === 'proxy' && settings.systemProxy) {
-      await setSystemProxy(true, settings.mixedPort)
+    if (
+      settings.networkOverrideEnabled &&
+      effectiveMode === 'proxy' &&
+      settings.systemProxy
+    ) {
+      await setManagedSystemProxy(settings.mixedPort)
     }
     if (!isCurrent()) return
     mode = effectiveMode
@@ -292,7 +359,7 @@ async function reconcileLifecycle(
     if (!isCurrent()) return
     lastError = String(e)
     log(`connect failed: ${e}`, 'error')
-    await cleanupCore(false)
+    await cleanupCore(true)
     throw e
   }
 
@@ -352,6 +419,7 @@ export async function setTunEnabled(enabled: boolean): Promise<TunStatus> {
 
 export async function setConnectionMode(next: ConnectionMode): Promise<TunStatus> {
   setSettings({ connectionMode: next })
+  if (!getSettings().networkOverrideEnabled) return getTunStatus()
   const desired = lifecycle.desiredTarget
   const running = desired?.running ?? (await getStatus()).running
   if (running) {
@@ -362,6 +430,20 @@ export async function setConnectionMode(next: ConnectionMode): Promise<TunStatus
     }
   }
   return getTunStatus()
+}
+
+export async function syncManagedSystemProxy(running: boolean): Promise<void> {
+  const settings = getSettings()
+  if (
+    running &&
+    settings.networkOverrideEnabled &&
+    settings.systemProxy &&
+    mode === 'proxy'
+  ) {
+    await setManagedSystemProxy(settings.mixedPort)
+  } else {
+    await clearManagedSystemProxy()
+  }
 }
 
 export async function ensureHelperAndStatus(): Promise<TunStatus> {
@@ -402,6 +484,17 @@ setReloadActiveCoreHook(async (configPath, profileId) => {
   const st = await getStatus()
   if (!st.running) return
   if (getActiveProfileId() !== profileId) return
+  const network = readEffectiveNetworkConfig(configPath)
+  if (network.mode !== mode) {
+    await lifecycle.request({
+      running: true,
+      mode: network.mode,
+      profileId,
+      reason: 'live-reload',
+      preparedConfigPath: configPath,
+    })
+    return
+  }
   log(`applying config profile=${profileId} reason=live-reload`)
   mihomoApi.ensureSecretFromStore()
   await mihomoApi.putConfigs(configPath)
