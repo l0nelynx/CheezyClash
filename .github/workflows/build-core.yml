@@ -20,6 +20,8 @@ on:
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
+      - 'desktop/scripts/core-build-info.mjs'
+      - 'desktop/scripts/verify-core-parity.mjs'
   push:
     branches: [main]
     paths:
@@ -28,6 +30,8 @@ on:
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
+      - 'desktop/scripts/core-build-info.mjs'
+      - 'desktop/scripts/verify-core-parity.mjs'
 
 permissions:
   contents: write
@@ -129,7 +133,6 @@ jobs:
           ls -lh "/tmp/${ZIP}"
 
       - name: Build desktop mihomo sidecars
-        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           HASH="${{ steps.hash.outputs.go_hash }}"
@@ -154,13 +157,6 @@ jobs:
           echo "mihomoVersion=$MIHOMO_VER"
           printf '%s\n' "$MIHOMO_VER" > "$OUT_DIR/mihomo-version.txt"
 
-          (
-            cd "$GO_DIR"
-            go mod download github.com/metacubex/mihomo
-          )
-          MODDIR="$(cd "$GO_DIR" && go list -m -f '{{.Dir}}' github.com/metacubex/mihomo)"
-          echo "mihomo module dir: $MODDIR"
-
           TARGETS=(
             "windows/amd64"
             "windows/arm64"
@@ -180,10 +176,15 @@ jobs:
             STAGE="$OUT_DIR/stage-${GOOS}-${GOARCH}"
             mkdir -p "$STAGE"
             echo "Building mihomo ${GOOS}/${GOARCH}…"
-            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-              go build -C "$MODDIR" -tags with_gvisor -trimpath \
-              -ldflags="-s -w -X github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}" \
-              -o "$STAGE/$BIN" .
+            (
+              cd "$GO_DIR"
+              CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+                go build -tags with_gvisor -trimpath \
+                -ldflags="-s -w -X github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}" \
+                -o "$STAGE/$BIN" github.com/metacubex/mihomo
+            )
+            node desktop/scripts/verify-core-parity.mjs \
+              "$STAGE/$BIN" core/build/generatedJniLibs/x86_64/libclash.so
             # Bundle version label next to the binary (About reads this file)
             cp "$OUT_DIR/mihomo-version.txt" "$STAGE/mihomo-version.txt"
             ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
@@ -260,5 +261,14 @@ jobs:
         with:
           name: libclash-${{ steps.hash.outputs.go_hash }}
           path: core/build/generatedJniLibs/**/libclash.so
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Upload desktop sidecar workflow artifacts
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mihomo-sidecars-${{ steps.hash.outputs.go_hash }}
+          path: core/build/mihomo-sidecars/*.zip
           retention-days: 3
           if-no-files-found: error

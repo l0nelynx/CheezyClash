@@ -28,6 +28,7 @@
     "test:lifecycle": "node scripts/test-lifecycle-coordinator.mjs",
     "fetch-core": "node scripts/fetch-core.mjs",
     "build-core": "node scripts/build-core.mjs",
+    "verify-core-parity": "node scripts/verify-core-parity.mjs",
     "build:helper": "node scripts/build-helper.mjs",
     "smoke": "node scripts/smoke-proxy.mjs"
   },

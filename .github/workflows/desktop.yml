@@ -37,13 +37,13 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.23.x'
       - name: Install deps
         run: npm ci
       - name: Sync version
         run: npm run sync-version
-      - name: Fetch mihomo sidecar
-        run: npm run fetch-core
+      - name: Build mihomo sidecar from root Go module
+        run: npm run build-core
       - name: Build helper
         run: npm run build:helper
       - name: Typecheck
@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.23.x'
       - name: Install deps
         run: npm ci
       - name: Fetch mihomo sidecar

@@ -37,23 +37,25 @@ const outPath = join(outDir, binName)
 const hash = computeGoHash(goDir)
 const mihomoVer = readMihomoVersion(join(goDir, 'go.mod'))
 
-console.log(`Building mihomo from go.mod (hash ${hash}, ${mihomoVer}) for ${goos()}/${goarch()}…`)
-execFileSync('go', ['mod', 'download', 'github.com/metacubex/mihomo'], {
-  cwd: goDir,
-  stdio: 'inherit',
-})
-const modDir = execFileSync('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/metacubex/mihomo'], {
-  cwd: goDir,
-  encoding: 'utf8',
-}).trim()
+console.log(`Building mihomo from root go.mod (hash ${hash}, ${mihomoVer}) for ${goos()}/${goarch()}…`)
 
 // Bake Android-style pseudo-version into the binary (mihomo constant.Version).
 const ldflags = `-s -w -X github.com/metacubex/mihomo/constant.Version=${mihomoVer}`
 
 execFileSync(
   'go',
-  ['build', '-C', modDir, '-tags', 'with_gvisor', '-trimpath', `-ldflags=${ldflags}`, '-o', outPath, '.'],
+  [
+    'build',
+    '-tags',
+    'with_gvisor',
+    '-trimpath',
+    `-ldflags=${ldflags}`,
+    '-o',
+    outPath,
+    'github.com/metacubex/mihomo',
+  ],
   {
+    cwd: goDir,
     stdio: 'inherit',
     env: {
       ...process.env,
