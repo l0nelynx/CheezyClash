@@ -2,6 +2,7 @@
 
 package com.cheezy.freedom.ui.main.home
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -33,14 +34,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,8 +58,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -72,6 +80,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
@@ -83,7 +93,13 @@ import com.cheezy.freedom.R
 import com.cheezy.freedom.clash.ConnectionPhase
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.ui.library.MorphPolygonShape
+import com.cheezy.freedom.ui.main.proxies.PrimaryProxyGroupUiData
+import com.cheezy.freedom.ui.main.proxies.ProxyListItem
+import com.cheezy.freedom.ui.main.proxies.ProxyRow
+import com.cheezy.freedom.ui.main.proxies.ProxyUiData
+import com.cheezy.freedom.ui.main.proxies.proxyDelay
 import com.cheezy.freedom.ui.theme.CheezyVPNTheme
+import com.cheezy.freedom.ui.theme.successColor
 import com.cheezy.freedom.ui.theme.warningColor
 import com.cheezy.freedom.util.formatBytes
 import com.cheezy.freedom.util.formatExpire
@@ -107,6 +123,10 @@ fun HomeTab(
     lastError: String?,
     configName: String?,
     loading: Boolean,
+    primaryProxyGroup: PrimaryProxyGroupUiData? = null,
+    proxyDelays: Map<String, Map<String, Int>> = emptyMap(),
+    selectingProxy: String? = null,
+    onSelectProxy: (String, String) -> Unit = { _, _ -> },
     onRefresh: () -> Unit,
     onVpnToggle: () -> Unit,
     phase: ConnectionPhase = ConnectionPhase.IDLE
@@ -167,7 +187,13 @@ fun HomeTab(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Spacer(Modifier.height(14.dp))
-                            ProxyBadge(proxyname = lastKnownProxy)
+                            ActiveServerCard(
+                                fallbackProxyName = lastKnownProxy,
+                                group = primaryProxyGroup,
+                                delays = proxyDelays,
+                                selectingProxy = selectingProxy,
+                                onSelectProxy = onSelectProxy,
+                            )
                         }
                     }
                 }
@@ -249,34 +275,235 @@ private fun AnnounceCard(text: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProxyBadge(proxyname: String) {
+private fun ActiveServerCard(
+    fallbackProxyName: String,
+    group: PrimaryProxyGroupUiData?,
+    delays: Map<String, Map<String, Int>>,
+    selectingProxy: String?,
+    onSelectProxy: (String, String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val selectedProxy = group?.proxies?.firstOrNull { it.name == group.now }
+    val displayName = group?.now?.takeIf { it.isNotBlank() } ?: fallbackProxyName
+    val displayDelay = group?.let { current ->
+        selectedProxy?.let { proxyDelay(current.name, it, delays) }
+    }
+    val canSelect = group != null && group.proxies.isNotEmpty()
+
+    LaunchedEffect(group?.now, group?.name) {
+        if (showPicker) showPicker = false
+    }
+    LaunchedEffect(group) {
+        if (group == null) showPicker = false
+    }
+
+    val clickModifier = if (canSelect) {
+        Modifier.clickable(role = Role.Button) { showPicker = true }
+    } else {
+        Modifier
+    }
+
     Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.secondaryContainer
+        modifier = clickModifier
+            .testTag("home_active_server")
+            .widthIn(max = 320.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        tonalElevation = 1.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            modifier = Modifier
+                .heightIn(min = 56.dp)
+                .padding(start = 14.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = proxyname,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 220.dp)
-            )
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ) {
+                Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group?.name ?: stringResource(R.string.home_active_server),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                selectedProxy?.activeChild?.let { child ->
+                    Text(
+                        text = child,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.65f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            displayDelay?.let { delay ->
+                PingLabel(delay)
+            }
+            if (canSelect) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.home_change_server),
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
     }
+
+    if (showPicker && group != null) {
+        ServerPickerSheet(
+            group = group,
+            delays = delays,
+            selectingProxy = selectingProxy,
+            sheetState = sheetState,
+            onDismiss = { showPicker = false },
+            onSelect = { proxyName ->
+                if (proxyName == group.now) {
+                    showPicker = false
+                } else {
+                    onSelectProxy(group.name, proxyName)
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerPickerSheet(
+    group: PrimaryProxyGroupUiData,
+    delays: Map<String, Map<String, Int>>,
+    selectingProxy: String?,
+    sheetState: androidx.compose.material3.SheetState,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    var query by remember(group.name) { mutableStateOf("") }
+    val filtered = remember(group.proxies, query) {
+        val normalized = query.trim().lowercase()
+        if (normalized.isEmpty()) group.proxies
+        else group.proxies.filter { proxy ->
+            proxy.name.lowercase().contains(normalized) ||
+                proxy.subtitle.lowercase().contains(normalized) ||
+                proxy.activeChild?.lowercase()?.contains(normalized) == true
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .testTag("home_server_picker")
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.home_choose_server),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = group.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (group.proxies.size > 12) {
+                Spacer(Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier
+                        .testTag("home_server_search")
+                        .fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text(stringResource(R.string.home_search_servers)) },
+                    shape = MaterialTheme.shapes.extraLarge,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            if (filtered.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_no_servers),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 28.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp),
+                ) {
+                    items(filtered, key = { it.name }) { proxy ->
+                        val row = ProxyListItem.ProxyItem(
+                            groupName = group.name,
+                            name = proxy.name,
+                            type = proxy.type,
+                            subtitle = proxy.activeChild ?: proxy.subtitle,
+                            pingMs = proxyDelay(group.name, proxy, delays),
+                            isSelected = proxy.name == group.now,
+                        )
+                        ProxyRow(
+                            item = row,
+                            onClick = { onSelect(proxy.name) },
+                            isPinging = selectingProxy == proxy.name,
+                            enabled = selectingProxy == null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PingLabel(delay: Int) {
+    val color = when {
+        delay <= 0 -> MaterialTheme.colorScheme.error
+        delay < 500 -> successColor
+        delay < 700 -> warningColor
+        else -> MaterialTheme.colorScheme.error
+    }
+    Text(
+        text = if (delay <= 0) stringResource(R.string.proxies_timeout)
+        else stringResource(R.string.proxies_ms, delay),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -563,6 +790,11 @@ private fun TrafficText(trafficNowFlow: StateFlow<Long>, color: Color) {
 }
 
 @Preview(showBackground = true, name = "Home Tab - Connected")
+@Preview(
+    showBackground = true,
+    name = "Home Tab - Connected Dark",
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
 @Composable
 fun HomeTabConnectedPreview() {
     CheezyVPNTheme {
@@ -582,6 +814,25 @@ fun HomeTabConnectedPreview() {
             lastError = null,
             configName = "config.yaml",
             loading = false,
+            primaryProxyGroup = PrimaryProxyGroupUiData(
+                name = "PROXY",
+                now = "Netherlands-Premium",
+                proxies = listOf(
+                    ProxyUiData(
+                        name = "Netherlands-Premium",
+                        type = "Vless",
+                        subtitle = "Amsterdam · Premium",
+                        groupNow = "Netherlands-Premium",
+                    ),
+                    ProxyUiData(
+                        name = "Singapore — very long server name for compact screens",
+                        type = "Vless",
+                        subtitle = "Singapore",
+                        groupNow = "Netherlands-Premium",
+                    ),
+                ),
+            ),
+            proxyDelays = mapOf("PROXY" to mapOf("Netherlands-Premium" to 124)),
             onRefresh = {},
             onVpnToggle = {}
         )

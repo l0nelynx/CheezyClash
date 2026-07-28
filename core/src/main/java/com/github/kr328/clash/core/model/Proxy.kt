@@ -10,6 +10,7 @@ data class Proxy(
     val subtitle: String = "",
     val type: Type = Type.Unknown,
     val delay: Int = 0,
+    val delayAvailable: Boolean = false,
 ) {
     enum class Type(val group: Boolean) {
         @SerialName("Direct") Direct(false),

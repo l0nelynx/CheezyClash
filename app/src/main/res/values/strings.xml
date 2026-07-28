@@ -36,6 +36,11 @@
     <string name="home_unlimited" translatable="false">∞</string>
     <string name="home_expires">Истекает: %1$s</string>
     <string name="home_error_no_config">Сначала загрузите конфигурацию</string>
+    <string name="home_active_server">Текущий сервер</string>
+    <string name="home_change_server">Сменить сервер</string>
+    <string name="home_choose_server">Выберите сервер</string>
+    <string name="home_search_servers">Поиск серверов…</string>
+    <string name="home_no_servers">Серверы не найдены</string>
 
     <!-- Proxies -->
     <string name="proxies_check_ping">Проверить ping</string>
@@ -126,6 +131,7 @@
     <string name="error_no_active_profile">Нет активного профиля</string>
     <string name="error_load_failed">Загрузка не удалась: %1$s</string>
     <string name="error_refresh_failed">Обновление не удалось: %1$s</string>
+    <string name="error_proxy_select_failed">Не удалось сменить сервер</string>
     <string name="error_generic">Ошибка: %1$s</string>
     <string name="error_account_sync_failed">Не удалось обновить данные аккаунта. Проверьте соединение.</string>
 

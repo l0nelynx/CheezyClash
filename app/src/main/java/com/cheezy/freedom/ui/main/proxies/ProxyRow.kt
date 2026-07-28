@@ -128,6 +128,7 @@ fun ProxyRow(
     onClick: () -> Unit,
     onPing: (() -> Unit)? = null,
     isPinging: Boolean = false,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val pingColor = when {
@@ -215,7 +216,7 @@ fun ProxyRow(
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            modifier = Modifier.clickable(onClick = onClick)
+            modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
         )
     }
 }

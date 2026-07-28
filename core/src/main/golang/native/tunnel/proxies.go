@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -22,11 +23,12 @@ const (
 )
 
 type Proxy struct {
-	Name     string `json:"name"`
-	Title    string `json:"title"`
-	Subtitle string `json:"subtitle"`
-	Type     string `json:"type"`
-	Delay    int    `json:"delay"`
+	Name           string `json:"name"`
+	Title          string `json:"title"`
+	Subtitle       string `json:"subtitle"`
+	Type           string `json:"type"`
+	Delay          int    `json:"delay"`
+	DelayAvailable bool   `json:"delayAvailable"`
 }
 
 type ProxyGroup struct {
@@ -97,7 +99,7 @@ func QueryProxyGroup(name string, sortMode SortMode, uiSubtitlePattern *regexp2.
 		return nil
 	}
 
-	proxies := convertProxies(g.Proxies(), uiSubtitlePattern)
+	proxies := convertProxies(g.Proxies(), uiSubtitlePattern, groupTestURL(g))
 	// 	proxies := collectProviders(g.Providers(), uiSubtitlePattern)
 
 	switch sortMode {
@@ -164,7 +166,7 @@ func PatchSelector(selector, name string) bool {
 	return true
 }
 
-func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {
+func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp, groupTestURL string) []*Proxy {
 	result := make([]*Proxy, 0, 128)
 
 	for _, p := range proxies {
@@ -182,20 +184,20 @@ func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Pro
 				}
 			}
 		}
-		testURL := "https://www.gstatic.com/generate_204"
-		for k := range p.ExtraDelayHistories() {
-			if len(k) > 0 {
-				testURL = k
-				break
-			}
-		}
+		testURL := proxyTestURL(p, groupTestURL)
+
+		delay, delayAvailable := delayFromHistories(
+			p.DelayHistoryForTestUrl(testURL),
+			p.DelayHistory(),
+		)
 
 		result = append(result, &Proxy{
-			Name:     name,
-			Title:    strings.TrimSpace(title),
-			Subtitle: strings.TrimSpace(subtitle),
-			Type:     p.Type().String(),
-			Delay:    int(p.LastDelayForTestUrl(testURL)),
+			Name:           name,
+			Title:          strings.TrimSpace(title),
+			Subtitle:       strings.TrimSpace(subtitle),
+			Type:           p.Type().String(),
+			Delay:          delay,
+			DelayAvailable: delayAvailable,
 		})
 	}
 	return result
@@ -221,23 +223,70 @@ func collectProviders(providers []provider.ProxyProvider, uiSubtitlePattern *reg
 				}
 			}
 
-			testURL := "https://www.gstatic.com/generate_204"
-			for k := range px.ExtraDelayHistories() {
-				if len(k) > 0 {
-					testURL = k
-					break
-				}
-			}
+			testURL := proxyTestURL(px, "")
+
+			delay, delayAvailable := delayFromHistories(
+				px.DelayHistoryForTestUrl(testURL),
+				px.DelayHistory(),
+			)
 
 			result = append(result, &Proxy{
-				Name:     name,
-				Title:    strings.TrimSpace(title),
-				Subtitle: strings.TrimSpace(subtitle),
-				Type:     px.Type().String(),
-				Delay:    int(px.LastDelayForTestUrl(testURL)),
+				Name:           name,
+				Title:          strings.TrimSpace(title),
+				Subtitle:       strings.TrimSpace(subtitle),
+				Type:           px.Type().String(),
+				Delay:          delay,
+				DelayAvailable: delayAvailable,
 			})
 		}
 	}
 
 	return result
+}
+
+// delayFromHistories mirrors the external-controller history semantics used by
+// the desktop client. The preferred history belongs to the group's test URL;
+// the default proxy history is only a fallback. A recorded delay of zero means
+// the last health-check failed and is exposed as uint16 max, while an empty
+// history remains distinguishable through DelayAvailable=false.
+func delayFromHistories(preferred, fallback []C.DelayHistory) (delay int, available bool) {
+	history := preferred
+	if len(history) == 0 {
+		history = fallback
+	}
+	if len(history) == 0 {
+		return 0, false
+	}
+
+	last := history[len(history)-1].Delay
+	if last == 0 {
+		return int(^uint16(0)), true
+	}
+	return int(last), true
+}
+
+func groupTestURL(group outboundgroup.ProxyGroup) string {
+	raw, err := group.MarshalJSON()
+	if err != nil {
+		return ""
+	}
+	var payload struct {
+		TestURL string `json:"testUrl"`
+	}
+	if json.Unmarshal(raw, &payload) != nil {
+		return ""
+	}
+	return payload.TestURL
+}
+
+func proxyTestURL(proxy C.Proxy, preferred string) string {
+	if preferred != "" {
+		return preferred
+	}
+	for testURL := range proxy.ExtraDelayHistories() {
+		if testURL != "" {
+			return testURL
+		}
+	}
+	return C.DefaultTestURL
 }

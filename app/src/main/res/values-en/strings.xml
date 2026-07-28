@@ -35,6 +35,11 @@
     <string name="home_stat_limit">Limit</string>
     <string name="home_expires">Expires: %1$s</string>
     <string name="home_error_no_config">Load a configuration first</string>
+    <string name="home_active_server">Current server</string>
+    <string name="home_change_server">Change server</string>
+    <string name="home_choose_server">Choose a server</string>
+    <string name="home_search_servers">Search servers…</string>
+    <string name="home_no_servers">No servers found</string>
 
     <!-- Proxies -->
     <string name="proxies_check_ping">Check ping</string>
@@ -123,6 +128,7 @@
     <string name="error_no_active_profile">No active profile</string>
     <string name="error_load_failed">Load failed: %1$s</string>
     <string name="error_refresh_failed">Refresh failed: %1$s</string>
+    <string name="error_proxy_select_failed">Couldn\'t change server</string>
     <string name="error_generic">Error: %1$s</string>
     <string name="error_account_sync_failed">Failed to update account data. Check your connection.</string>
 

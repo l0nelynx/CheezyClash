@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.circle
 import androidx.graphics.shapes.star
-import com.cheezy.freedom.clash.ClashState
 import kotlinx.coroutines.launch
 
 private const val PING_TIMEOUT_VALUE = 65535
@@ -66,7 +65,7 @@ fun ProxiesTab(
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
     val pingingGroups = remember { mutableStateMapOf<String, Boolean>() }
     val pingingProxies = remember { mutableStateMapOf<String, Boolean>() }
-    val pings by ClashState.pings.collectAsState()
+    val delays by viewModel.proxyDelays.collectAsState()
     val loading by viewModel.isPinging.collectAsState()
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -154,8 +153,7 @@ fun ProxiesTab(
                                     RectangleShape
                                 }
                                 val displaySubtitle = proxy.activeChild ?: proxy.subtitle
-                                val pingKey = proxy.activeChild ?: proxy.name
-                                val pingMs = pings[pingKey]
+                                val pingMs = proxyDelay(groupName, proxy, delays)
                                 val isSelected = proxy.name == currentProxy
                                 val rowItem = remember(groupName, proxy, displaySubtitle, pingMs, isSelected) {
                                     ProxyListItem.ProxyItem(

@@ -23,22 +23,34 @@ import com.cheezy.freedom.clash.ProfileManager
 import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnInfo
+import com.cheezy.freedom.ui.main.proxies.PrimaryProxyGroupUiData
+import com.cheezy.freedom.ui.main.proxies.ProxyRuntimeSnapshot
 import com.cheezy.freedom.ui.main.proxies.ProxyUiData
+import com.cheezy.freedom.ui.main.proxies.buildProxyRuntimeSnapshot
+import com.cheezy.freedom.ui.main.proxies.mergeProxyDelays
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+
+private const val PASSIVE_PROXY_REFRESH_MS = 15_000L
 
 sealed class MainEffect {
     data class LaunchVerify(val email: String?) : MainEffect()
@@ -114,6 +126,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _isPinging = MutableStateFlow(false)
     val isPinging: StateFlow<Boolean> = _isPinging.asStateFlow()
 
+    private val _primaryProxyGroup = MutableStateFlow<PrimaryProxyGroupUiData?>(null)
+    val primaryProxyGroup: StateFlow<PrimaryProxyGroupUiData?> = _primaryProxyGroup.asStateFlow()
+
+    private val _proxyDelays = MutableStateFlow<Map<String, Map<String, Int>>>(emptyMap())
+    val proxyDelays: StateFlow<Map<String, Map<String, Int>>> = _proxyDelays.asStateFlow()
+
+    private val _selectingProxy = MutableStateFlow<String?>(null)
+    val selectingProxy: StateFlow<String?> = _selectingProxy.asStateFlow()
+
     private val _shareInfo = MutableStateFlow(ShareVpnInfo.EMPTY)
     val shareInfo: StateFlow<ShareVpnInfo> = _shareInfo.asStateFlow()
 
@@ -121,6 +142,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val supportsAuthFlow: Boolean get() = AppDeps.accountProvider.supportsAuthFlow
 
     private var isClashLoaded = false
+    private val proxySnapshotMutex = Mutex()
 
     init {
         // Immediately load the group and icon cache from disk so the Proxies tab
@@ -597,21 +619,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reloadProxyGroups(forceLoad: Boolean = false) {
-        viewModelScope.launch {
-            if (!ClashRemoteManager.connected.value) return@launch
+        if (forceLoad) clearRuntimeProxyState()
+        viewModelScope.launch { reloadProxyGroupsInternal(forceLoad) }
+    }
 
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
+    /**
+     * Foreground-only passive refresh loop. It never starts a health-check: every
+     * tick only reads the latest group selections and delay history held by core.
+     */
+    suspend fun observePassiveProxyUpdates() {
+        combine(
+            ClashState.running,
+            ClashRemoteManager.connected,
+        ) { running, connected -> running && connected }
+            .collectLatest { ready ->
+                if (!ready) {
+                    clearRuntimeProxyState()
+                    return@collectLatest
+                }
+                while (currentCoroutineContext().isActive) {
+                    refreshRuntimeProxySnapshot()
+                    delay(PASSIVE_PROXY_REFRESH_MS)
+                }
+            }
+    }
+
+    private suspend fun reloadProxyGroupsInternal(forceLoad: Boolean) {
+        if (!ClashRemoteManager.connected.value) return
+
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                proxySnapshotMutex.withLock {
                     val activeDir = ProfileStore.activeDir(context)
-
-                    // Check the current state of the core in the remote process
                     val coreNames = ClashRemoteManager.queryGroupNames(false)
                     val isRunning = ClashRemoteManager.isRunning()
                     val isAlreadyLoaded = coreNames.isNotEmpty() || isRunning
-
-                    // If the core in another process is already running, no need to reinitialize it
                     val didReload = ConfigManager.hasConfig(context) &&
-                            (!isClashLoaded && !isAlreadyLoaded || forceLoad)
+                        ((!isClashLoaded && !isAlreadyLoaded) || forceLoad)
+
                     if (didReload) {
                         ClashRemoteManager.loadConfig(activeDir.absolutePath)
                         isClashLoaded = true
@@ -623,90 +668,99 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 runCatching { ClashRemoteManager.patchSelector(group, proxy) }
                             }
                         }
-                        if (saved.isNotEmpty()) kotlinx.coroutines.delay(100)
+                        if (saved.isNotEmpty()) delay(100)
                     } else if (isAlreadyLoaded) {
                         isClashLoaded = true
                     }
 
-                    // If loadConfig was just called, the coreNames snapshot above is outdated
-                    // (taken BEFORE config loading). Reread it, otherwise during a cold
-                    // start of the :vpn process finalNames=[] and the UI will get an empty
-                    // list, overwriting the one shown from the cache.
                     val finalNames = if (forceLoad || didReload) {
                         ClashRemoteManager.queryGroupNames(false)
-                    } else coreNames
-                    val groupMap = coroutineScope {
-                        finalNames.map { name ->
-                            async { name to ClashRemoteManager.queryGroup(name) }
-                        }.awaitAll().mapNotNull { if (it.second == null) null else it.first to it.second!! }.toMap()
+                    } else {
+                        coreNames
                     }
-
-                    val groups = finalNames.mapNotNull { name ->
-                        val group = groupMap[name] ?: return@mapNotNull null
-                        name to group.proxies.map { p ->
-                            val typeName = p.type.name
-                            val isSubgroup = typeName == "URLTest" || typeName == "Fallback" ||
-                                    typeName == "LoadBalance" || typeName == "Selector" ||
-                                    typeName == "Smart"
-
-                            var activeChild: String? = null
-                            if (isSubgroup) {
-                                val subGroup = groupMap[p.name]
-                                activeChild = subGroup?.now?.takeIf { it.isNotBlank() }
-
-                                // Smart behaves like URLTest: it selects a node itself;
-                                // if the core hasn't run a health-check yet and `now` is empty,
-                                // we substitute the first child so the UI doesn't flicker with "—".
-                                if (activeChild == null && (typeName == "URLTest" || typeName == "Fallback" || typeName == "Smart")) {
-                                    activeChild = subGroup?.proxies?.firstOrNull()?.name
-                                }
-                            }
-
-                            ProxyUiData(p.name, typeName, p.subtitle, group.now, activeChild)
-                        }
-                    }
-
-                    // Read icons on every reload: YAML is parsed from disk, which is
-                    // a cheap operation and always happens inside Dispatchers.IO.
-                    // A conditional cache ("read only if map is empty") caused
-                    // new groups in an updated config.yaml to remain without icons
-                    // until app restart — the only way to update the cache was
-                    // through forceLoad=true in importFromUrl, while the background
-                    // WorkManager triggered reloadProxyGroups only with forceLoad=false.
+                    val snapshot = queryRuntimeSnapshot(finalNames)
                     val icons = ConfigManager.readGroupIcons(context).mapValues { (_, resName) ->
                         context.resources.getIdentifier(resName, "drawable", context.packageName)
                     }
-
-                    groups to icons
+                    snapshot to icons
                 }
             }
-            result.onSuccess { (groups, icons) ->
-                // Protection against overwriting valid data with an empty list.
-                // This happens when the core in the :vpn process hasn't warmed up
-                // yet by the time ClashRemoteManager reports connected=true.
-                // If we already have groups shown (from cache or previous reload),
-                // don't block the UI with emptiness.
-                val existing = _proxyGroups.value
-                if (groups.isNotEmpty() || existing.isNullOrEmpty()) {
-                    _proxyGroups.value = groups
-                }
-                _groupIcons.value = icons
-                // Write cache to disk — the next cold start will immediately
-                // show the same groups without calling the core. Don't cache
-                // empty lists (it means the core hasn't responded yet — better
-                // to keep the old cache).
-                if (groups.isNotEmpty()) {
-                    runCatching { ConfigManager.saveProxyGroupsCache(context, groups) }
-                }
+        }
+
+        result.onSuccess { (snapshot, icons) ->
+            applyRuntimeSnapshot(snapshot, replaceGroups = forceLoad)
+            _groupIcons.value = icons
+            if (snapshot.groups.isNotEmpty()) {
+                runCatching { ConfigManager.saveProxyGroupsCache(context, _proxyGroups.value ?: snapshot.groups) }
             }
         }
     }
 
+    private suspend fun refreshRuntimeProxySnapshot() {
+        if (!ClashRemoteManager.connected.value || !ClashState.running.value) return
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                proxySnapshotMutex.withLock {
+                    val groupNames = ClashRemoteManager.queryGroupNames(false)
+                    // An active configuration always exposes at least one group.
+                    // Treat an empty response as a transient binder/core miss so a
+                    // passive tick cannot wipe the last good runtime snapshot.
+                    if (groupNames.isEmpty()) return@withLock null
+                    queryRuntimeSnapshot(groupNames)
+                }
+            }
+        }
+        result.onSuccess { snapshot ->
+            snapshot?.let { applyRuntimeSnapshot(it, replaceGroups = false) }
+        }
+    }
+
+    private suspend fun queryRuntimeSnapshot(groupNames: List<String>): ProxyRuntimeSnapshot {
+        val groupMap = coroutineScope {
+            groupNames.map { name ->
+                async { name to ClashRemoteManager.queryGroup(name) }
+            }.awaitAll()
+                .mapNotNull { (name, group) -> group?.let { name to it } }
+                .toMap()
+        }
+        return buildProxyRuntimeSnapshot(groupNames, groupMap)
+    }
+
+    private fun applyRuntimeSnapshot(snapshot: ProxyRuntimeSnapshot, replaceGroups: Boolean) {
+        val requested = snapshot.requestedNames.toSet()
+        _proxyDelays.value = mergeProxyDelays(_proxyDelays.value, snapshot, replaceGroups)
+
+        val allGroupsAnswered = snapshot.groups.size == snapshot.requestedNames.size
+        _primaryProxyGroup.value = snapshot.primarySelector
+            ?: _primaryProxyGroup.value?.takeIf { !allGroupsAnswered && it.name in requested }
+
+        val existing = _proxyGroups.value
+        val nextGroups = when {
+            replaceGroups || existing.isNullOrEmpty() -> snapshot.groups
+            snapshot.groups.isEmpty() -> existing
+            else -> {
+                val fresh = snapshot.groups.toMap()
+                val stale = existing.toMap()
+                snapshot.requestedNames.mapNotNull { name ->
+                    fresh[name]?.let { name to it } ?: stale[name]?.let { name to it }
+                }
+            }
+        }
+        if (nextGroups.isNotEmpty() || existing.isNullOrEmpty()) {
+            _proxyGroups.value = nextGroups
+        }
+    }
+
+    private fun clearRuntimeProxyState() {
+        _primaryProxyGroup.value = null
+        _proxyDelays.value = emptyMap()
+        _selectingProxy.value = null
+    }
+
     fun measurePings() {
         if (_isPinging.value) return
-        // Without a running core, healthCheck will return errors/emptiness,
-        // and ClashState.setPings({}) will reset pings to Ping/Pong labels in the UI.
-        // Better not to start it at all.
+        // Manual checks require a running core; otherwise there is no runtime
+        // snapshot to refresh after healthCheck completes.
         if (!ClashRemoteManager.connected.value || !ClashState.running.value) {
             viewModelScope.launch {
                 _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.sb_start_vpn_for_ping)))
@@ -717,10 +771,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _isPinging.value = true
             try {
                 val current = _proxyGroups.value ?: return@launch
-                val visibleProxyNames = current.flatMap { (_, proxies) ->
-                    proxies.flatMap { listOfNotNull(it.name, it.activeChild) }
-                }.toSet()
-
                 val targetGroups = current.map { it.first }.toMutableSet()
                 current.forEach { (_, proxies) ->
                     proxies.forEach { p ->
@@ -742,20 +792,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // Give some time for pings to complete on the service side
                     kotlinx.coroutines.delay(2000)
 
-                    val collected = targetGroups.mapNotNull { name ->
-                        ClashRemoteManager.queryGroup(name)?.let { name to it.proxies }
-                    }
-                    val measured = HashMap<String, Int>()
-                    collected.forEach { (_, proxies) ->
-                        proxies.forEach { p ->
-                            if (p.name in visibleProxyNames) {
-                                measured[p.name] = if (p.delay in 1 until 65535) p.delay else -1
-                            }
-                        }
-                    }
-                    ClashState.setPings(measured)
                 }
-                reloadProxyGroups()
+                refreshRuntimeProxySnapshot()
             } finally {
                 _isPinging.value = false
             }
@@ -763,11 +801,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectProxy(groupName: String, proxyName: String) {
+        if (_selectingProxy.value != null) return
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                ClashRemoteManager.patchSelector(groupName, proxyName)
+            _selectingProxy.value = proxyName
+            try {
+                val ok = withContext(Dispatchers.IO) {
+                    ClashRemoteManager.patchSelector(groupName, proxyName)
+                }
+                if (ok) {
+                    applySelectedProxy(groupName, proxyName)
+                    refreshRuntimeProxySnapshot()
+                } else {
+                    _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_proxy_select_failed)))
+                }
+            } finally {
+                _selectingProxy.value = null
             }
-            if (ok) reloadProxyGroups()
+        }
+    }
+
+    private fun applySelectedProxy(groupName: String, proxyName: String) {
+        _primaryProxyGroup.value = _primaryProxyGroup.value
+            ?.takeIf { it.name == groupName }
+            ?.let { group ->
+                group.copy(
+                    now = proxyName,
+                    proxies = group.proxies.map { it.copy(groupNow = proxyName) },
+                )
+            }
+            ?: _primaryProxyGroup.value
+
+        _proxyGroups.value = _proxyGroups.value?.map { (name, proxies) ->
+            if (name == groupName) {
+                name to proxies.map { it.copy(groupNow = proxyName) }
+            } else {
+                name to proxies
+            }
         }
     }
 
@@ -777,15 +846,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 withTimeoutOrNull(5_000L) {
                     runCatching { ClashRemoteManager.healthCheck(groupName) }
                 }
-                kotlinx.coroutines.delay(2000)
-                val existing = HashMap(ClashState.pings.value)
-                ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                    group.proxies.forEach { p ->
-                        existing[p.name] = if (p.delay in 1 until 65535) p.delay else -1
-                    }
-                }
-                ClashState.setPings(existing)
+                delay(2000)
             }
+            refreshRuntimeProxySnapshot()
         }
     }
 
@@ -795,16 +858,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 withTimeoutOrNull(5_000L) {
                     runCatching { ClashRemoteManager.healthCheck(proxyName) }
                 }
-                kotlinx.coroutines.delay(2000)
-                ClashRemoteManager.queryGroup(groupName)?.let { group ->
-                    val found = group.proxies.firstOrNull { it.name == proxyName }
-                    if (found != null) {
-                        val existing = HashMap(ClashState.pings.value)
-                        existing[found.name] = if (found.delay in 1 until 65535) found.delay else -1
-                        ClashState.setPings(existing)
-                    }
-                }
+                delay(2000)
             }
+            refreshRuntimeProxySnapshot()
         }
     }
 

@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -140,6 +141,9 @@ fun MainScreen(
     val tgId by viewModel.tgId.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val proxiesPinging by viewModel.isPinging.collectAsState()
+    val primaryProxyGroup by viewModel.primaryProxyGroup.collectAsState()
+    val proxyDelays by viewModel.proxyDelays.collectAsState()
+    val selectingProxy by viewModel.selectingProxy.collectAsState()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
     val showUrlDialog by viewModel.showUrlDialog.collectAsState()
@@ -175,6 +179,12 @@ fun MainScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.observePassiveProxyUpdates()
+        }
     }
 
     val subscriptionLauncher = rememberLauncherForActivityResult(
@@ -402,6 +412,10 @@ fun MainScreen(
                             configName = configName,
                             loading = loading,
                             phase = phase,
+                            primaryProxyGroup = primaryProxyGroup,
+                            proxyDelays = proxyDelays,
+                            selectingProxy = selectingProxy,
+                            onSelectProxy = viewModel::selectProxy,
                             onRefresh = { viewModel.refresh() },
                             onVpnToggle = {
                                 if (running) {
