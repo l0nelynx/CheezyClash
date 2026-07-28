@@ -78,7 +78,7 @@ tasks.register<Exec>("packageUnpacked") {
     description = "Build unpacked desktop app (electron-builder --dir, no installer)"
     workingDir = projectDir
     commandLine(npmCmd, "run", "package")
-    dependsOn("npmInstall")
+    dependsOn("npmInstall", "fetchCore")
     doLast {
         val releaseDir = projectDir.resolve("release")
         val unpacked =
@@ -113,7 +113,7 @@ tasks.register<Exec>("distInstaller") {
     description = "Build desktop installers for the current platform"
     workingDir = projectDir
     commandLine(npmCmd, "run", "dist")
-    dependsOn("npmInstall")
+    dependsOn("npmInstall", "fetchCore")
 }
 
 tasks.named("assemble") {

@@ -21,7 +21,9 @@ on:
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
       - 'desktop/scripts/core-build-info.mjs'
+      - 'desktop/scripts/core-manifest.mjs'
       - 'desktop/scripts/verify-core-parity.mjs'
+      - 'desktop/scripts/write-core-manifest.mjs'
   push:
     branches: [main]
     paths:
@@ -31,7 +33,9 @@ on:
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
       - 'desktop/scripts/core-build-info.mjs'
+      - 'desktop/scripts/core-manifest.mjs'
       - 'desktop/scripts/verify-core-parity.mjs'
+      - 'desktop/scripts/write-core-manifest.mjs'
 
 permissions:
   contents: write
@@ -185,10 +189,12 @@ jobs:
             )
             node desktop/scripts/verify-core-parity.mjs \
               "$STAGE/$BIN" core/build/generatedJniLibs/x86_64/libclash.so
+            node desktop/scripts/write-core-manifest.mjs \
+              "$STAGE/$BIN" "$STAGE/core-build.json" "$GO_DIR" "$GOOS" "$GOARCH"
             # Bundle version label next to the binary (About reads this file)
             cp "$OUT_DIR/mihomo-version.txt" "$STAGE/mihomo-version.txt"
             ZIP="mihomo-${HASH}-${GOOS}-${GOARCH}.zip"
-            (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN" mihomo-version.txt)
+            (cd "$STAGE" && zip -q "${OUT_DIR}/${ZIP}" "$BIN" mihomo-version.txt core-build.json)
             ls -lh "${OUT_DIR}/${ZIP}"
             rm -rf "$STAGE"
           done

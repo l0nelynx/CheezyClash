@@ -44,6 +44,8 @@ jobs:
         run: npm run sync-version
       - name: Build mihomo sidecar from root Go module
         run: npm run build-core
+      - name: Verify core artifact contract
+        run: npm run test:core-manifest
       - name: Build helper
         run: npm run build:helper
       - name: Typecheck

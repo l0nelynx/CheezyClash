@@ -11,6 +11,7 @@ import { platform, arch } from 'os'
 import { execFileSync } from 'child_process'
 import { computeGoHash } from './go-hash.mjs'
 import { readMihomoVersion } from './mihomo-version.mjs'
+import { writeCoreManifest } from './core-manifest.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -25,6 +26,10 @@ function goos() {
 }
 
 function goarch() {
+  const override = (process.env.TARGET_ARCH || process.env.npm_config_arch || '').toLowerCase()
+  if (override === 'x64' || override === 'amd64') return 'amd64'
+  if (override === 'arm64') return 'arm64'
+  if (override === 'ia32' || override === '386') return '386'
   const a = arch()
   if (a === 'arm64') return 'arm64'
   if (a === 'ia32') return '386'
@@ -68,5 +73,10 @@ execFileSync(
 
 if (goos() !== 'windows') chmodSync(outPath, 0o755)
 writeFileSync(join(outDir, 'mihomo-version.txt'), `${mihomoVer}\n`, 'utf8')
+writeCoreManifest(
+  { binaryPath: outPath, goDir, targetOs: goos(), targetArch: goarch() },
+  join(outDir, 'core-build.json'),
+)
 console.log('Wrote', outPath)
+console.log('Wrote', join(outDir, 'core-build.json'))
 console.log('mihomo-version.txt =', mihomoVer)

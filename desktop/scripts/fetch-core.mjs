@@ -33,6 +33,10 @@ import { platform, arch } from 'os'
 import { execFileSync } from 'child_process'
 import { computeGoHash } from './go-hash.mjs'
 import { readMihomoVersion } from './mihomo-version.mjs'
+import {
+  CORE_MANIFEST_NAME,
+  validateCoreArtifact,
+} from './core-manifest.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -141,6 +145,19 @@ function findBin(dir) {
   return null
 }
 
+function findNamedFile(dir, wanted) {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name)
+    if (statSync(path).isDirectory()) {
+      const found = findNamedFile(path, wanted)
+      if (found) return found
+    } else if (name === wanted) {
+      return path
+    }
+  }
+  return null
+}
+
 async function main() {
   if (!existsSync(goSources)) {
     throw new Error(`Go sources not found at ${goSources}`)
@@ -151,11 +168,26 @@ async function main() {
   const archName = goarch()
   const asset = `mihomo-${hash}-${os}-${archName}.zip`
   const url = `https://github.com/${releaseRepo}/releases/download/libclash-${hash}/${asset}`
+  const binName = os === 'windows' ? 'mihomo.exe' : 'mihomo'
+  const dest = join(outDir, binName)
 
   console.log(`Go sources hash: ${hash}`)
+  mkdirSync(outDir, { recursive: true })
+  const local = validateCoreArtifact({
+    dir: outDir,
+    binaryPath: dest,
+    goDir: goSources,
+    targetOs: os,
+    targetArch: archName,
+  })
+  if (local.valid) {
+    console.log(`Using verified local core (${local.manifest.binarySha256})`)
+    await fetchWintun()
+    return
+  }
+  console.warn(`Local core is absent or stale:\n- ${local.errors.join('\n- ')}`)
   console.log(`Fetching ${url}`)
 
-  mkdirSync(outDir, { recursive: true })
   const tmp = join(outDir, asset)
 
   try {
@@ -171,8 +203,6 @@ async function main() {
     throw e
   }
 
-  const binName = os === 'windows' ? 'mihomo.exe' : 'mihomo'
-  const dest = join(outDir, binName)
   const extractDir = join(outDir, '_extract')
   try {
     rmSync(extractDir, { recursive: true, force: true })
@@ -182,22 +212,47 @@ async function main() {
   extractZip(tmp, extractDir)
   const found = findBin(extractDir)
   if (!found) throw new Error('mihomo binary not found in zip')
-  if (existsSync(dest)) unlinkSync(dest)
-  renameSync(found, dest)
-  unlinkSync(tmp)
+  const manifestFound = findNamedFile(extractDir, CORE_MANIFEST_NAME)
+  if (!manifestFound) {
+    throw new Error(
+      `Downloaded sidecar has no ${CORE_MANIFEST_NAME}; old sidecar schema is incompatible`,
+    )
+  }
+  const extractedDir = dirname(manifestFound)
+  if (dirname(found) !== extractedDir) {
+    throw new Error(`mihomo and ${CORE_MANIFEST_NAME} must be in the same archive directory`)
+  }
+  const downloaded = validateCoreArtifact({
+    dir: extractedDir,
+    binaryPath: found,
+    goDir: goSources,
+    targetOs: os,
+    targetArch: archName,
+  })
+  if (!downloaded.valid) {
+    throw new Error(`Downloaded core failed verification:\n- ${downloaded.errors.join('\n- ')}`)
+  }
 
-  const verFromZip = join(extractDir, 'mihomo-version.txt')
+  const verFromZip = join(extractedDir, 'mihomo-version.txt')
   const verDest = join(outDir, 'mihomo-version.txt')
+  const manifestDest = join(outDir, CORE_MANIFEST_NAME)
+  for (const path of [dest, verDest, manifestDest]) {
+    if (existsSync(path)) unlinkSync(path)
+  }
+  renameSync(found, dest)
+  renameSync(manifestFound, manifestDest)
   if (existsSync(verFromZip)) {
     renameSync(verFromZip, verDest)
   } else {
     const mihomoVer = readMihomoVersion(join(goSources, 'go.mod'))
     writeFileSync(verDest, `${mihomoVer}\n`, 'utf8')
   }
+  unlinkSync(tmp)
   rmSync(extractDir, { recursive: true, force: true })
 
   if (os !== 'windows') chmodSync(dest, 0o755)
   console.log('Wrote', dest)
+  console.log('Verified', manifestDest)
   console.log('mihomo-version.txt =', readFileSync(verDest, 'utf8').trim())
 
   await fetchWintun()
