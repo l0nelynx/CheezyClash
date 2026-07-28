@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-go@v5
@@ -51,7 +51,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Deep-link matrix / privacy
-        run: npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle
+        run: npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle && npm run test:network-config
       - name: Build
         run: npm run build
   package:
@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-go@v5

@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - name: Install deps
@@ -94,8 +94,8 @@ jobs:
         run: |
           npm run sync-version
           test "$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME#v}"
-      - name: Typecheck and deep-link tests
-        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle
+      - name: Typecheck and Desktop tests
+        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle && npm run test:network-config
 
   desktop:
     if: github.event_name == 'push'
@@ -129,7 +129,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-go@v5
