@@ -36,10 +36,10 @@ const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
 
 /** Set from core-manager to avoid a circular profiles ↔ core-manager import. */
-let reloadActiveCore: ((configPath: string) => Promise<void>) | null = null
+let reloadActiveCore: ((configPath: string, profileId: string) => Promise<void>) | null = null
 
 export function setReloadActiveCoreHook(
-  fn: ((configPath: string) => Promise<void>) | null,
+  fn: ((configPath: string, profileId: string) => Promise<void>) | null,
 ): void {
   reloadActiveCore = fn
 }
@@ -460,7 +460,7 @@ export async function refreshProfile(
   const configPath = rebuildConfig(id)
 
   if (opts.reloadCore && getActiveProfileId() === id) {
-    await reloadActiveCore?.(configPath)
+    await reloadActiveCore?.(configPath, id)
   }
 
   return { ...meta, name: displayProfileName(meta.name) }
@@ -481,8 +481,6 @@ export function deleteProfile(id: string): boolean {
   store.set('profiles', list)
   if (wasActive) {
     store.set('activeProfileId', list[0]?.id ?? null)
-    const nextActive = getActiveProfileId()
-    if (nextActive) rebuildConfig(nextActive)
   }
   const dir = profileDir(id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })

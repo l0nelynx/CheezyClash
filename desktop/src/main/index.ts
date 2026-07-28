@@ -17,6 +17,7 @@ import {
   getTunStatus,
   setTunEnabled,
   setConnectionMode,
+  switchProfile,
   ensureHelperAndStatus,
   corePresent,
 } from './core-manager'
@@ -31,7 +32,6 @@ import {
   refreshProfile,
   ensureProfilesRoot,
   migrateOrphanDirs,
-  rebuildConfig,
   rebuildActive,
   getActiveProxyGroupNames,
   getProxyGroupIcons,
@@ -276,21 +276,19 @@ function registerIpc(): void {
   ipcMain.handle('profiles:setActive', async (_e, id: string) => {
     setActiveProfile(id)
     notifyProfilesChanged()
-    const st = await getStatus()
-    if (st.running) await connect(st.mode, 'profile-switch')
-    else rebuildConfig(id)
+    await switchProfile(id)
   })
   ipcMain.handle('profiles:delete', async (_e, id: string) => {
     const wasActive = deleteProfile(id)
     rescheduleSubscriptionUpdates()
     notifyProfilesChanged()
-    const st = await getStatus()
-    if (!st.running) return
-    if (!getActiveProfileId()) {
+    if (!wasActive) return
+    const profileId = getActiveProfileId()
+    if (!profileId) {
       await disconnect()
       return
     }
-    if (wasActive) await connect(st.mode)
+    await switchProfile(profileId)
   })
   ipcMain.handle('profiles:update', async (_e, id: string) => {
     const meta = await refreshProfile(id, { reloadCore: true })

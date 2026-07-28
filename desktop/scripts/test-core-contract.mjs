@@ -7,7 +7,7 @@ const index = readFileSync(new URL('../src/main/index.ts', import.meta.url), 'ut
 const api = readFileSync(new URL('../src/main/mihomo-api.ts', import.meta.url), 'utf8')
 
 const initialApply = coreManager.slice(
-  coreManager.indexOf('async function connectInternal'),
+  coreManager.indexOf('async function reconcileLifecycle'),
   coreManager.indexOf('export async function connect'),
 )
 assert.ok(initialApply.includes('spawnCoreDirect(configPath)'), 'cold start must spawn with -f')
@@ -22,7 +22,12 @@ const activate = profiles.slice(
   profiles.indexOf('export function deleteProfile'),
 )
 assert.ok(!activate.includes('rebuildConfig('), 'profile activation must not rebuild implicitly')
-assert.match(index, /if \(st\.running\).*profile-switch[\s\S]*else rebuildConfig\(id\)/)
+assert.match(index, /await switchProfile\(id\)/)
+assert.match(
+  coreManager,
+  /target\.rebuildWhenStopped[\s\S]*rebuildConfig\(target\.profileId\)/,
+  'a stopped profile switch must rebuild through the lifecycle coordinator',
+)
 
 assert.ok(api.includes('groupsInFlight'), 'getGroups must be single-flight')
 assert.match(api, /if \(this\.groupsInFlight\) return this\.groupsInFlight/)

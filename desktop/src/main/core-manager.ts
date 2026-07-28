@@ -16,7 +16,7 @@ import {
 } from './paths'
 import { getOrCreateSecret, getSettings, setSettings, getSelections } from './store'
 import {
-  rebuildActive,
+  rebuildConfig,
   getActiveProfileId,
   setReloadActiveCoreHook,
 } from './profiles'
@@ -33,15 +33,24 @@ import {
 } from './helper'
 import { authorizeForTun, privilegesOk } from './privileges'
 import { log } from './logger'
+import { LatestWinsCoordinator, type LifecycleTicket } from './lifecycle-coordinator'
 
 let child: ChildProcess | null = null
 let mode: ConnectionMode = 'proxy'
 let lastError: string | undefined
 let crashCount = 0
-let stopping = false
-let connectChain: Promise<CoreStatus> | null = null
+const intentionalStops = new WeakSet<ChildProcess>()
 
 type ConfigApplyReason = 'cold-start' | 'profile-switch'
+
+interface LifecycleTarget {
+  running: boolean
+  mode: ConnectionMode
+  profileId: string | null
+  reason: ConfigApplyReason
+  rebuildWhenStopped?: boolean
+  clearProxy?: boolean
+}
 
 function broadcast(status: CoreStatus): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -123,7 +132,7 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
   const secret = getOrCreateSecret()
   mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
 
-  child = spawn(
+  const coreProcess = spawn(
     bin,
     ['-d', home, '-f', configPath],
     {
@@ -135,12 +144,13 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
       windowsHide: true,
     },
   )
-  child.stdout?.on('data', (d) => log(`[core] ${String(d).trim()}`))
-  child.stderr?.on('data', (d) => log(`[core] ${String(d).trim()}`, 'warn'))
-  child.on('exit', (code) => {
+  child = coreProcess
+  coreProcess.stdout?.on('data', (d) => log(`[core] ${String(d).trim()}`))
+  coreProcess.stderr?.on('data', (d) => log(`[core] ${String(d).trim()}`, 'warn'))
+  coreProcess.on('exit', (code) => {
     log(`core exited code=${code}`)
-    child = null
-    if (!stopping) void onCrash()
+    if (child === coreProcess) child = null
+    if (!intentionalStops.has(coreProcess)) void onCrash()
   })
   await mihomoApi.waitReady()
 }
@@ -165,8 +175,10 @@ async function cleanupCore(clearProxy: boolean): Promise<void> {
     /* ignore */
   }
   if (child) {
-    child.kill()
+    const coreProcess = child
     child = null
+    intentionalStops.add(coreProcess)
+    coreProcess.kill()
   }
   if (clearProxy) {
     try {
@@ -177,50 +189,60 @@ async function cleanupCore(clearProxy: boolean): Promise<void> {
   }
 }
 
-async function disconnectInternal(clearProxy: boolean, forReconnect = false): Promise<void> {
-  if (!forReconnect) stopping = true
-  await cleanupCore(clearProxy)
-}
-
 async function onCrash(): Promise<void> {
   crashCount++
   lastError = 'core crashed'
-  broadcast(await getStatus())
   if (crashCount > 5) {
     log('crash loop — giving up', 'error')
+    broadcast(await getStatus())
     return
   }
   log(`restarting core after crash (#${crashCount})`)
-  try {
-    await connectInternal(mode)
-  } catch (e) {
-    lastError = String(e)
-  }
+  const desired = lifecycle.desiredTarget
+  if (!desired?.running || !desired.profileId) return
+  void lifecycle
+    .request({ ...desired, reason: 'cold-start' })
+    .catch(async (error) => {
+      lastError = String(error)
+      broadcast(await getStatus())
+    })
 }
 
-async function connectInternal(
-  requested?: ConnectionMode,
-  reason: ConfigApplyReason = 'cold-start',
-): Promise<CoreStatus> {
-  stopping = false
+async function reconcileLifecycle(
+  ticket: LifecycleTicket<LifecycleTarget>,
+  isCurrent: () => boolean,
+): Promise<void> {
+  const target = ticket.target
+  if (!target.running) {
+    await cleanupCore(target.clearProxy === true)
+    if (!isCurrent()) return
+    mode = target.mode
+    if (target.rebuildWhenStopped && target.profileId) {
+      rebuildConfig(target.profileId)
+      log(`applying config profile=${target.profileId} reason=profile-switch (stopped)`)
+    }
+    lastError = undefined
+    log('disconnected')
+    const status = await getStatus()
+    if (isCurrent()) broadcast(status)
+    return
+  }
+
   lastError = undefined
   const settings = getSettings()
-  mode = requested ?? settings.connectionMode
-
-  const profileId = getActiveProfileId()
+  const profileId = target.profileId
   if (!profileId) {
     lastError = 'no active profile'
     throw new Error(lastError)
   }
 
-  let effectiveMode = mode
+  let effectiveMode = target.mode
   if (effectiveMode === 'tun') {
     const auth = await authorizeForTun()
     if (!auth) {
       lastError = 'privileges required for TUN'
       log(lastError, 'error')
       effectiveMode = 'proxy'
-      mode = 'proxy'
       log('falling back to mixed-port proxy mode for this session', 'warn')
     }
   }
@@ -235,61 +257,93 @@ async function connectInternal(
       ? { ...settings, tunEnabled: true, connectionMode: 'tun' as const }
       : { ...settings, tunEnabled: false, connectionMode: 'proxy' as const }
 
-  const configPath = rebuildActive(rebuildSettings)
-  if (!configPath || !existsSync(configPath)) {
+  const configPath = rebuildConfig(profileId, rebuildSettings)
+  if (!existsSync(configPath)) {
     lastError = 'config rebuild failed'
     throw new Error(lastError)
   }
 
-  await disconnectInternal(false, true)
+  await cleanupCore(false)
+  if (!isCurrent()) return
 
   try {
-    log(`applying config profile=${profileId} reason=${reason}`)
-    if (effectiveMode === 'tun' && (await pingHelper())) {
+    log(
+      `lifecycle generation=${ticket.generation} profile=${profileId} reason=${target.reason}`,
+    )
+    const helperReady = effectiveMode === 'tun' && (await pingHelper())
+    if (!isCurrent()) return
+    if (helperReady) {
       await spawnCoreElevated(configPath)
     } else {
       await spawnCoreDirect(configPath)
     }
-    stopping = false
+    if (!isCurrent()) return
     await mihomoApi.applySelections(getSelections(profileId))
+    if (!isCurrent()) return
 
     if (effectiveMode === 'proxy' && settings.systemProxy) {
       await setSystemProxy(true, settings.mixedPort)
     }
+    if (!isCurrent()) return
+    mode = effectiveMode
     crashCount = 0
-    log(`connected mode=${effectiveMode}`)
+    log(`connected mode=${effectiveMode} profile=${profileId}`)
   } catch (e) {
+    if (!isCurrent()) return
     lastError = String(e)
     log(`connect failed: ${e}`, 'error')
     await cleanupCore(false)
-    stopping = false
     throw e
   }
 
-  const status = await getStatus()
-  broadcast(status)
-  return status
+  if (isCurrent()) {
+    const status = await getStatus()
+    if (isCurrent()) broadcast(status)
+  }
+}
+
+const lifecycle = new LatestWinsCoordinator<LifecycleTarget>(reconcileLifecycle)
+
+async function requestLifecycle(target: LifecycleTarget): Promise<CoreStatus> {
+  await lifecycle.request(target)
+  return getStatus()
 }
 
 export async function connect(
   requested?: ConnectionMode,
   reason: ConfigApplyReason = 'cold-start',
+  profileId: string | null = getActiveProfileId(),
 ): Promise<CoreStatus> {
-  if (connectChain) return connectChain
-  connectChain = connectInternal(requested, reason).finally(() => {
-    connectChain = null
+  const settings = getSettings()
+  return requestLifecycle({
+    running: true,
+    mode: requested ?? settings.connectionMode,
+    profileId,
+    reason,
   })
-  return connectChain
 }
 
 export async function disconnect(): Promise<CoreStatus> {
-  await disconnectInternal(true, false)
-  stopping = false
-  lastError = undefined
-  log('disconnected')
-  const status = await getStatus()
-  broadcast(status)
-  return status
+  const desired = lifecycle.desiredTarget
+  return requestLifecycle({
+    running: false,
+    mode: desired?.mode ?? getSettings().connectionMode,
+    profileId: desired?.profileId ?? getActiveProfileId(),
+    reason: 'cold-start',
+    clearProxy: true,
+  })
+}
+
+export async function switchProfile(profileId: string): Promise<CoreStatus> {
+  const desired = lifecycle.desiredTarget
+  const running = desired?.running ?? (await getStatus()).running
+  return requestLifecycle({
+    running,
+    mode: desired?.mode ?? getSettings().connectionMode,
+    profileId,
+    reason: 'profile-switch',
+    rebuildWhenStopped: !running,
+  })
 }
 
 export async function setTunEnabled(enabled: boolean): Promise<TunStatus> {
@@ -298,10 +352,11 @@ export async function setTunEnabled(enabled: boolean): Promise<TunStatus> {
 
 export async function setConnectionMode(next: ConnectionMode): Promise<TunStatus> {
   setSettings({ connectionMode: next })
-  const running = (await getStatus()).running
+  const desired = lifecycle.desiredTarget
+  const running = desired?.running ?? (await getStatus()).running
   if (running) {
     try {
-      await connect(next)
+      await connect(next, 'cold-start', desired?.profileId ?? getActiveProfileId())
     } catch (e) {
       lastError = String(e)
     }
@@ -343,11 +398,10 @@ export function coreBinarySha256(): string | null {
 export { corePresent }
 
 // Break profiles ↔ core-manager cycle: profiles calls this after a live reload.
-setReloadActiveCoreHook(async (configPath) => {
+setReloadActiveCoreHook(async (configPath, profileId) => {
   const st = await getStatus()
   if (!st.running) return
-  const profileId = getActiveProfileId()
-  if (!profileId) return
+  if (getActiveProfileId() !== profileId) return
   log(`applying config profile=${profileId} reason=live-reload`)
   mihomoApi.ensureSecretFromStore()
   await mihomoApi.putConfigs(configPath)
