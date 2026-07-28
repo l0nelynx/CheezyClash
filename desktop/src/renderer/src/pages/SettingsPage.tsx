@@ -106,8 +106,8 @@ export function SettingsPage({
         />
         {!settings.networkOverrideEnabled && (
           <p className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-ink-dim">
-            Network settings are controlled by the profile YAML. The saved Desktop values below
-            are not applied.
+            Network settings are controlled by the Provider. The saved Desktop values below are
+            not applied.
           </p>
         )}
         <div>
