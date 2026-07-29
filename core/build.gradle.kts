@@ -302,6 +302,11 @@ tasks.register("bumpMihomo") {
         }
 
         runGo(goWorkDir, "mod", "tidy")
+        // The Android JNI wrapper does not import Mihomo's package main, while
+        // the desktop sidecar does. Preserve checksums for the complete module
+        // graph so a strict `go build -mod=readonly github.com/metacubex/mihomo`
+        // remains reproducible after every bump.
+        runGo(goWorkDir, "mod", "download", "all")
         logger.lifecycle("[bumpMihomo] new: ${readMihomoVersion()}")
     }
 }

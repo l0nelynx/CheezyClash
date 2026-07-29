@@ -144,20 +144,13 @@ jobs:
           OUT_DIR="$PWD/core/build/mihomo-sidecars"
           mkdir -p "$OUT_DIR"
 
-          # Android-style label: replace fork@pseudo-version (same as :core:printMihomoVersion)
-          MIHOMO_VER=$(
-            awk '
-              /^replace[ \t]+github\.com\/metacubex\/mihomo[ \t]+=>[ \t]+/ {
-                path=$3; ver=$4
-                if (path == "github.com/metacubex/mihomo") print ver
-                else print path "@" ver
-                found=1; exit
-              }
-              END { if (!found) exit 1 }
-            ' "$GO_DIR/go.mod" \
-            || awk '/github\.com\/metacubex\/mihomo[ \t]/ { print $2; exit }' "$GO_DIR/go.mod" \
-            || echo "unknown"
-          )
+          # Single parser shared with desktop packaging. It understands a
+          # module-level replace and returns fork@pseudo-version.
+          MIHOMO_VER=$(node desktop/scripts/mihomo-version.mjs)
+          if [ -z "$MIHOMO_VER" ] || [ "$MIHOMO_VER" = "unknown" ]; then
+            echo "ERROR: unable to resolve mihomo version from $GO_DIR/go.mod"
+            exit 1
+          fi
           echo "mihomoVersion=$MIHOMO_VER"
           printf '%s\n' "$MIHOMO_VER" > "$OUT_DIR/mihomo-version.txt"
 
@@ -183,7 +176,7 @@ jobs:
             (
               cd "$GO_DIR"
               CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-                go build -tags with_gvisor -trimpath \
+                go build -mod=readonly -tags with_gvisor -trimpath \
                 -ldflags="-s -w -X github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}" \
                 -o "$STAGE/$BIN" github.com/metacubex/mihomo
             )
