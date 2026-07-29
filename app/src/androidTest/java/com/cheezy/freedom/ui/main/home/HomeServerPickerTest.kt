@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -24,6 +25,127 @@ import org.junit.Test
 class HomeServerPickerTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun countryFlagReplacesGlobeAndIsRemovedFromHomeName() {
+        compose.setContent {
+            CheezyVPNTheme {
+                HomeTab(
+                    running = true,
+                    proxyname = "🇩🇪 Germany 01",
+                    trafficNowFlow = MutableStateFlow(0L),
+                    subscription = null,
+                    lastUpdateTime = 0L,
+                    lastError = null,
+                    configName = "config.yaml",
+                    loading = false,
+                    primaryProxyGroup = group(listOf("🇩🇪 Germany 01")),
+                    onRefresh = {},
+                    onVpnToggle = {},
+                    phase = ConnectionPhase.CONNECTED,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("home_server_flag").assertTextEquals("🇩🇪")
+        compose.onNodeWithTag("home_server_globe").assertDoesNotExist()
+        compose.onNodeWithText("Germany 01").assertIsDisplayed()
+        compose.onNodeWithText("🇩🇪 Germany 01").assertDoesNotExist()
+    }
+
+    @Test
+    fun nameWithoutCountryFlagKeepsGlobe() {
+        compose.setContent {
+            CheezyVPNTheme {
+                HomeTab(
+                    running = true,
+                    proxyname = "Amsterdam",
+                    trafficNowFlow = MutableStateFlow(0L),
+                    subscription = null,
+                    lastUpdateTime = 0L,
+                    lastError = null,
+                    configName = "config.yaml",
+                    loading = false,
+                    primaryProxyGroup = group(listOf("Amsterdam")),
+                    onRefresh = {},
+                    onVpnToggle = {},
+                    phase = ConnectionPhase.CONNECTED,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("home_server_globe").assertIsDisplayed()
+        compose.onNodeWithTag("home_server_flag").assertDoesNotExist()
+        compose.onNodeWithText("Amsterdam").assertIsDisplayed()
+    }
+
+    @Test
+    fun activeChildCountryFlagHasPriority() {
+        compose.setContent {
+            CheezyVPNTheme {
+                HomeTab(
+                    running = true,
+                    proxyname = "🇺🇸 AUTO",
+                    trafficNowFlow = MutableStateFlow(0L),
+                    subscription = null,
+                    lastUpdateTime = 0L,
+                    lastError = null,
+                    configName = "config.yaml",
+                    loading = false,
+                    primaryProxyGroup = PrimaryProxyGroupUiData(
+                        name = "PROXY",
+                        now = "🇺🇸 AUTO",
+                        proxies = listOf(
+                            ProxyUiData(
+                                name = "🇺🇸 AUTO",
+                                type = "URLTest",
+                                subtitle = "Automatic",
+                                groupNow = "🇺🇸 AUTO",
+                                activeChild = "🇯🇵 Tokyo 01",
+                            ),
+                        ),
+                    ),
+                    onRefresh = {},
+                    onVpnToggle = {},
+                    phase = ConnectionPhase.CONNECTED,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("home_server_flag").assertTextEquals("🇯🇵")
+        compose.onNodeWithText("AUTO").assertIsDisplayed()
+        compose.onNodeWithText("Tokyo 01").assertIsDisplayed()
+        compose.onNodeWithText("🇯🇵 Tokyo 01").assertDoesNotExist()
+    }
+
+    @Test
+    fun bottomSheetAndSelectionKeepRawProxyName() {
+        var selection: Pair<String, String>? = null
+        compose.setContent {
+            CheezyVPNTheme {
+                HomeTab(
+                    running = true,
+                    proxyname = "🇩🇪 Germany",
+                    trafficNowFlow = MutableStateFlow(0L),
+                    subscription = null,
+                    lastUpdateTime = 0L,
+                    lastError = null,
+                    configName = "config.yaml",
+                    loading = false,
+                    primaryProxyGroup = group(listOf("🇩🇪 Germany", "🇵🇱 Warsaw")),
+                    onSelectProxy = { group, proxy -> selection = group to proxy },
+                    onRefresh = {},
+                    onVpnToggle = {},
+                    phase = ConnectionPhase.CONNECTED,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("home_active_server").performClick()
+        compose.onNodeWithText("🇵🇱 Warsaw").assertIsDisplayed().performClick()
+
+        assertEquals("PROXY" to "🇵🇱 Warsaw", selection)
+    }
 
     @Test
     fun opensPickerAndSelectsServer() {

@@ -82,12 +82,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
 import com.cheezy.freedom.R
 import com.cheezy.freedom.clash.ConnectionPhase
@@ -287,7 +290,10 @@ private fun ActiveServerCard(
     var showPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val selectedProxy = group?.proxies?.firstOrNull { it.name == group.now }
-    val displayName = group?.now?.takeIf { it.isNotBlank() } ?: fallbackProxyName
+    val selectedName = (group?.now?.takeIf { it.isNotBlank() } ?: fallbackProxyName)
+        .toProxyNamePresentation()
+    val activeChildName = selectedProxy?.activeChild?.toProxyNamePresentation()
+    val displayFlag = activeChildName?.flag ?: selectedName.flag
     val displayDelay = group?.let { current ->
         selectedProxy?.let { proxyDelay(current.name, it, delays) }
     }
@@ -327,11 +333,24 @@ private fun ActiveServerCard(
                 contentColor = MaterialTheme.colorScheme.onSecondary,
             ) {
                 Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    if (displayFlag != null) {
+                        Text(
+                            text = displayFlag,
+                            modifier = Modifier
+                                .testTag("home_server_flag")
+                                .semantics { hideFromAccessibility() },
+                            fontSize = 20.sp,
+                            lineHeight = 20.sp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .testTag("home_server_globe")
+                                .size(18.dp),
+                        )
+                    }
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -343,16 +362,16 @@ private fun ActiveServerCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = displayName,
+                    text = selectedName.displayName,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                selectedProxy?.activeChild?.let { child ->
+                activeChildName?.let { child ->
                     Text(
-                        text = child,
+                        text = child.displayName,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.65f),
                         maxLines = 1,
@@ -800,7 +819,7 @@ fun HomeTabConnectedPreview() {
     CheezyVPNTheme {
         HomeTab(
             running = true,
-            proxyname = "Netherlands-Premium",
+            proxyname = "🇳🇱 Netherlands — very long premium server name",
             trafficNowFlow = MutableStateFlow(125000L),
             subscription = SubscriptionInfo(
                 title = "Cheezy Premium",
@@ -816,23 +835,25 @@ fun HomeTabConnectedPreview() {
             loading = false,
             primaryProxyGroup = PrimaryProxyGroupUiData(
                 name = "PROXY",
-                now = "Netherlands-Premium",
+                now = "🇳🇱 Netherlands — very long premium server name",
                 proxies = listOf(
                     ProxyUiData(
-                        name = "Netherlands-Premium",
+                        name = "🇳🇱 Netherlands — very long premium server name",
                         type = "Vless",
                         subtitle = "Amsterdam · Premium",
-                        groupNow = "Netherlands-Premium",
+                        groupNow = "🇳🇱 Netherlands — very long premium server name",
                     ),
                     ProxyUiData(
-                        name = "Singapore — very long server name for compact screens",
+                        name = "🇸🇬 Singapore — very long server name for compact screens",
                         type = "Vless",
                         subtitle = "Singapore",
-                        groupNow = "Netherlands-Premium",
+                        groupNow = "🇳🇱 Netherlands — very long premium server name",
                     ),
                 ),
             ),
-            proxyDelays = mapOf("PROXY" to mapOf("Netherlands-Premium" to 124)),
+            proxyDelays = mapOf(
+                "PROXY" to mapOf("🇳🇱 Netherlands — very long premium server name" to 124),
+            ),
             onRefresh = {},
             onVpnToggle = {}
         )
