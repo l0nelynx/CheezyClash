@@ -11,7 +11,7 @@ object ConfigOverrideManager {
     internal const val BASE_FILE_NAME = "base.yaml"
     internal const val CONFIG_FILE_NAME = "config.yaml"
 
-    private val registry: List<ConfigOverride> = listOf(LocalProxyOverride)
+    private val registry: List<ConfigOverride> = listOf(LocalProxyOverride, WapConfigOverride)
 
     fun isEnabled(context: Context, id: String): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -51,18 +51,55 @@ object ConfigOverrideManager {
     fun rebuild(context: Context, dir: File) {
         ensureBaseExists(dir)
         LocalProxyOverride.authEntry = LocalProxyOverride.ensureCredentials(context)
-        val enabled = registry.filter { isEnabled(context, it.id) }.map { it.id }.toSet()
-        rebuildInDir(dir, enabled)
+        val wapSettings = WapSettingsStore.load(context)
+        val profile = ProfileStore.list(context).firstOrNull { ProfileStore.dir(context, it.id).canonicalFile == dir.canonicalFile }
+        val wapRuntime = if (wapSettings.enabled) {
+            WapRuntimeConfig(
+                proxy = WapSettingsStore.fallbackProxy(wapSettings),
+                subscriptionHost = profile?.url?.let { runCatching { java.net.URL(it).host }.getOrNull() },
+                subscriptionHeaders = ConfigManager.subscriptionRequestHeaders(context),
+            )
+        } else null
+        val enabled = registry.filter { isEnabled(context, it.id) }.map { it.id }.toMutableSet()
+        if (wapRuntime != null) enabled += WapConfigOverride.id
+        rebuildInDir(dir, enabled, wapRuntime)
+    }
+
+    fun rebuildForVpn(
+        context: Context,
+        dir: File,
+        proxy: ResolvedWapProxy?,
+        subscriptionHost: String?,
+        localProxyEnabled: Boolean,
+    ) {
+        ensureBaseExists(dir)
+        LocalProxyOverride.authEntry = LocalProxyOverride.ensureCredentials(context)
+        val runtime = proxy?.let {
+            WapRuntimeConfig(it, subscriptionHost, ConfigManager.subscriptionRequestHeaders(context))
+        }
+        val enabled = buildSet {
+            if (localProxyEnabled) add(LocalProxyOverride.id)
+            if (runtime != null) add(WapConfigOverride.id)
+        }
+        rebuildInDir(dir, enabled, runtime)
     }
 
     /** Pure helper for unit tests: operate on an explicit clash directory and id set. */
-    internal fun rebuildInDir(clash: File, enabledIds: Set<String>) {
+    internal fun rebuildInDir(
+        clash: File,
+        enabledIds: Set<String>,
+        wapRuntime: WapRuntimeConfig? = null,
+    ) {
         val base = File(clash, BASE_FILE_NAME)
         if (!base.exists()) return
         val map = runCatching { readMap(base) }.getOrNull()?.toMutableMap() ?: return
 
-        registry.forEach { override ->
-            if (override.id in enabledIds) override.apply(map)
+        synchronized(this) {
+            WapConfigOverride.runtime = wapRuntime
+            registry.forEach { override ->
+                if (override.id in enabledIds) override.apply(map)
+            }
+            WapConfigOverride.runtime = null
         }
 
         val dumperOptions = DumperOptions().apply {

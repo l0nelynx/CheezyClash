@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
+import android.net.Network
 import android.os.Build
 import android.service.quicksettings.TileService
 import android.util.Log
@@ -30,6 +31,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.net.URL
 import org.json.JSONObject
 
 class ClashVpnService : VpnService() {
@@ -47,6 +49,11 @@ class ClashVpnService : VpnService() {
     private var acEnabled = false
     private var acForceIncluded: Set<String> = emptySet()
     private var acForceExcluded: Set<String> = emptySet()
+    private var localProxyEnabled = false
+    private var wapSettings = WapSettings()
+    private var wapSession: WapNetworkSession? = null
+    private var subscriptionHost: String? = null
+    private var runtimeConfigPrepared = false
 
     /** Proxy selections snapshot from main (group -> proxy), same cross-process rationale as AC. */
     private var startupSelections: Map<String, String> = emptyMap()
@@ -77,12 +84,77 @@ class ClashVpnService : VpnService() {
      * on every entry point.
      */
     private suspend fun ensureConfigLoaded() {
+        prepareRuntimeConfig()
         val sig = configSignature()
         val alreadyLoaded = loadedConfigSig == sig &&
             runCatching { Clash.queryGroupNames(false).isNotEmpty() }.getOrDefault(false)
         if (alreadyLoaded) return
         Clash.load(activeConfigDir)
         loadedConfigSig = sig
+    }
+
+    private suspend fun prepareRuntimeConfig() {
+        if (runtimeConfigPrepared) return
+        wapSession?.close()
+        wapSession = null
+        if (wapSettings.enabled) {
+            val session = WapNetworkManager.acquire(
+                context = this,
+                settings = wapSettings,
+                onLost = ::onWapNetworkLost,
+                onProxyChanged = ::onWapProxyChanged,
+            )
+            wapSession = session
+            ConfigOverrideManager.rebuildForVpn(
+                context = this,
+                dir = activeConfigDir,
+                proxy = session.proxy,
+                subscriptionHost = subscriptionHost,
+                localProxyEnabled = localProxyEnabled,
+            )
+            Clash.installSocketPolicy(
+                tcpOnly = true,
+                markSocket = ::markOutboundSocket,
+                querySocketUid = { _, _, _ -> 0 },
+            )
+        } else {
+            ConfigOverrideManager.rebuildForVpn(
+                context = this,
+                dir = activeConfigDir,
+                proxy = null,
+                subscriptionHost = subscriptionHost,
+                localProxyEnabled = localProxyEnabled,
+            )
+        }
+        loadedConfigSig = null
+        runtimeConfigPrepared = true
+    }
+
+    private fun markOutboundSocket(fd: Int): Boolean {
+        val session = wapSession
+        return if (wapSettings.enabled) {
+            session?.bindAndProtect(fd, ::protect) == true
+        } else {
+            protect(fd)
+        }
+    }
+
+    private fun onWapNetworkLost(network: Network) {
+        if (wapSession?.network != network) return
+        failClosedWap("Cellular WAP network lost")
+    }
+
+    private fun onWapProxyChanged(proxy: ResolvedWapProxy) {
+        if (wapSession?.proxy == proxy) return
+        failClosedWap("APN proxy changed; restart VPN")
+    }
+
+    private fun failClosedWap(message: String) {
+        scope.launch {
+            ClashState.setError(message)
+            ClashState.setPhase(ConnectionPhase.ERROR)
+            stopClash(cancelStartJob = false)
+        }
     }
 
     private val callbacks = RemoteCallbackList<IClashCallback>()
@@ -122,6 +194,7 @@ class ClashVpnService : VpnService() {
                             canonical.path.startsWith(profilesRoot.path + File.separator)
                     ) { "loadConfig path outside profiles root: $path" }
                     activeConfigDir = canonical
+                    runtimeConfigPrepared = false
                 }
                 ensureConfigLoaded()
             }
@@ -278,6 +351,21 @@ class ClashVpnService : VpnService() {
             acForceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(ctx) else emptySet()
             acForceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(ctx) else emptySet()
         }
+        localProxyEnabled = intent?.getBooleanExtra(EXTRA_LOCAL_PROXY_ENABLED, false)
+            ?: ConfigOverrideManager.isEnabled(this, LocalProxyOverride.id)
+        wapSettings = intent?.takeIf { it.hasExtra(EXTRA_WAP_MODE) }?.let {
+            WapSettings(
+                mode = runCatching { WapMode.valueOf(it.getStringExtra(EXTRA_WAP_MODE).orEmpty()) }
+                    .getOrDefault(WapMode.OFF),
+                host = it.getStringExtra(EXTRA_WAP_HOST).orEmpty().ifBlank { WapSettingsStore.DEFAULT_HOST },
+                port = it.getIntExtra(EXTRA_WAP_PORT, WapSettingsStore.DEFAULT_PORT),
+                username = it.getStringExtra(EXTRA_WAP_USERNAME).orEmpty(),
+                password = it.getStringExtra(EXTRA_WAP_PASSWORD).orEmpty(),
+            )
+        } ?: WapSettingsStore.load(this)
+        subscriptionHost = intent?.getStringExtra(EXTRA_SUBSCRIPTION_HOST)
+            ?: ProfileStore.active(this)?.url?.let { runCatching { URL(it).host }.getOrNull() }
+        runtimeConfigPrepared = false
         startupSelections = intent?.getStringExtra(EXTRA_SELECTIONS_JSON)?.let { parseSelectionsJson(it) }
             ?: ConfigManager.getSavedSelections(this)
         intent?.getStringExtra(EXTRA_ACTIVE_DIR)?.takeIf { it.isNotBlank() }?.let {
@@ -362,7 +450,7 @@ class ClashVpnService : VpnService() {
                     gateway = "$tunGateway/30",
                     portal = tunPortal,
                     dns = dnsServer,
-                    markSocket = { sock -> protect(sock) },
+                    markSocket = ::markOutboundSocket,
                     querySocketUid = { _, _, _ -> 0 },
                 )
                 fdOwned = false
@@ -400,9 +488,13 @@ class ClashVpnService : VpnService() {
             withTimeoutOrNull(5_000) {
                 runCatching { Clash.stopTun() }
                 runCatching { Clash.stopHttp() }
+                runCatching { Clash.clearSocketPolicy() }
                 runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
             }
         }
+        wapSession?.close()
+        wapSession = null
+        runtimeConfigPrepared = false
         ClashState.setRunning(false)
         // Keep ERROR phase + lastError when tearing down a failed start.
         if (ClashState.phase.value != ConnectionPhase.ERROR) {
@@ -542,6 +634,13 @@ class ClashVpnService : VpnService() {
         private const val EXTRA_AC_FORCE_EXCLUDED = "extra.ac_force_excluded"
         private const val EXTRA_ACTIVE_DIR = "extra.active_dir"
         private const val EXTRA_SELECTIONS_JSON = "extra.selections_json"
+        private const val EXTRA_LOCAL_PROXY_ENABLED = "extra.local_proxy_enabled"
+        private const val EXTRA_WAP_MODE = "extra.wap_mode"
+        private const val EXTRA_WAP_HOST = "extra.wap_host"
+        private const val EXTRA_WAP_PORT = "extra.wap_port"
+        private const val EXTRA_WAP_USERNAME = "extra.wap_username"
+        private const val EXTRA_WAP_PASSWORD = "extra.wap_password"
+        private const val EXTRA_SUBSCRIPTION_HOST = "extra.subscription_host"
 
         private fun parseSelectionsJson(json: String): Map<String, String> =
             runCatching {
@@ -565,6 +664,9 @@ class ClashVpnService : VpnService() {
             val forceIncluded = if (acEnabled) ConfigManager.getUserForceIncluded(context) else emptySet()
             val forceExcluded = if (acEnabled) ConfigManager.getUserForceExcluded(context) else emptySet()
             val selections = ConfigManager.getSavedSelections(context)
+            val wap = WapSettingsStore.load(context)
+            val subscriptionHost = ProfileStore.active(context)?.url
+                ?.let { runCatching { URL(it).host }.getOrNull() }
 
             val intent = Intent(context, ClashVpnService::class.java).apply {
                 putExtra(EXTRA_AC_ENABLED, acEnabled)
@@ -572,6 +674,13 @@ class ClashVpnService : VpnService() {
                 putExtra(EXTRA_AC_FORCE_EXCLUDED, forceExcluded.toTypedArray())
                 putExtra(EXTRA_ACTIVE_DIR, ProfileStore.activeDir(context).absolutePath)
                 putExtra(EXTRA_SELECTIONS_JSON, selectionsToJson(selections))
+                putExtra(EXTRA_LOCAL_PROXY_ENABLED, ConfigOverrideManager.isEnabled(context, LocalProxyOverride.id))
+                putExtra(EXTRA_WAP_MODE, wap.mode.name)
+                putExtra(EXTRA_WAP_HOST, wap.host)
+                putExtra(EXTRA_WAP_PORT, wap.port)
+                putExtra(EXTRA_WAP_USERNAME, wap.username)
+                putExtra(EXTRA_WAP_PASSWORD, wap.password)
+                putExtra(EXTRA_SUBSCRIPTION_HOST, subscriptionHost)
             }
             if (Build.VERSION.SDK_INT >= 26) {
                 context.startForegroundService(intent)

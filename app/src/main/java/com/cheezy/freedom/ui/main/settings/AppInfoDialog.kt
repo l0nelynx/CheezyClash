@@ -1,7 +1,5 @@
 package com.cheezy.freedom.ui.main.settings
 
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
@@ -16,21 +14,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.cheezy.freedom.R
 import com.cheezy.freedom.PrivacyPolicyDialog
 import com.cheezy.freedom.TermsOfServiceDialog
 import com.github.kr328.clash.core.bridge.Bridge
 
-// Zashboard connects to 127.0.0.1:9090 (mihomo external-controller) from the browser.
-// We open it via HTTP to avoid mixed-content issues (HTTPS→HTTP API). GH Pages
-// serves both versions without redirect for this domain, verified.
-private const val ZASHBOARD_URL = "http://board.zash.run.place/"
-
 @Composable
 fun AppInfoDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
     var showPolicyDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
 
@@ -71,13 +62,7 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_core_version)) },
                     supportingContent = { Text(stringResource(R.string.info_core_version_value, mihomoVersion)) },
-                    colors = transparentList,
-                    modifier = Modifier.clickable {
-                        CustomTabsIntent.Builder()
-                            .setShowTitle(true)
-                            .build()
-                            .launchUrl(context, Uri.parse(ZASHBOARD_URL))
-                    }
+                    colors = transparentList
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_privacy_policy)) },

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/metacubex/mihomo/component/process"
@@ -17,6 +18,11 @@ import (
 )
 
 var errBlocked = errors.New("blocked")
+var tcpOnly atomic.Bool
+
+func SetTCPOnly(enabled bool) {
+	tcpOnly.Store(enabled)
+}
 
 func Init(home, versionName, gitVersion string, platformVersion int) {
 	log.Infoln("Init core, home: %s, versionName: %s, gitVersion: %s, platformVersion: %d", home, versionName, gitVersion, platformVersion)
@@ -51,9 +57,17 @@ func Init(home, versionName, gitVersion string, platformVersion int) {
 		if platform.ShouldBlockConnection() {
 			return errBlocked
 		}
+		if tcpOnly.Load() && !strings.HasPrefix(network, "tcp") {
+			return errors.New("non-TCP outbound blocked by socket policy")
+		}
 
-		return conn.Control(func(fd uintptr) {
-			app.MarkSocket(int(fd))
+		var policyErr error
+		err := conn.Control(func(fd uintptr) {
+			policyErr = app.MarkSocket(int(fd))
 		})
+		if err != nil {
+			return err
+		}
+		return policyErr
 	}
 }

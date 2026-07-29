@@ -1,6 +1,7 @@
 package com.cheezy.freedom.ui.main.settings
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,9 +18,11 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -33,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,12 +55,14 @@ import com.cheezy.freedom.R
 import com.cheezy.freedom.LogsActivity
 import com.cheezy.freedom.UpdateManager
 import com.cheezy.freedom.account.AppDeps
+import com.cheezy.freedom.clash.WapSettings
 
 @Composable
 fun SettingsTab(
     userEmail: String?,
     tgId: Long?,
     isCheckingUpdate: Boolean,
+    wapSettings: WapSettings,
     // Capabilities: if a flavor does not support a feature, the corresponding
     // UI block is not drawn. In open, everything is false; in proprietary,
     // everything is true.
@@ -74,15 +80,26 @@ fun SettingsTab(
     onUnlinkTelegram: () -> Unit,
     onRequestTransfer: () -> Unit,
     onOpenAccessControl: () -> Unit,
+    onSaveWapSettings: (WapSettings) -> Unit,
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
     // ListItems default to an opaque `surface` container; on the tab card that
     // reads as white strips. Make them transparent so they take the card colour.
     val transparentList = ListItemDefaults.colors(containerColor = Color.Transparent)
 
     if (showInfoDialog) AppInfoDialog { showInfoDialog = false }
+    BackHandler(enabled = showAdvanced) { showAdvanced = false }
+    if (showAdvanced) {
+        AdvancedSettingsScreen(
+            wapSettings = wapSettings,
+            onSaveWapSettings = onSaveWapSettings,
+            onBack = { showAdvanced = false },
+        )
+        return
+    }
     // TransferSubscriptionDialog is rendered from MainScreen — it lives in
     // proprietaryMain and main code is not allowed to reference it directly.
     // onRequestTransfer above is a signal that "the user clicked to transfer
@@ -156,6 +173,15 @@ fun SettingsTab(
         )
 
         AppDeps.launchers.ExtraSettingsItems(onAddConfig)
+
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_advanced)) },
+            supportingContent = { Text(stringResource(R.string.settings_advanced_summary)) },
+            leadingContent = { Icon(Icons.Default.Tune, null) },
+            trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+            colors = transparentList,
+            modifier = Modifier.clickable { showAdvanced = true },
+        )
 
         ListItem(
             headlineContent = { Text(stringResource(R.string.settings_access_control)) },

@@ -9,7 +9,12 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Authenticator
+import java.net.PasswordAuthentication
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import kotlinx.coroutines.sync.Mutex
 
 object ConfigManager {
     private const val PREFS_SELECTIONS = "cheezy.selections"
@@ -23,6 +28,7 @@ object ConfigManager {
     private const val KEY_AC_FORCE_EXCLUDED = "force_excluded"
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val subscriptionDownloadMutex = Mutex()
 
     /** Result of a raw subscription download (no persistence side effects). */
     data class DownloadMeta(
@@ -51,12 +57,33 @@ object ConfigManager {
         targetDir: File,
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): DownloadMeta {
+        subscriptionDownloadMutex.lock()
+        var wapSession: WapNetworkSession? = null
+        var authenticatorInstalled = false
+        try {
         val initialUrl = URL(urlString)
         requireHttps(initialUrl)
 
         // App name differs per flavor: open → CheezyClash, proprietary → CheezyVPN.
         val appName = if (com.cheezy.freedom.BuildConfig.EDITION == "OPEN") "CheezyClash" else "CheezyVPN"
-        val conn = openSubscriptionConnection(initialUrl, context, appName)
+        val wapSettings = WapSettingsStore.load(context)
+        if (wapSettings.enabled) {
+            wapSession = WapNetworkManager.acquire(context, wapSettings)
+            val proxy = wapSession.proxy
+            if (proxy.username.isNotBlank()) {
+                Authenticator.setDefault(object : Authenticator() {
+                    override fun getPasswordAuthentication(): PasswordAuthentication? {
+                        val isExpectedProxy = requestorType == RequestorType.PROXY &&
+                            requestingHost.equals(proxy.host, ignoreCase = true) && requestingPort == proxy.port
+                        return if (isExpectedProxy) {
+                            PasswordAuthentication(proxy.username, proxy.password.toCharArray())
+                        } else null
+                    }
+                })
+                authenticatorInstalled = true
+            }
+        }
+        val conn = openSubscriptionConnection(initialUrl, context, appName, wapSession)
         try {
             val code = conn.responseCode
             if (code !in 200..299) {
@@ -89,25 +116,45 @@ object ConfigManager {
 
             targetDir.mkdirs()
             val target = targetDir.resolve(ConfigOverrideManager.BASE_FILE_NAME)
-            conn.inputStream.use { input ->
-                target.outputStream().use { output ->
-                    var copied = 0L
-                    val buf = ByteArray(8 * 1024)
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        copied += n
-                        if (copied > MAX_DOWNLOAD_BYTES) {
-                            throw IOException("Subscription exceeded size limit ($MAX_DOWNLOAD_BYTES bytes)")
+            val temporary = targetDir.resolve("${ConfigOverrideManager.BASE_FILE_NAME}.download")
+            try {
+                conn.inputStream.use { input ->
+                    temporary.outputStream().use { output ->
+                        var copied = 0L
+                        val buf = ByteArray(8 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            copied += n
+                            if (copied > MAX_DOWNLOAD_BYTES) {
+                                throw IOException("Subscription exceeded size limit ($MAX_DOWNLOAD_BYTES bytes)")
+                            }
+                            output.write(buf, 0, n)
                         }
-                        output.write(buf, 0, n)
                     }
                 }
+                runCatching {
+                    Files.move(
+                        temporary.toPath(),
+                        target.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING,
+                    )
+                }.getOrElse {
+                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+            } finally {
+                temporary.delete()
             }
 
             return DownloadMeta(name, sub, intervalHours)
         } finally {
             conn.disconnect()
+        }
+        } finally {
+            if (authenticatorInstalled) Authenticator.setDefault(null)
+            wapSession?.close()
+            subscriptionDownloadMutex.unlock()
         }
     }
 
@@ -121,24 +168,30 @@ object ConfigManager {
         url: URL,
         context: Context,
         appName: String,
+        wapSession: WapNetworkSession?,
     ): HttpURLConnection {
-        return (url.openConnection() as HttpURLConnection).apply {
+        val raw = wapSession?.openConnection(url) ?: url.openConnection()
+        return (raw as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 20_000
             readTimeout = 30_000
-            setRequestProperty("Accept", "text/yaml, text/plain, application/octet-stream, */*")
-            setRequestProperty("x-hwid", DeviceId.get(context))
-            setRequestProperty("x-device-os", "Android")
-            setRequestProperty("x-ver-os", Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString())
-            setRequestProperty("x-device-model", Build.MODEL ?: "unknown")
-            setRequestProperty(
-                "user-agent",
-                "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/mihomo/${com.cheezy.freedom.BuildConfig.VERSION_NAME}"
-            )
+            subscriptionRequestHeaders(context, appName).forEach(::setRequestProperty)
             // Follow redirects but requireHttps() re-checks the final URL.
             instanceFollowRedirects = true
         }
     }
+
+    internal fun subscriptionRequestHeaders(
+        context: Context,
+        appName: String = if (com.cheezy.freedom.BuildConfig.EDITION == "OPEN") "CheezyClash" else "CheezyVPN",
+    ): Map<String, String> = linkedMapOf(
+        "Accept" to "text/yaml, text/plain, application/octet-stream, */*",
+        "x-hwid" to DeviceId.get(context),
+        "x-device-os" to "Android",
+        "x-ver-os" to (Build.VERSION.RELEASE ?: Build.VERSION.SDK_INT.toString()),
+        "x-device-model" to (Build.MODEL ?: "unknown"),
+        "user-agent" to "$appName/${com.cheezy.freedom.BuildConfig.EDITION}/mihomo/${com.cheezy.freedom.BuildConfig.VERSION_NAME}",
+    )
 
     /** True if the active profile has a materialized config.yaml on disk. */
     fun hasConfig(context: Context): Boolean = configFile(context).exists()

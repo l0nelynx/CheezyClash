@@ -95,6 +95,20 @@ Java_com_github_kr328_clash_core_bridge_Bridge_nativeNotifyInstalledAppChanged(J
 }
 
 JNIEXPORT void JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeInstallSocketPolicy(JNIEnv *env, jobject thiz,
+                                                                         jobject cb,
+                                                                         jboolean tcp_only) {
+    TRACE_METHOD();
+    installSocketPolicy(new_global(cb), tcp_only ? 1 : 0);
+}
+
+JNIEXPORT void JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeClearSocketPolicy(JNIEnv *env, jobject thiz) {
+    TRACE_METHOD();
+    clearSocketPolicy();
+}
+
+JNIEXPORT void JNICALL
 Java_com_github_kr328_clash_core_bridge_Bridge_nativeStartTun(JNIEnv *env, jobject thiz,
                                                               jint fd,
                                                               jstring stack,
@@ -291,12 +305,16 @@ static jclass c_clash_exception;
 static jclass c_content;
 static jobject o_unit;
 
-static void call_tun_interface_mark_socket_impl(void *tun_interface, int fd) {
+static int call_tun_interface_mark_socket_impl(void *tun_interface, int fd) {
     TRACE_METHOD();
     ATTACH_JNI();
-    (*env)->CallVoidMethod(env, (jobject) tun_interface,
-                           (jmethodID) m_tun_interface_mark_socket,
-                           (jint) fd);
+    jboolean result = (*env)->CallBooleanMethod(env, (jobject) tun_interface,
+                                                (jmethodID) m_tun_interface_mark_socket,
+                                                (jint) fd);
+    if (jni_catch_exception(env)) {
+        return 0;
+    }
+    return result ? 1 : 0;
 }
 
 static int call_tun_interface_query_socket_uid_impl(void *tun_interface, int protocol,
@@ -420,7 +438,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved) {
     jclass c_throwable = find_class("java/lang/Throwable");
     jclass c_unit = find_class("kotlin/Unit");
 
-    m_tun_interface_mark_socket = find_method(c_tun_interface, "markSocket", "(I)V");
+    m_tun_interface_mark_socket = find_method(c_tun_interface, "markSocket", "(I)Z");
     m_tun_interface_query_socket_uid = find_method(c_tun_interface, "querySocketUid",
                                                    "(ILjava/lang/String;Ljava/lang/String;)I");
     m_completable_complete = find_method(c_completable, "complete", "(Ljava/lang/Object;)Z");

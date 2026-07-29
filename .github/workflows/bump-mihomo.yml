@@ -1,7 +1,7 @@
 name: Bump Mihomo
 
 # Runs manually. Updates go.mod / go.sum to a fresh ref of the
-# required Go package (default: mihomo@Alpha) and opens a PR into main.
+# required Go package (default: promoted Cheezy Core) and opens a PR into main.
 # The merge itself is done by a human.
 #
 # Pushing to the feature branch triggers build-core.yml (on pull_request),
@@ -10,17 +10,24 @@ name: Bump Mihomo
 on:
   workflow_dispatch:
     inputs:
+      from_latest_cheezy_core:
+        description: "Resolve and pin the latest github.com/l0nelynx/cheezy-core:cheezy-wap commit."
+        required: true
+        type: boolean
+        default: true
       ref:
-        description: "ref (branch / commit / tag). Default: Alpha HEAD."
+        description: "Manual ref used only when latest Cheezy Core is unchecked (commit preferred)."
         type: string
-        default: "Alpha"
+        default: ""
       replace_with:
         description: |
+          Manual source used only when latest Cheezy Core is unchecked.
           Optional: path to the fork for the replace directive.
           Use if the fork retains `module github.com/metacubex/mihomo`
           in its go.mod — otherwise a normal `go get github.com/<fork>` fails with
           "module declares its path as ... but was required as ...".
-          Example: github.com/vernesong/mihomo
+          Production default: github.com/l0nelynx/cheezy-core
+        default: "github.com/l0nelynx/cheezy-core"
 
 permissions:
   contents: write       # to create a branch and commit to it
@@ -37,6 +44,37 @@ jobs:
           # fetch-depth: 0 is needed if comparing with history; for
           # simple PR branch creation it's not mandatory, but won't hurt.
           fetch-depth: 0
+
+      - name: Resolve dependency source
+        id: target
+        env:
+          FROM_LATEST_CHEEZY_CORE: ${{ inputs.from_latest_cheezy_core }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_REPLACE: ${{ inputs.replace_with }}
+        run: |
+          if [ "$FROM_LATEST_CHEEZY_CORE" = "true" ]; then
+            REPLACE="github.com/l0nelynx/cheezy-core"
+            REF=$(git ls-remote --exit-code \
+              https://github.com/l0nelynx/cheezy-core.git \
+              refs/heads/cheezy-wap | awk 'NR == 1 { print $1 }')
+            if ! printf '%s' "$REF" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::Unable to resolve cheezy-core:cheezy-wap to an exact commit SHA."
+              exit 1
+            fi
+            MODE="latest cheezy-core:cheezy-wap"
+          else
+            REF="$INPUT_REF"
+            REPLACE="$INPUT_REPLACE"
+            MODE="manual ref"
+            if [ -z "$REF" ]; then
+              echo "::error::ref is required when latest Cheezy Core is unchecked."
+              exit 1
+            fi
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "replace=$REPLACE" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Resolved $MODE: ${REPLACE:-github.com/metacubex/mihomo}@$REF"
 
       - name: Set up Go 1.23
         uses: actions/setup-go@v5
@@ -61,8 +99,8 @@ jobs:
 
       - name: Apply dependency update (via :core:bumpMihomo)
         env:
-          REF:     ${{ inputs.ref }}
-          REPLACE: ${{ inputs.replace_with }}
+          REF:     ${{ steps.target.outputs.ref }}
+          REPLACE: ${{ steps.target.outputs.replace }}
         run: |
           chmod +x gradlew
           # Delegate work to the Gradle task :core:bumpMihomo. This is the single
@@ -99,7 +137,7 @@ jobs:
       - name: Stop if nothing changed
         if: steps.diff.outputs.changed == 'false'
         run: |
-          echo "::notice::Already at the latest version mihomo@${{ inputs.ref }}: ${{ steps.old.outputs.old_version }}"
+          echo "::notice::Already at the requested version mihomo@${{ steps.target.outputs.ref }}: ${{ steps.old.outputs.old_version }}"
           exit 0
 
       - name: Compute branch and PR metadata
@@ -107,8 +145,8 @@ jobs:
         id: meta
         env:
           PKG:     github.com/metacubex/mihomo
-          REF:     ${{ inputs.ref }}
-          REPLACE: ${{ inputs.replace_with }}
+          REF:     ${{ steps.target.outputs.ref }}
+          REPLACE: ${{ steps.target.outputs.replace }}
         run: |
           # Reflect the REAL code source in the title and branch name:
           # the fork name if there's a replace; otherwise the require name.
@@ -153,8 +191,9 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           PKG:         github.com/metacubex/mihomo
-          REF:         ${{ inputs.ref }}
-          REPLACE:     ${{ inputs.replace_with }}
+          REF:         ${{ steps.target.outputs.ref }}
+          REPLACE:     ${{ steps.target.outputs.replace }}
+          SOURCE_MODE: ${{ steps.target.outputs.mode }}
           OLD_VERSION: ${{ steps.old.outputs.old_version }}
           NEW_VERSION: ${{ steps.new.outputs.new_version }}
           RUN_ID:      ${{ github.run_id }}
@@ -169,6 +208,7 @@ jobs:
             if [ -n "$REPLACE" ]; then
               echo "| Replace with | \`$REPLACE\` |"
             fi
+            echo "| Source mode | \`$SOURCE_MODE\` |"
             echo "| Ref     | \`$REF\` |"
             echo "| Old     | \`$OLD_VERSION\` |"
             echo "| New     | \`$NEW_VERSION\` |"
