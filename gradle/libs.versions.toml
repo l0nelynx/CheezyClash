@@ -22,7 +22,7 @@ material3 = "1.5.0-alpha19"
 # AGP 9 поддерживается только начиная с 1.5.0-alpha (b/443311090).
 # 1.5.0-alpha06 — latest на момент написания, включает фикс для AGP/R8 9.1+ repackageclasses.
 profileinstaller = "1.4.1"
-benchmarkMacro = "1.5.0-alpha06"
+benchmarkMacro = "1.5.0-alpha07"
 uiautomator = "2.3.0"
 baselineprofile = "1.5.0-alpha06"
 startup = "1.2.0"
