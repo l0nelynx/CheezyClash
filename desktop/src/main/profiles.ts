@@ -36,6 +36,7 @@ import {
   effectiveNetworkFromDocument,
   type EffectiveNetworkConfig,
 } from './network-config'
+import { applyXrayMuxSettings } from './xray-mux-config'
 
 const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
@@ -100,6 +101,7 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
 
   applyNetworkSettings(doc, settings)
   applyAccessControlRules(doc, settings.accessControlRules ?? [])
+  applyXrayMuxSettings(doc, settings)
   ensureDns(doc)
 
   // Always bind controller to loopback for the desktop UI.

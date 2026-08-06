@@ -1,7 +1,10 @@
 import { app } from 'electron'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { existsSync } from 'fs'
 import { platform, arch } from 'os'
+
+/** electron-vite emits main into `out/main` — desktop package root is two levels up. */
+const desktopRoot = join(__dirname, '..', '..')
 
 export function userDataRoot(): string {
   return join(app.getPath('userData'), 'cheezy')
@@ -33,14 +36,24 @@ export function bundledCoreDir(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'core')
   }
-  return join(app.getAppPath(), 'resources', 'core')
+  // Prefer path relative to compiled main (stable under electron-vite).
+  // app.getAppPath() can point at out/ or asar roots where resources/ is absent.
+  const fromDesktop = join(desktopRoot, 'resources', 'core')
+  if (existsSync(fromDesktop)) return fromDesktop
+  const fromApp = join(app.getAppPath(), 'resources', 'core')
+  if (existsSync(fromApp)) return fromApp
+  return fromDesktop
 }
 
 export function bundledHelperDir(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'helper')
   }
-  return join(app.getAppPath(), 'resources', 'helper')
+  const fromDesktop = join(desktopRoot, 'resources', 'helper')
+  if (existsSync(fromDesktop)) return fromDesktop
+  const fromApp = join(app.getAppPath(), 'resources', 'helper')
+  if (existsSync(fromApp)) return fromApp
+  return fromDesktop
 }
 
 export function coreBinaryName(): string {
@@ -81,4 +94,9 @@ export function hostGoos(): string {
   if (p === 'win32') return 'windows'
   if (p === 'darwin') return 'darwin'
   return 'linux'
+}
+
+/** Repo / package roots for resolving go.mod next to the desktop app. */
+export function desktopPackageRoot(): string {
+  return desktopRoot
 }

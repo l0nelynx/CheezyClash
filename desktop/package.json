@@ -27,6 +27,7 @@
     "test:core-contract": "node scripts/test-core-contract.mjs",
     "test:lifecycle": "node scripts/test-lifecycle-coordinator.mjs",
     "test:network-config": "node scripts/test-network-config.mjs",
+    "test:xray-mux-config": "node scripts/test-xray-mux-config.mjs",
     "fetch-core": "node scripts/fetch-core.mjs",
     "build-core": "node scripts/build-core.mjs",
     "verify-core-parity": "node scripts/verify-core-parity.mjs",

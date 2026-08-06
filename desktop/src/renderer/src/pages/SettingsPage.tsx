@@ -33,6 +33,12 @@ export function SettingsPage({
   const [acOpen, setAcOpen] = useState(false)
   const [portDraft, setPortDraft] = useState(String(settings.mixedPort))
   const [mtuDraft, setMtuDraft] = useState(String(settings.tunMtu))
+  const [muxConcurrencyDraft, setMuxConcurrencyDraft] = useState(
+    String(settings.xrayMuxConcurrency),
+  )
+  const [muxMaxConnectionsDraft, setMuxMaxConnectionsDraft] = useState(
+    String(settings.xrayMuxMaxConnections),
+  )
 
   const openDashboard = () => {
     void window.cheezy.openExternal(`http://${CONTROLLER_HOST}:${CONTROLLER_PORT}/ui/`)
@@ -56,6 +62,24 @@ export function SettingsPage({
     if (next !== settings.tunMtu) onPatch({ tunMtu: next })
   }
 
+  const commitMuxConcurrency = (): void => {
+    const next = Number(muxConcurrencyDraft)
+    if (!Number.isInteger(next) || next < 1) {
+      setMuxConcurrencyDraft(String(settings.xrayMuxConcurrency))
+      return
+    }
+    if (next !== settings.xrayMuxConcurrency) onPatch({ xrayMuxConcurrency: next })
+  }
+
+  const commitMuxMaxConnections = (): void => {
+    const next = Number(muxMaxConnectionsDraft)
+    if (!Number.isInteger(next) || next < 0) {
+      setMuxMaxConnectionsDraft(String(settings.xrayMuxMaxConnections))
+      return
+    }
+    if (next !== settings.xrayMuxMaxConnections) onPatch({ xrayMuxMaxConnections: next })
+  }
+
   useEffect(() => {
     setPortDraft(String(settings.mixedPort))
   }, [settings.mixedPort])
@@ -63,6 +87,14 @@ export function SettingsPage({
   useEffect(() => {
     setMtuDraft(String(settings.tunMtu))
   }, [settings.tunMtu])
+
+  useEffect(() => {
+    setMuxConcurrencyDraft(String(settings.xrayMuxConcurrency))
+  }, [settings.xrayMuxConcurrency])
+
+  useEffect(() => {
+    setMuxMaxConnectionsDraft(String(settings.xrayMuxMaxConnections))
+  }, [settings.xrayMuxMaxConnections])
 
   const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
   const networkLocked = busy || !settings.networkOverrideEnabled
@@ -195,6 +227,52 @@ export function SettingsPage({
               if (e.key === 'Enter') commitPort()
             }}
           />
+        </label>
+      </Section>
+
+      <Section title="Xray Mux">
+        <Toggle
+          label="Enable Mux.Cool"
+          hint="Apply Xray-compatible multiplexing to every VLESS proxy without flow"
+          checked={settings.xrayMuxEnabled}
+          disabled={busy}
+          onChange={(v) => onPatch({ xrayMuxEnabled: v })}
+        />
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-ink">Concurrency</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            className="field max-w-[160px]"
+            value={muxConcurrencyDraft}
+            disabled={busy || !settings.xrayMuxEnabled}
+            onChange={(e) => setMuxConcurrencyDraft(e.target.value)}
+            onBlur={commitMuxConcurrency}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitMuxConcurrency()
+            }}
+          />
+          <span className="mt-1 block text-xs text-ink-dim">
+            Active TCP streams per physical connection; default 32
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-ink">Max connections</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className="field max-w-[160px]"
+            value={muxMaxConnectionsDraft}
+            disabled={busy || !settings.xrayMuxEnabled}
+            onChange={(e) => setMuxMaxConnectionsDraft(e.target.value)}
+            onBlur={commitMuxMaxConnections}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitMuxMaxConnections()
+            }}
+          />
+          <span className="mt-1 block text-xs text-ink-dim">0 — unset / unlimited</span>
         </label>
       </Section>
 

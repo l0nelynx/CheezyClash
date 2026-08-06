@@ -53,7 +53,7 @@ import {
 } from '../shared/deep-link'
 import { getPrivateModule, loadPrivateModule } from './private-module'
 import { syncManagedFromPrivate } from './private-sync'
-import { resolveCoreVersionLabel } from './mihomo-label'
+import { isUsefulCoreLabel, resolveCoreVersionLabel } from './mihomo-label'
 import {
   rescheduleSubscriptionUpdates,
   startSubscriptionUpdater,
@@ -315,12 +315,17 @@ function registerIpc(): void {
       return settings
     }
 
+    const changesXrayMux =
+      patch.xrayMuxEnabled !== undefined ||
+      patch.xrayMuxConcurrency !== undefined ||
+      patch.xrayMuxMaxConnections !== undefined
     const needsLiveReload =
-      settings.networkOverrideEnabled &&
+      changesXrayMux ||
+      (settings.networkOverrideEnabled &&
       (patch.mixedPort !== undefined ||
         patch.allowLan !== undefined ||
         patch.tunStack !== undefined ||
-        patch.tunMtu !== undefined)
+        patch.tunMtu !== undefined))
 
     if (needsLiveReload) {
       const path = rebuildActive(settings)
@@ -328,6 +333,9 @@ function registerIpc(): void {
         mihomoApi.ensureSecretFromStore()
         await mihomoApi.putConfigs(path)
         await mihomoApi.applySelections(getSelections())
+        if (changesXrayMux) {
+          await mihomoApi.closeAllConnections()
+        }
       }
     }
     if (patch.systemProxy !== undefined || (needsLiveReload && patch.mixedPort !== undefined)) {
@@ -379,6 +387,9 @@ function registerIpc(): void {
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('core:version', async () => {
+    // Prefer Android-style label (fork@pseudo-version) from sidecar metadata /
+    // go.mod — same string baked into libclash via -ldflags on mobile.
+    // Do not trust stock mihomo constant.Version ("1.10.0") from the API.
     const labeled = resolveCoreVersionLabel()
     if (labeled.version !== 'unknown') {
       return { version: labeled.version, source: labeled.source }
@@ -386,7 +397,11 @@ function registerIpc(): void {
     try {
       mihomoApi.ensureSecretFromStore()
       const v = await mihomoApi.getVersion()
-      return { version: v.version || 'unknown', source: 'api', meta: v.meta }
+      const apiVersion = (v.version || '').trim()
+      if (isUsefulCoreLabel(apiVersion)) {
+        return { version: apiVersion, source: 'api', meta: v.meta }
+      }
+      return { version: 'unknown', source: 'none', meta: v.meta }
     } catch {
       return { version: 'unknown', source: 'none' }
     }

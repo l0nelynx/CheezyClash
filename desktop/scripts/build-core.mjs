@@ -11,7 +11,7 @@ import { platform, arch } from 'os'
 import { execFileSync } from 'child_process'
 import { computeGoHash } from './go-hash.mjs'
 import { readMihomoVersion } from './mihomo-version.mjs'
-import { writeCoreManifest } from './core-manifest.mjs'
+import { DESKTOP_BUILD_TAGS, writeCoreManifest } from './core-manifest.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -45,14 +45,15 @@ const mihomoVer = readMihomoVersion(join(goDir, 'go.mod'))
 console.log(`Building mihomo from root go.mod (hash ${hash}, ${mihomoVer}) for ${goos()}/${goarch()}…`)
 
 // Bake Android-style pseudo-version into the binary (mihomo constant.Version).
-const ldflags = `-s -w -X github.com/metacubex/mihomo/constant.Version=${mihomoVer}`
+// Quote the -X assignment so values with '@' stay intact for the Go linker.
+const ldflags = `-s -w -X 'github.com/metacubex/mihomo/constant.Version=${mihomoVer}'`
 
 execFileSync(
   'go',
   [
     'build',
     '-tags',
-    'with_gvisor',
+    DESKTOP_BUILD_TAGS.join(','),
     '-trimpath',
     `-ldflags=${ldflags}`,
     '-o',

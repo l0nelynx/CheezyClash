@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -30,6 +31,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.cheezy.freedom.R
 import com.cheezy.freedom.clash.WapMode
 import com.cheezy.freedom.clash.WapSettings
+import com.cheezy.freedom.clash.XrayMuxSettings
 
 // Zashboard talks to the local mihomo controller over HTTP. Using the HTTP page
 // avoids a browser mixed-content block when it connects to 127.0.0.1:9090.
@@ -56,12 +59,26 @@ private const val ZASHBOARD_URL = "http://board.zash.run.place/"
 @Composable
 fun AdvancedSettingsScreen(
     wapSettings: WapSettings,
+    xrayMuxSettings: XrayMuxSettings,
     onSaveWapSettings: (WapSettings) -> Unit,
+    onSaveXrayMuxSettings: (XrayMuxSettings) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val transparentList = ListItemDefaults.colors(containerColor = Color.Transparent)
     var showWapDialog by remember { mutableStateOf(false) }
+    var showXrayMuxDialog by remember { mutableStateOf(false) }
+
+    if (showXrayMuxDialog) {
+        XrayMuxSettingsDialog(
+            initial = xrayMuxSettings,
+            onDismiss = { showXrayMuxDialog = false },
+            onSave = {
+                onSaveXrayMuxSettings(it)
+                showXrayMuxDialog = false
+            },
+        )
+    }
 
     if (showWapDialog) {
         WapSettingsDialog(
@@ -138,6 +155,37 @@ fun AdvancedSettingsScreen(
             ),
         ) {
             ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_xray_mux)) },
+                supportingContent = {
+                    Text(
+                        if (!xrayMuxSettings.enabled) {
+                            stringResource(R.string.settings_xray_mux_off)
+                        } else {
+                            val max = if (xrayMuxSettings.maxConnections == 0) {
+                                stringResource(R.string.settings_xray_mux_unlimited)
+                            } else {
+                                xrayMuxSettings.maxConnections.toString()
+                            }
+                            stringResource(
+                                R.string.settings_xray_mux_summary,
+                                xrayMuxSettings.concurrency,
+                                max,
+                            )
+                        },
+                    )
+                },
+                leadingContent = { Icon(Icons.Default.Tune, contentDescription = null) },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                colors = transparentList,
+                modifier = Modifier.clickable { showXrayMuxDialog = true },
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 56.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_wap)) },
                 supportingContent = {
                     Text(
@@ -174,6 +222,71 @@ fun AdvancedSettingsScreen(
             )
         }
     }
+}
+
+@Composable
+private fun XrayMuxSettingsDialog(
+    initial: XrayMuxSettings,
+    onDismiss: () -> Unit,
+    onSave: (XrayMuxSettings) -> Unit,
+) {
+    var enabled by remember(initial) { mutableStateOf(initial.enabled) }
+    var concurrency by remember(initial) { mutableStateOf(initial.concurrency.toString()) }
+    var maxConnections by remember(initial) { mutableStateOf(initial.maxConnections.toString()) }
+    val parsedConcurrency = concurrency.toIntOrNull()
+    val parsedMaxConnections = maxConnections.toIntOrNull()
+    val valid = parsedConcurrency != null && parsedConcurrency >= 1 &&
+        parsedMaxConnections != null && parsedMaxConnections >= 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_xray_mux)) },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_xray_mux_enabled),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                OutlinedTextField(
+                    value = concurrency,
+                    onValueChange = { concurrency = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.settings_xray_mux_concurrency)) },
+                    supportingText = { Text(stringResource(R.string.settings_xray_mux_concurrency_hint)) },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = maxConnections,
+                    onValueChange = { maxConnections = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.settings_xray_mux_max_connections)) },
+                    supportingText = { Text(stringResource(R.string.settings_xray_mux_max_connections_hint)) },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = {
+                    onSave(
+                        XrayMuxSettings(
+                            enabled = enabled,
+                            concurrency = parsedConcurrency ?: initial.concurrency,
+                            maxConnections = parsedMaxConnections ?: initial.maxConnections,
+                        ),
+                    )
+                },
+            ) { Text(stringResource(android.R.string.ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

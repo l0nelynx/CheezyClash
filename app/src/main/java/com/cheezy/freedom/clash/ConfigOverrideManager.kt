@@ -62,7 +62,7 @@ object ConfigOverrideManager {
         } else null
         val enabled = registry.filter { isEnabled(context, it.id) }.map { it.id }.toMutableSet()
         if (wapRuntime != null) enabled += WapConfigOverride.id
-        rebuildInDir(dir, enabled, wapRuntime)
+        rebuildInDir(dir, enabled, wapRuntime, XrayMuxSettingsStore.load(context))
     }
 
     fun rebuildForVpn(
@@ -81,7 +81,7 @@ object ConfigOverrideManager {
             if (localProxyEnabled) add(LocalProxyOverride.id)
             if (runtime != null) add(WapConfigOverride.id)
         }
-        rebuildInDir(dir, enabled, runtime)
+        rebuildInDir(dir, enabled, runtime, XrayMuxSettingsStore.load(context))
     }
 
     /** Pure helper for unit tests: operate on an explicit clash directory and id set. */
@@ -89,6 +89,7 @@ object ConfigOverrideManager {
         clash: File,
         enabledIds: Set<String>,
         wapRuntime: WapRuntimeConfig? = null,
+        xrayMuxSettings: XrayMuxSettings? = null,
     ) {
         val base = File(clash, BASE_FILE_NAME)
         if (!base.exists()) return
@@ -98,6 +99,9 @@ object ConfigOverrideManager {
             WapConfigOverride.runtime = wapRuntime
             registry.forEach { override ->
                 if (override.id in enabledIds) override.apply(map)
+            }
+            if (xrayMuxSettings != null) {
+                XrayMuxConfigOverride.apply(map, xrayMuxSettings)
             }
             WapConfigOverride.runtime = null
         }

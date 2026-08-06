@@ -56,6 +56,7 @@ import com.cheezy.freedom.LogsActivity
 import com.cheezy.freedom.UpdateManager
 import com.cheezy.freedom.account.AppDeps
 import com.cheezy.freedom.clash.WapSettings
+import com.cheezy.freedom.clash.XrayMuxSettings
 
 @Composable
 fun SettingsTab(
@@ -63,6 +64,7 @@ fun SettingsTab(
     tgId: Long?,
     isCheckingUpdate: Boolean,
     wapSettings: WapSettings,
+    xrayMuxSettings: XrayMuxSettings,
     // Capabilities: if a flavor does not support a feature, the corresponding
     // UI block is not drawn. In open, everything is false; in proprietary,
     // everything is true.
@@ -81,6 +83,7 @@ fun SettingsTab(
     onRequestTransfer: () -> Unit,
     onOpenAccessControl: () -> Unit,
     onSaveWapSettings: (WapSettings) -> Unit,
+    onSaveXrayMuxSettings: (XrayMuxSettings) -> Unit,
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -95,7 +98,9 @@ fun SettingsTab(
     if (showAdvanced) {
         AdvancedSettingsScreen(
             wapSettings = wapSettings,
+            xrayMuxSettings = xrayMuxSettings,
             onSaveWapSettings = onSaveWapSettings,
+            onSaveXrayMuxSettings = onSaveXrayMuxSettings,
             onBack = { showAdvanced = false },
         )
         return

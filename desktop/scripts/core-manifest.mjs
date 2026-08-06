@@ -11,7 +11,7 @@ import {
 } from './core-build-info.mjs'
 
 export const CORE_MANIFEST_SCHEMA_VERSION = 1
-export const DESKTOP_BUILD_TAGS = ['with_gvisor']
+export const DESKTOP_BUILD_TAGS = ['with_gvisor', 'no_zerotier']
 export const DESKTOP_CGO_ENABLED = false
 export const CORE_MANIFEST_NAME = 'core-build.json'
 

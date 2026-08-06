@@ -20,6 +20,10 @@ export interface AppSettings {
   /** TUN interface MTU used when Desktop network override is enabled. */
   tunMtu: number
   autoStart: boolean
+  xrayMuxEnabled: boolean
+  xrayMuxConcurrency: number
+  /** 0 means omitted from generated YAML / unlimited. */
+  xrayMuxMaxConnections: number
   accessControlRules: AccessControlRule[]
 }
 
@@ -97,6 +101,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   networkOverrideEnabled: false,
   tunMtu: 1500,
   autoStart: false,
+  xrayMuxEnabled: true,
+  xrayMuxConcurrency: 32,
+  xrayMuxMaxConnections: 0,
   accessControlRules: [],
 }
 
@@ -125,6 +132,22 @@ export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     raw.tunMtu <= 9000
       ? raw.tunMtu
       : DEFAULT_SETTINGS.tunMtu
+  merged.xrayMuxEnabled =
+    typeof raw.xrayMuxEnabled === 'boolean'
+      ? raw.xrayMuxEnabled
+      : DEFAULT_SETTINGS.xrayMuxEnabled
+  merged.xrayMuxConcurrency =
+    typeof raw.xrayMuxConcurrency === 'number' &&
+    Number.isInteger(raw.xrayMuxConcurrency) &&
+    raw.xrayMuxConcurrency >= 1
+      ? raw.xrayMuxConcurrency
+      : DEFAULT_SETTINGS.xrayMuxConcurrency
+  merged.xrayMuxMaxConnections =
+    typeof raw.xrayMuxMaxConnections === 'number' &&
+    Number.isInteger(raw.xrayMuxMaxConnections) &&
+    raw.xrayMuxMaxConnections >= 0
+      ? raw.xrayMuxMaxConnections
+      : DEFAULT_SETTINGS.xrayMuxMaxConnections
   return merged
 }
 

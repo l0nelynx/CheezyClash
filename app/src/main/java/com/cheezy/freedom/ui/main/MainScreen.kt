@@ -92,6 +92,7 @@ import com.cheezy.freedom.clash.ClashState
 import com.cheezy.freedom.clash.ConfigManager
 import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.clash.WapSettings
+import com.cheezy.freedom.clash.XrayMuxSettings
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnDialog
 import com.cheezy.freedom.ui.main.profiles.ProfilesTab
 import com.cheezy.freedom.ui.main.settings.AccessControlScreen
@@ -147,6 +148,7 @@ fun MainScreen(
     val selectingProxy by viewModel.selectingProxy.collectAsState()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val wapSettings by viewModel.wapSettings.collectAsState()
+    val xrayMuxSettings by viewModel.xrayMuxSettings.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
     val showUrlDialog by viewModel.showUrlDialog.collectAsState()
     val needsAuth by viewModel.needsAuth.collectAsState()
@@ -466,6 +468,7 @@ fun MainScreen(
                             tgId = tgId,
                             isCheckingUpdate = isCheckingUpdate,
                             wapSettings = wapSettings,
+                            xrayMuxSettings = xrayMuxSettings,
                             showAccountCard = AppDeps.accountProvider.supportsAuthFlow,
                             showDevices = AppDeps.accountProvider.supportsDeviceManagement,
                             showSubscription = AppDeps.accountProvider.supportsBilling,
@@ -485,6 +488,7 @@ fun MainScreen(
                             onRequestTransfer = { showTransferDialog = true },
                             onOpenAccessControl = { showAccessControlDialog = true },
                             onSaveWapSettings = viewModel::saveWapSettings,
+                            onSaveXrayMuxSettings = viewModel::saveXrayMuxSettings,
                         )
                     }
                 }

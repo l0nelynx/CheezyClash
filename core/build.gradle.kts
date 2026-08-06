@@ -172,7 +172,7 @@ goAbis.forEach { abi ->
             abi.goArm?.let { environment("GOARM", it) }
 
             // CMFA tags: foss + with_gvisor + cmfa. Without them, mihomo will be incomplete.
-            val buildTags = "foss,with_gvisor,cmfa"
+            val buildTags = "foss,with_gvisor,cmfa,no_zerotier"
 
             // Mihomo version compiled into libclash.so. Passed via -X
             // main.mihomoVersion — the Go linker will write the string to native/version.go.

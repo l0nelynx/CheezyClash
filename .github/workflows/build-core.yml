@@ -176,8 +176,8 @@ jobs:
             (
               cd "$GO_DIR"
               CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-                go build -mod=readonly -tags with_gvisor -trimpath \
-                -ldflags="-s -w -X github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}" \
+                go build -mod=readonly -tags with_gvisor,no_zerotier -trimpath \
+                -ldflags="-s -w -X 'github.com/metacubex/mihomo/constant.Version=${MIHOMO_VER}'" \
                 -o "$STAGE/$BIN" github.com/metacubex/mihomo
             )
             node desktop/scripts/verify-core-parity.mjs \

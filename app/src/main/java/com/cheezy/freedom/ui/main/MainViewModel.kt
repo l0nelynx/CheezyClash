@@ -24,6 +24,8 @@ import com.cheezy.freedom.clash.ProfileStore
 import com.cheezy.freedom.clash.SubscriptionInfo
 import com.cheezy.freedom.clash.WapSettings
 import com.cheezy.freedom.clash.WapSettingsStore
+import com.cheezy.freedom.clash.XrayMuxSettings
+import com.cheezy.freedom.clash.XrayMuxSettingsStore
 import com.cheezy.freedom.ui.main.dialogs.ShareVpnInfo
 import com.cheezy.freedom.ui.main.proxies.PrimaryProxyGroupUiData
 import com.cheezy.freedom.ui.main.proxies.ProxyRuntimeSnapshot
@@ -98,6 +100,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _wapSettings = MutableStateFlow(WapSettingsStore.load(context))
     val wapSettings: StateFlow<WapSettings> = _wapSettings.asStateFlow()
+
+    private val _xrayMuxSettings = MutableStateFlow(XrayMuxSettingsStore.load(context))
+    val xrayMuxSettings: StateFlow<XrayMuxSettings> = _xrayMuxSettings.asStateFlow()
 
     private val _updateInfo = MutableStateFlow<UpdateManager.UpdateInfo?>(null)
     val updateInfo: StateFlow<UpdateManager.UpdateInfo?> = _updateInfo.asStateFlow()
@@ -409,6 +414,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ConfigOverrideManager.rebuild(context)
             }
             _wapSettings.value = settings
+            if (wasRunning) {
+                ClashVpnService.stop(context)
+                delay(750)
+                ClashVpnService.start(context)
+            }
+        }
+    }
+
+    fun saveXrayMuxSettings(settings: XrayMuxSettings) {
+        viewModelScope.launch {
+            val wasRunning = ClashState.running.value
+            withContext(Dispatchers.IO) {
+                XrayMuxSettingsStore.save(context, settings)
+                ConfigOverrideManager.rebuild(context)
+            }
+            _xrayMuxSettings.value = settings
             if (wasRunning) {
                 ClashVpnService.stop(context)
                 delay(750)
