@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Activity, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
 import { isSelectorGroup } from '../lib/proxy-groups'
+import { Button } from './ui/button'
 
 interface Props {
   groups: ProxyGroupInfo[]
@@ -57,9 +58,10 @@ export function ProxyGroupList({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-end gap-2">
-        <button
+        <Button
           type="button"
-          className="btn px-2.5 py-1.5 text-xs"
+          variant="outline"
+          size="sm"
           disabled={busy || testingAll || groups.length === 0}
           onClick={onHealthAll}
         >
@@ -67,7 +69,7 @@ export function ProxyGroupList({
           {testingAll && testProgress
             ? `Testing ${testProgress.done}/${testProgress.total}`
             : 'Test all'}
-        </button>
+        </Button>
       </div>
 
       {groups.map((g) => {
@@ -77,12 +79,12 @@ export function ProxyGroupList({
         return (
           <section
             key={g.name}
-            className="overflow-hidden rounded-xl border border-surface-border bg-surface-raised"
+            className="page-card overflow-hidden"
           >
             <div className="flex items-center gap-1 border-b border-surface-border px-2 py-1.5">
               <button
                 type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-surface-overlay"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 onClick={() => toggle(g.name)}
                 aria-expanded={open}
               >
@@ -101,15 +103,17 @@ export function ProxyGroupList({
                   </p>
                 </div>
               </button>
-              <button
+              <Button
                 type="button"
-                className="btn shrink-0 px-2.5 py-1.5 text-xs"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
                 disabled={busy || testingAll}
                 onClick={() => onHealth(g.name)}
               >
                 <Activity className="h-3.5 w-3.5" />
                 Test
-              </button>
+              </Button>
             </div>
             {open && (
               <ul className="max-h-64 overflow-y-auto p-2">
@@ -122,7 +126,7 @@ export function ProxyGroupList({
                         type="button"
                         disabled={busy || testingAll || !selectable}
                         onClick={() => onSelect(g.name, name)}
-                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
                           active
                             ? 'bg-primary/10 text-primary'
                             : 'text-ink hover:bg-surface-overlay'

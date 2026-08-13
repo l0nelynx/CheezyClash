@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { Button } from '../components/ui/button'
 
 interface UpdateInfo {
   current: string
@@ -35,21 +36,22 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
         <p className="text-sm text-muted-foreground">{productName} desktop client.</p>
       </div>
 
-      <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
+      <section className="page-card space-y-3 p-4">
         <Row label="Application" value={`${productName} ${appVer}`} />
         <Row label="Engine" value={coreVer} breakAll />
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Documentation</p>
-          <button
+          <Button
             type="button"
-            className="btn inline-flex items-center gap-1.5 text-xs"
+            variant="outline"
+            size="sm"
             onClick={() =>
               void window.cheezy.openExternal('https://l0nelynx.github.io/CheezyClash-docs/')
             }
           >
             Open docs
             <ExternalLink className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Updates</p>
@@ -66,24 +68,27 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
                 Update available: <span className="font-medium text-primary">{update.latest}</span>
                 <span className="text-muted-foreground"> (current {update.current})</span>
               </p>
-              <button
+              <Button
                 type="button"
-                className="btn inline-flex items-center gap-1.5 text-xs"
+                variant="outline"
+                size="sm"
                 onClick={() => void window.cheezy.openExternal(update.releasesUrl)}
               >
                 Open releases
                 <ExternalLink className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           )}
           {update && !update.updateAvailable && !update.error && (
-            <button
+            <Button
               type="button"
-              className="mt-2 text-xs text-primary hover:underline"
+              variant="link"
+              size="sm"
+              className="mt-1 h-auto px-0 py-1 text-xs"
               onClick={() => void window.cheezy.openExternal(update.releasesUrl)}
             >
               View releases on GitHub
-            </button>
+            </Button>
           )}
         </div>
       </section>

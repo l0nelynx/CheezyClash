@@ -7,7 +7,20 @@ import { randomUUID } from 'crypto'
 import { platform, release, arch } from 'os'
 import { store } from './store'
 import { getPrivateModule } from './private-module'
-import type { SubscriptionInfo } from '../shared/types'
+import {
+  decodeMaybeBase64Header,
+  displayProfileName,
+  subscriptionFromHeaders,
+} from './subscription-metadata'
+
+export {
+  decodeMaybeBase64Header,
+  displayProfileName,
+  parseAccentColorHeader,
+  parseHttpUrlHeader,
+  parseSubscriptionUserInfo,
+  subscriptionFromHeaders,
+} from './subscription-metadata'
 
 export function subscriptionUserAgent(): string {
   const caps = getPrivateModule().capabilities()
@@ -94,36 +107,6 @@ function looksLikeBase64(text: string): boolean {
   return !looksLikeClashYaml(text)
 }
 
-/** Android ConfigYamlParsers.decodeMaybeBase64 + desktop raw-base64 heuristic. */
-export function decodeMaybeBase64Header(value: string | null | undefined): string | null {
-  if (!value) return null
-  const v = value.trim()
-  if (!v) return null
-
-  if (v.toLowerCase().startsWith('base64:')) {
-    const payload = v.slice(7).trim()
-    try {
-      return Buffer.from(payload, 'base64').toString('utf8')
-    } catch {
-      return v
-    }
-  }
-
-  if (looksLikeBase64(v) && !/[\s]/.test(v) && !v.includes(':')) {
-    try {
-      const decoded = Buffer.from(v, 'base64').toString('utf8')
-      // Prefer decoded if it looks like readable text
-      if (decoded && !decoded.includes('\uFFFD') && /[\p{L}\p{N}]/u.test(decoded)) {
-        return decoded
-      }
-    } catch {
-      /* keep original */
-    }
-  }
-
-  return v
-}
-
 /** Android ConfigYamlParsers.parseFilename */
 export function parseContentDispositionFilename(header: string | null): string | null {
   if (!header) return null
@@ -132,51 +115,10 @@ export function parseContentDispositionFilename(header: string | null): string |
   return name || null
 }
 
-/** Android ConfigYamlParsers.mergeUserInfo */
-export function parseSubscriptionUserInfo(header: string | null): Partial<SubscriptionInfo> {
-  if (!header) return {}
-  const parts = header
-    .split(';')
-    .map((s) => {
-      const kv = s.trim().split('=', 2)
-      if (kv.length !== 2) return null
-      return [kv[0]!.trim().toLowerCase(), kv[1]!.trim()] as const
-    })
-    .filter((x): x is readonly [string, string] => !!x)
-  const map = Object.fromEntries(parts)
-  return {
-    upload: Number.parseInt(map.upload || '0', 10) || 0,
-    download: Number.parseInt(map.download || '0', 10) || 0,
-    total: Number.parseInt(map.total || '0', 10) || 0,
-    expire: Number.parseInt(map.expire || '0', 10) || 0,
-  }
-}
-
-export function subscriptionFromHeaders(headers: Headers): SubscriptionInfo {
-  const userInfo = parseSubscriptionUserInfo(headers.get('subscription-userinfo'))
-  return {
-    title: decodeMaybeBase64Header(headers.get('profile-title')) || undefined,
-    announce: decodeMaybeBase64Header(headers.get('announce')) || undefined,
-    tag:
-      decodeMaybeBase64Header(
-        headers.get('subscription-tag') || headers.get('profile-tag'),
-      ) || undefined,
-    upload: userInfo.upload ?? 0,
-    download: userInfo.download ?? 0,
-    total: userInfo.total ?? 0,
-    expire: userInfo.expire ?? 0,
-  }
-}
-
 /** Android ConfigManager: profile-update-interval as hours; invalid/absent → 0. */
 export function parseUpdateIntervalHours(headers: Headers): number {
   const raw = headers.get('profile-update-interval')
   if (!raw) return 0
   const n = Number.parseInt(raw.trim(), 10)
   return Number.isFinite(n) && n > 0 ? n : 0
-}
-
-/** Safe display name for already-stored profiles that may still be base64. */
-export function displayProfileName(name: string): string {
-  return decodeMaybeBase64Header(name) || name
 }

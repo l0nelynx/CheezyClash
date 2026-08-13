@@ -1,9 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { AccessControlRule, AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../../../shared/types'
 import { AccessControlModal } from '../components/AccessControlModal'
+import { Switch } from '../components/ui/switch'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select'
 
 interface Props {
   settings: AppSettings
@@ -38,6 +48,9 @@ export function SettingsPage({
   )
   const [muxMaxConnectionsDraft, setMuxMaxConnectionsDraft] = useState(
     String(settings.xrayMuxMaxConnections),
+  )
+  const [muxMaxDialsDraft, setMuxMaxDialsDraft] = useState(
+    String(settings.xrayMuxMaxDialsPerMinute),
   )
 
   const openDashboard = () => {
@@ -80,6 +93,15 @@ export function SettingsPage({
     if (next !== settings.xrayMuxMaxConnections) onPatch({ xrayMuxMaxConnections: next })
   }
 
+  const commitMuxMaxDials = (): void => {
+    const next = Number(muxMaxDialsDraft)
+    if (!Number.isInteger(next) || next < 0) {
+      setMuxMaxDialsDraft(String(settings.xrayMuxMaxDialsPerMinute))
+      return
+    }
+    if (next !== settings.xrayMuxMaxDialsPerMinute) onPatch({ xrayMuxMaxDialsPerMinute: next })
+  }
+
   useEffect(() => {
     setPortDraft(String(settings.mixedPort))
   }, [settings.mixedPort])
@@ -95,6 +117,10 @@ export function SettingsPage({
   useEffect(() => {
     setMuxMaxConnectionsDraft(String(settings.xrayMuxMaxConnections))
   }, [settings.xrayMuxMaxConnections])
+
+  useEffect(() => {
+    setMuxMaxDialsDraft(String(settings.xrayMuxMaxDialsPerMinute))
+  }, [settings.xrayMuxMaxDialsPerMinute])
 
   const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
   const networkLocked = busy || !settings.networkOverrideEnabled
@@ -117,16 +143,33 @@ export function SettingsPage({
               </p>
             </div>
             <div className="flex gap-2">
-              <button type="button" className="btn text-xs" disabled={busy} onClick={onSyncSubscription}>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onSyncSubscription}>
                 Sync
-              </button>
-              <button type="button" className="btn-danger text-xs" disabled={busy} onClick={onLogout}>
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={onLogout}>
                 Log out
-              </button>
+              </Button>
             </div>
           </div>
         </Section>
       )}
+
+      <Section title="Application">
+        <Toggle
+          label="Launch at system startup"
+          hint="Start quietly in the tray when you sign in to your computer"
+          checked={settings.autoStart}
+          disabled={busy}
+          onChange={(v) => onPatch({ autoStart: v })}
+        />
+        <Toggle
+          label="Connect when the app starts"
+          hint="Connect the active profile after every manual or system launch"
+          checked={settings.autoConnect}
+          disabled={busy}
+          onChange={(v) => onPatch({ autoConnect: v })}
+        />
+      </Section>
 
       <Section title="Connection">
         <Toggle
@@ -173,27 +216,31 @@ export function SettingsPage({
         />
         <label className="block">
           <span className="mb-1.5 block text-sm text-ink">TUN stack</span>
-          <select
-            className="field max-w-[200px]"
+          <Select
             value={settings.tunStack}
             disabled={networkLocked || mode !== 'tun'}
-            onChange={(e) =>
-              onPatch({ tunStack: e.target.value as AppSettings['tunStack'] })
+            onValueChange={(value) =>
+              onPatch({ tunStack: value as AppSettings['tunStack'] })
             }
           >
-            <option value="mixed">mixed</option>
-            <option value="system">system</option>
-            <option value="gvisor">gvisor</option>
-          </select>
+            <SelectTrigger className="max-w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mixed">mixed</SelectItem>
+              <SelectItem value="system">system</SelectItem>
+              <SelectItem value="gvisor">gvisor</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm text-ink">TUN MTU</span>
-          <input
+          <Input
             type="number"
             min={576}
             max={9000}
             step={1}
-            className="field max-w-[160px]"
+            className="max-w-[160px]"
             value={mtuDraft}
             disabled={networkLocked || mode !== 'tun'}
             onChange={(e) => setMtuDraft(e.target.value)}
@@ -216,9 +263,9 @@ export function SettingsPage({
         />
         <label className="block">
           <span className="mb-1.5 block text-sm text-ink">Port</span>
-          <input
+          <Input
             type="number"
-            className="field max-w-[160px]"
+            className="max-w-[160px]"
             value={portDraft}
             disabled={networkLocked}
             onChange={(e) => setPortDraft(e.target.value)}
@@ -240,11 +287,11 @@ export function SettingsPage({
         />
         <label className="block">
           <span className="mb-1.5 block text-sm text-ink">Concurrency</span>
-          <input
+          <Input
             type="number"
             min={1}
             step={1}
-            className="field max-w-[160px]"
+            className="max-w-[160px]"
             value={muxConcurrencyDraft}
             disabled={busy || !settings.xrayMuxEnabled}
             onChange={(e) => setMuxConcurrencyDraft(e.target.value)}
@@ -254,16 +301,16 @@ export function SettingsPage({
             }}
           />
           <span className="mt-1 block text-xs text-ink-dim">
-            Active TCP streams per physical connection; default 32
+            Active TCP streams per carrier after soft-grow; default 32
           </span>
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm text-ink">Max connections</span>
-          <input
+          <Input
             type="number"
             min={0}
             step={1}
-            className="field max-w-[160px]"
+            className="max-w-[160px]"
             value={muxMaxConnectionsDraft}
             disabled={busy || !settings.xrayMuxEnabled}
             onChange={(e) => setMuxMaxConnectionsDraft(e.target.value)}
@@ -272,7 +319,28 @@ export function SettingsPage({
               if (e.key === 'Enter') commitMuxMaxConnections()
             }}
           />
-          <span className="mt-1 block text-xs text-ink-dim">0 — unset / unlimited</span>
+          <span className="mt-1 block text-xs text-ink-dim">
+            Soft-grow target + hard cap; 0 — pack-first / unlimited
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-ink">Max dials per minute</span>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            className="max-w-[160px]"
+            value={muxMaxDialsDraft}
+            disabled={busy || !settings.xrayMuxEnabled}
+            onChange={(e) => setMuxMaxDialsDraft(e.target.value)}
+            onBlur={commitMuxMaxDials}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitMuxMaxDials()
+            }}
+          />
+          <span className="mt-1 block text-xs text-ink-dim">
+            New physical dial budget; 0 — unlimited
+          </span>
         </label>
       </Section>
 
@@ -282,23 +350,23 @@ export function SettingsPage({
           <p className="text-sm text-ink">
             {ruleCount === 0 ? 'No rules' : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`}
           </p>
-          <button type="button" className="btn text-sm" disabled={busy} onClick={() => setAcOpen(true)}>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => setAcOpen(true)}>
             Manage
-          </button>
+          </Button>
         </div>
       </Section>
 
       <Section title="Dashboard">
         <p className="text-xs text-ink-dim">Open the local Mihomo dashboard (connect first).</p>
-        <button
+        <Button
           type="button"
-          className="btn inline-flex items-center gap-1.5 text-sm"
+          variant="outline"
           disabled={busy || !status?.running}
           onClick={openDashboard}
         >
           Open dashboard
           <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </Section>
 
       <AccessControlModal
@@ -324,26 +392,24 @@ function ModeButton({
   onClick: () => void
 }): React.JSX.Element {
   return (
-    <button
+    <Button
       type="button"
       role="radio"
       aria-checked={active}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-primary font-semibold text-primary-foreground'
-          : 'text-muted-foreground hover:text-ink'
-      }`}
+      variant={active ? 'default' : 'ghost'}
+      size="sm"
+      className={active ? 'font-semibold' : 'text-muted-foreground'}
     >
       {label}
-    </button>
+    </Button>
   )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <section className="space-y-4 rounded-xl border border-surface-border bg-surface-raised p-4">
+    <section className="page-card space-y-4 p-4">
       <h3 className="section-label">{title}</h3>
       {children}
     </section>
@@ -363,19 +429,22 @@ function Toggle({
   disabled: boolean
   onChange: (v: boolean) => void
 }): React.JSX.Element {
+  const id = useId()
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4">
       <span>
-        <span className="block text-sm font-medium text-ink">{label}</span>
-        <span className="block text-xs text-ink-dim">{hint}</span>
+        <label htmlFor={id} className="block cursor-pointer text-sm font-medium text-foreground">
+          {label}
+        </label>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>
       </span>
-      <input
-        type="checkbox"
-        className="mt-1 h-4 w-4 rounded border-surface-border accent-accent"
+      <Switch
+        id={id}
+        className="mt-0.5"
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
+        onCheckedChange={onChange}
       />
-    </label>
+    </div>
   )
 }

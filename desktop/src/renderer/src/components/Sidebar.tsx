@@ -39,14 +39,14 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
               aria-label={label}
               aria-current={active ? 'page' : undefined}
               onClick={() => onTab(id)}
-              className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition ${
+              className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring ${
                 active
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
                   : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground'
               }`}
             >
               <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
-              <span className="pointer-events-none absolute left-full z-20 ml-2 hidden whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-lg group-hover:block group-focus-visible:block">
+              <span className="pointer-events-none absolute left-full z-20 ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-lg transition-all duration-150 translate-x-[-2px] group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
                 {label}
               </span>
             </button>

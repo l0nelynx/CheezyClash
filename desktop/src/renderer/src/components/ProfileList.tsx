@@ -1,6 +1,9 @@
 import { ExternalLink, FileUp, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { ProfileMeta } from '../../../shared/types'
+import { Badge } from './ui/badge'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 interface Props {
   profiles: ProfileMeta[]
@@ -27,22 +30,21 @@ export function ProfileList({
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 rounded-xl border border-surface-border bg-surface-raised/95 p-4 backdrop-blur">
+      <div className="page-card sticky top-0 z-10 bg-card/95 p-4 backdrop-blur">
         <p className="section-label mb-3">Import</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative min-w-0 flex-1">
             <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-dim" />
-            <input
-              className="field pl-9"
+            <Input
+              className="pl-9"
               placeholder="Subscription URL"
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
               disabled={busy}
             />
           </div>
-          <button
+          <Button
             type="button"
-            className="btn-primary"
             disabled={busy || !importUrl.trim()}
             onClick={() => {
               const url = importUrl.trim()
@@ -51,15 +53,15 @@ export function ProfileList({
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Import URL
-          </button>
-          <button type="button" className="btn" disabled={busy} onClick={onImportFile}>
+          </Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={onImportFile}>
             <FileUp className="h-4 w-4" />
             File
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-surface-border bg-surface-raised">
+      <div className="page-card overflow-hidden">
         <div className="border-b border-surface-border px-4 py-3">
           <p className="text-xs text-ink-dim">{profiles.length} configured</p>
         </div>
@@ -81,17 +83,18 @@ export function ProfileList({
                         {p.name}
                       </span>
                       {active && (
-                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        <Badge variant="success" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
                           Active
-                        </span>
+                        </Badge>
                       )}
                       {managed && (
-                        <span
-                          className="rounded-md bg-surface-overlay px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-dim"
+                        <Badge
+                          variant="secondary"
+                          className="px-1.5 py-0 text-[10px] uppercase tracking-wide text-muted-foreground"
                           title="Managed by your account"
                         >
                           Account
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="truncate text-xs text-ink-dim" title={managed ? undefined : p.url || 'Local file'}>
@@ -100,43 +103,50 @@ export function ProfileList({
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {!active && (
-                      <button
+                      <Button
                         type="button"
-                        className="btn px-2.5 py-1.5 text-xs"
+                        variant="outline"
+                        size="sm"
                         disabled={busy}
                         onClick={() => onActivate(p.id)}
                       >
                         Activate
-                      </button>
+                      </Button>
                     )}
                     {canUpdate && (
-                      <button
+                      <Button
                         type="button"
-                        className="btn px-2.5 py-1.5 text-xs"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={busy}
                         onClick={() => onUpdate(p.id)}
                         aria-label={`Update ${p.name}`}
                         title="Update subscription"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     )}
                     {canUpdate && (
-                      <button
+                      <Button
                         type="button"
-                        className="btn px-2.5 py-1.5 text-xs"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={busy}
                         onClick={() => void window.cheezy.openExternal(p.url!)}
                         aria-label={`Manage ${p.name}`}
                         title="Manage subscription in browser"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     )}
                     {!managed && (
-                      <button
+                      <Button
                         type="button"
-                        className="btn-danger px-2.5 py-1.5 text-xs"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         disabled={busy}
                         onClick={() => {
                           if (window.confirm(`Delete profile “${p.name}”?`)) onDelete(p.id)
@@ -144,7 +154,7 @@ export function ProfileList({
                         aria-label={`Delete ${p.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </li>

@@ -1,13 +1,16 @@
-import { Loader2, Power, Unplug } from 'lucide-react'
-import type { CoreStatus, TunStatus } from '../../../shared/types'
+import { ExternalLink, LifeBuoy, Loader2, Power, Unplug } from 'lucide-react'
+import type { CoreStatus, ProfileMeta, TunStatus } from '../../../shared/types'
 import { DownloadRateSparkline } from './DownloadRateSparkline'
 import { formatRate } from '../lib/format'
+import { Badge } from './ui/badge'
+import { Button } from './ui/button'
 
 interface Props {
   status: CoreStatus | null
   tun: TunStatus | null
   busy: boolean
   hasProfile: boolean
+  activeProfile: ProfileMeta | null
   downRateHistory: number[]
   downRate: number
   upRate: number
@@ -22,6 +25,7 @@ export function ConnectHero({
   tun,
   busy,
   hasProfile,
+  activeProfile,
   downRateHistory,
   downRate,
   upRate,
@@ -32,6 +36,8 @@ export function ConnectHero({
 }: Props): React.JSX.Element {
   const running = !!status?.running
   const modeLabel = status?.mode === 'tun' ? 'TUN' : 'Proxy'
+  const subscription = activeProfile?.subscription
+  const connectedTitle = subscription?.title?.trim() || activeProfile?.name || 'Connected'
   const lastError = status?.lastError
     ? status.lastError.includes('no active profile')
       ? 'Import or activate a profile first.'
@@ -39,27 +45,64 @@ export function ConnectHero({
     : null
 
   return (
-    <section className="relative overflow-hidden rounded-xl border border-border bg-card p-8">
+    <section className="page-card relative overflow-hidden p-7 sm:p-8">
       <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-muted blur-3xl" />
       <DownloadRateSparkline
         values={downRateHistory}
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-90"
+        accentColor={subscription?.accentColor}
+        className="pointer-events-none absolute inset-0 h-full w-full opacity-80"
       />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="section-label mb-3">Connection</p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-              {running ? 'You are connected' : 'Ready to connect'}
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex flex-wrap items-center gap-2.5">
+              <p className="section-label">Connection</p>
+              <Badge variant={running ? 'success' : 'secondary'} className="px-2 py-0 text-[10px]">
+                {running ? 'Connected' : 'Disconnected'}
+              </Badge>
+            </div>
+            <h2
+              className="line-clamp-2 max-w-xl text-3xl font-semibold tracking-tight text-foreground"
+              title={running ? connectedTitle : undefined}
+            >
+              {running ? connectedTitle : 'Ready to connect'}
             </h2>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
               {running
-                ? `${modeLabel} mode. Change server below or on Proxies.`
+                ? 'Your secure connection is active.'
                 : hasProfile
                   ? 'Choose Proxy or TUN in Settings, then connect.'
                   : 'Add a subscription or profile file on Profiles, then connect.'}
             </p>
+            {(activeProfile?.url || subscription?.supportUrl) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {activeProfile?.url && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    title="Open the current subscription URL"
+                    onClick={() => void window.cheezy.openExternal(activeProfile.url!)}
+                  >
+                    <ExternalLink />
+                    Subscription
+                  </Button>
+                )}
+                {subscription?.supportUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    title="Open subscription support"
+                    onClick={() => void window.cheezy.openExternal(subscription.supportUrl!)}
+                  >
+                    <LifeBuoy />
+                    Support
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           {running && (
             <div className="shrink-0 space-y-1.5 text-right text-xs text-muted-foreground">
@@ -77,25 +120,28 @@ export function ConnectHero({
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           {!hasProfile && onGoProfiles ? (
-            <button type="button" className="btn-primary min-w-[140px]" onClick={onGoProfiles}>
+            <Button type="button" className="min-w-[140px]" onClick={onGoProfiles}>
               Go to Profiles
-            </button>
+            </Button>
           ) : !running ? (
-            <button type="button" className="btn-primary min-w-[140px]" disabled={busy} onClick={onConnect}>
+            <Button type="button" className="min-w-[140px]" disabled={busy} onClick={onConnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
               Connect
-            </button>
+            </Button>
           ) : (
-            <button type="button" className="btn-danger min-w-[140px]" disabled={busy} onClick={onDisconnect}>
+            <Button type="button" variant="destructive" className="min-w-[140px]" disabled={busy} onClick={onDisconnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
               Disconnect
-            </button>
+            </Button>
           )}
         </div>
 
         {lastError && <p className="mt-4 text-sm text-destructive">{lastError}</p>}
 
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
+          <span>
+            Mode: <span className="font-medium text-foreground">{modeLabel}</span>
+          </span>
           <span>
             VPN helper:{' '}
             <span className="text-foreground">
@@ -109,9 +155,9 @@ export function ConnectHero({
             </span>
           </span>
           {!tun?.privilegesOk && (
-            <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={busy} onClick={onEnsureHelper}>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={onEnsureHelper}>
               Install helper
-            </button>
+            </Button>
           )}
         </div>
       </div>

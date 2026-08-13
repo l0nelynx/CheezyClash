@@ -15,7 +15,7 @@ export function TrafficStrip({ traffic, status }: Props): React.JSX.Element | nu
   const downTotal = formatBytes(traffic?.downTotal ?? 0)
 
   return (
-    <section className="rounded-xl border border-surface-border bg-surface-raised px-4 py-3">
+    <section className="page-card px-4 py-3">
       <p className="mb-2 text-xs text-ink-dim">Session</p>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-medium text-ink">
         <span className="inline-flex items-center gap-1.5 tabular-nums" title={upTotal}>

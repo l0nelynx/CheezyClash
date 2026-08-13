@@ -1,52 +1,107 @@
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { buildSparklinePaths, smoothEma } from '../lib/sparkline'
+
 interface Props {
   values: number[]
+  accentColor?: string
   className?: string
 }
 
-/** Soft area sparkline for download B/s (viewBox 0..100 × 0..40). */
-export function DownloadRateSparkline({ values, className }: Props): React.JSX.Element | null {
-  if (values.length < 2) return null
-
-  const max = Math.max(...values, 1)
+/** Smoothed, continuously scrolling area graph for download B/s. */
+export function DownloadRateSparkline({
+  values,
+  accentColor,
+  className,
+}: Props): React.JSX.Element | null {
   const w = 100
   const h = 40
-  const n = values.length
-  const pts = values.map((v, i) => {
-    const x = n === 1 ? 0 : (i / (n - 1)) * w
-    const y = h - (v / max) * h * 0.92
-    return { x, y }
-  })
+  const groupRef = useRef<SVGGElement>(null)
+  const lastSampleAt = useRef(0)
+  const scaleMax = useRef(1)
+  const [reducedMotion, setReducedMotion] = useState(false)
+  const rawId = useId().replace(/:/g, '')
+  const gradientId = `dl-spark-fill-${rawId}`
+  const clipId = `dl-spark-clip-${rawId}`
+  const step = w / 59
 
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
-  const area = `${line} L${w},${h} L0,${h} Z`
+  const observedMax = Math.max(...smoothEma(values.slice(-60)), 1)
+  scaleMax.current = Math.max(observedMax, scaleMax.current * 0.92, 1)
+  const paths = useMemo(
+    () => buildSparklinePaths(values, { width: w, height: h, scaleMax: scaleMax.current }),
+    [values],
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = (): void => setReducedMotion(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  useEffect(() => {
+    lastSampleAt.current = performance.now()
+  }, [values])
+
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group || reducedMotion) {
+      group?.setAttribute('transform', 'translate(0 0)')
+      return
+    }
+    let frame = 0
+    const animate = (now: number): void => {
+      if (document.visibilityState !== 'hidden') {
+        const elapsed = Math.max(0, now - lastSampleAt.current)
+        const progress = Math.min(1, elapsed / 1000)
+        group.setAttribute('transform', `translate(${(-step * progress).toFixed(3)} 0)`)
+      }
+      frame = requestAnimationFrame(animate)
+    }
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') lastSampleAt.current = performance.now()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    frame = requestAnimationFrame(animate)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [reducedMotion, step])
+
+  if (values.length === 0) return null
+
+  const graphColor = /^#[0-9a-f]{6}$/i.test(accentColor || '') ? accentColor : 'currentColor'
 
   return (
     <svg
-      className={className}
+      className={`${className ?? ''} text-foreground`}
       viewBox={`0 0 ${w} ${h}`}
       preserveAspectRatio="none"
       aria-hidden
     >
       <defs>
-        <linearGradient id="dl-spark-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="oklch(0.985 0 0)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="oklch(0.985 0 0)" stopOpacity="0.02" />
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={graphColor} stopOpacity="0.14" />
+          <stop offset="100%" stopColor={graphColor} stopOpacity="0.015" />
         </linearGradient>
-        <linearGradient id="dl-spark-stroke" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="oklch(0.985 0 0)" stopOpacity="0.15" />
-          <stop offset="55%" stopColor="oklch(0.985 0 0)" stopOpacity="0.75" />
-          <stop offset="100%" stopColor="oklch(0.985 0 0)" stopOpacity="0.35" />
-        </linearGradient>
+        <clipPath id={clipId}>
+          <rect width={w} height={h} />
+        </clipPath>
       </defs>
-      <path d={area} fill="url(#dl-spark-fill)" />
-      <path
-        d={line}
-        fill="none"
-        stroke="url(#dl-spark-stroke)"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      <g ref={groupRef} clipPath={`url(#${clipId})`}>
+        <path d={paths.area} fill={`url(#${gradientId})`} />
+        <path
+          d={paths.line}
+          fill="none"
+          stroke={graphColor}
+          strokeOpacity="0.78"
+          strokeWidth="1.2"
+          vectorEffect="non-scaling-stroke"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </g>
     </svg>
   )
 }

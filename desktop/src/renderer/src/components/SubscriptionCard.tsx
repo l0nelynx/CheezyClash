@@ -43,7 +43,7 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
           : 'text-muted-foreground'
 
   return (
-    <section className="h-full rounded-xl border border-surface-border bg-surface-raised px-4 py-3">
+    <section className="page-card h-full px-4 py-3 transition-colors duration-200">
       {!isUnlimited && (
         <div className="mb-2.5 h-1 overflow-hidden rounded-full bg-surface-overlay">
           <div

@@ -36,7 +36,7 @@ export function AppShell({
           {error && (
             <div
               role="alert"
-              className="mx-5 mt-3 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+              className="notice-enter mx-5 mt-3 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
             >
               <p className="min-w-0 flex-1 break-words">{error}</p>
               <button
@@ -52,7 +52,7 @@ export function AppShell({
           {notice && !error && (
             <div
               role="status"
-              className="mx-5 mt-3 flex items-start gap-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok"
+              className="notice-enter mx-5 mt-3 flex items-start gap-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok"
             >
               <p className="min-w-0 flex-1 break-words">{notice}</p>
               <button
@@ -66,7 +66,9 @@ export function AppShell({
             </div>
           )}
 
-          <main className="min-h-0 flex-1 overflow-y-auto p-5">{children}</main>
+          <main className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div key={tab} className="page-enter h-full">{children}</div>
+          </main>
         </div>
       </div>
     </div>

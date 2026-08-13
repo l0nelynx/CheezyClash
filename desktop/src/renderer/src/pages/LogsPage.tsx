@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Switch } from '../components/ui/switch'
 
 interface Props {
   logs: string[]
@@ -17,7 +18,8 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
   const visible = logs.slice(-300)
 
   useEffect(() => {
-    if (autoScroll) endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (autoScroll) endRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' })
   }, [visible.length, autoScroll])
 
   return (
@@ -27,17 +29,15 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
           <h2 className="text-lg font-semibold text-ink">Logs</h2>
           <p className="text-sm text-muted-foreground">Recent activity.</p>
         </div>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            className="accent-accent"
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <Switch
             checked={autoScroll}
-            onChange={(e) => setAutoScroll(e.target.checked)}
+            onCheckedChange={setAutoScroll}
           />
           Auto-scroll
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-surface-border bg-surface-sunken p-4 font-mono text-xs leading-relaxed">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-surface-sunken p-4 font-mono text-xs leading-relaxed shadow-inner">
         {visible.length === 0 ? (
           <p className="text-ink-dim">No log lines yet.</p>
         ) : (

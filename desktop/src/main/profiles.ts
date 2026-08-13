@@ -327,6 +327,8 @@ export async function upsertManagedProfile(
     ...fromHeaders,
     ...subscription,
     title: subscription?.title || fromHeaders.title,
+    supportUrl: subscription?.supportUrl ?? fromHeaders.supportUrl,
+    accentColor: subscription?.accentColor ?? fromHeaders.accentColor,
     upload: subscription?.upload ?? fromHeaders.upload,
     download: subscription?.download ?? fromHeaders.download,
     total: subscription?.total ?? fromHeaders.total,

@@ -20,10 +20,13 @@ export interface AppSettings {
   /** TUN interface MTU used when Desktop network override is enabled. */
   tunMtu: number
   autoStart: boolean
+  autoConnect: boolean
   xrayMuxEnabled: boolean
   xrayMuxConcurrency: number
-  /** 0 means omitted from generated YAML / unlimited. */
+  /** 0 means omitted from generated YAML / unlimited (pack-first). */
   xrayMuxMaxConnections: number
+  /** 0 means omitted from generated YAML / unlimited. */
+  xrayMuxMaxDialsPerMinute: number
   accessControlRules: AccessControlRule[]
 }
 
@@ -44,6 +47,10 @@ export interface SubscriptionInfo {
   title?: string
   announce?: string
   tag?: string
+  /** Optional support page from the subscription `support-url` header. */
+  supportUrl?: string
+  /** Optional graph color from the subscription `cheezy-accent` header. */
+  accentColor?: string
   upload: number
   download: number
   total: number
@@ -101,9 +108,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   networkOverrideEnabled: false,
   tunMtu: 1500,
   autoStart: false,
+  autoConnect: false,
   xrayMuxEnabled: true,
   xrayMuxConcurrency: 32,
-  xrayMuxMaxConnections: 0,
+  xrayMuxMaxConnections: 3,
+  xrayMuxMaxDialsPerMinute: 3,
   accessControlRules: [],
 }
 
@@ -124,6 +133,8 @@ export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   }
 
   merged.tunEnabled = merged.connectionMode === 'tun'
+  merged.autoStart = raw.autoStart === true
+  merged.autoConnect = raw.autoConnect === true
   merged.networkOverrideEnabled = raw.networkOverrideEnabled === true
   merged.tunMtu =
     typeof raw.tunMtu === 'number' &&
@@ -148,6 +159,12 @@ export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     raw.xrayMuxMaxConnections >= 0
       ? raw.xrayMuxMaxConnections
       : DEFAULT_SETTINGS.xrayMuxMaxConnections
+  merged.xrayMuxMaxDialsPerMinute =
+    typeof raw.xrayMuxMaxDialsPerMinute === 'number' &&
+    Number.isInteger(raw.xrayMuxMaxDialsPerMinute) &&
+    raw.xrayMuxMaxDialsPerMinute >= 0
+      ? raw.xrayMuxMaxDialsPerMinute
+      : DEFAULT_SETTINGS.xrayMuxMaxDialsPerMinute
   return merged
 }
 

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
 
 interface Props {
   productName: string
@@ -35,7 +37,7 @@ export function LoginPage({
     <div className="flex h-full items-center justify-center p-6">
       <form
         onSubmit={(ev) => void submit(ev)}
-        className="w-full max-w-sm space-y-4 rounded-2xl border border-surface-border bg-surface-raised p-6"
+        className="page-card w-full max-w-sm space-y-4 rounded-2xl p-6"
       >
         <div>
           <h1 className="text-xl font-semibold text-ink">{productName}</h1>
@@ -48,8 +50,7 @@ export function LoginPage({
         )}
         <label className="block">
           <span className="mb-1.5 block text-xs text-ink-dim">Email</span>
-          <input
-            className="field"
+          <Input
             type="email"
             autoComplete="username"
             required
@@ -60,8 +61,7 @@ export function LoginPage({
         </label>
         <label className="block">
           <span className="mb-1.5 block text-xs text-ink-dim">Password</span>
-          <input
-            className="field"
+          <Input
             type="password"
             autoComplete="current-password"
             required
@@ -70,10 +70,10 @@ export function LoginPage({
             disabled={busy}
           />
         </label>
-        <button type="submit" className="btn-primary w-full" disabled={busy || !email || !password}>
+        <Button type="submit" className="w-full" disabled={busy || !email || !password}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Sign in
-        </button>
+        </Button>
       </form>
     </div>
   )

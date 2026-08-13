@@ -60,6 +60,7 @@ import {
   stopSubscriptionUpdater,
 } from './subscription-updater'
 import { notifyProfilesChanged } from './profile-events'
+import { applyAutoStart, isSystemStartupLaunch, type StartupIdentity } from './startup'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -110,7 +111,7 @@ function loadTrayImage(): Electron.NativeImage {
   return nativeImage.createEmpty()
 }
 
-function createWindow(productName: string): void {
+function createWindow(productName: string, showOnReady = true): void {
   const icon = loadAppIcon()
   mainWindow = new BrowserWindow({
     width: 800,
@@ -131,7 +132,9 @@ function createWindow(productName: string): void {
     },
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    if (showOnReady) mainWindow?.show()
+  })
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window:maximized', true)
   })
@@ -298,6 +301,10 @@ function registerIpc(): void {
   })
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', async (_e, patch) => {
+    const previous = getSettings()
+    if (typeof patch.autoStart === 'boolean' && patch.autoStart !== previous.autoStart) {
+      applyAutoStart(app, patch.autoStart, startupIdentity())
+    }
     const settings = setSettings(patch)
     const st = await getStatus()
     const changesMode =
@@ -318,7 +325,8 @@ function registerIpc(): void {
     const changesXrayMux =
       patch.xrayMuxEnabled !== undefined ||
       patch.xrayMuxConcurrency !== undefined ||
-      patch.xrayMuxMaxConnections !== undefined
+      patch.xrayMuxMaxConnections !== undefined ||
+      patch.xrayMuxMaxDialsPerMinute !== undefined
     const needsLiveReload =
       changesXrayMux ||
       (settings.networkOverrideEnabled &&
@@ -498,6 +506,26 @@ function registerIpc(): void {
   })
 }
 
+function startupIdentity(): StartupIdentity {
+  const caps = getPrivateModule().capabilities()
+  return {
+    appId: caps.supportsAuth ? 'com.cheezy.vpn.desktop' : 'com.cheezy.freedom.desktop',
+    productName: caps.productName || 'CheezyClash',
+  }
+}
+
+async function runStartupTasks(caps: PrivateCapabilities): Promise<void> {
+  if (caps.supportsAuth) {
+    await syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
+  }
+  if (!getSettings().autoConnect) return
+  if (!getActiveProfileId()) {
+    log('auto-connect skipped: no active profile', 'warn')
+    return
+  }
+  await connect().catch((e) => log(`auto-connect failed: ${e}`, 'error'))
+}
+
 /** Extract one of our URL schemes from process argv. */
 function findDeepLinkInArgv(argv: string[]): string | null {
   for (const arg of argv) {
@@ -667,8 +695,15 @@ if (!gotTheLock) {
       log('mihomo binary not found — run npm run fetch-core', 'warn')
     }
 
+    const launchHidden = isSystemStartupLaunch(app)
+    try {
+      applyAutoStart(app, getSettings().autoStart, startupIdentity())
+    } catch (e) {
+      log(`startup registration sync failed: ${e}`, 'warn')
+    }
+
     registerIpc()
-    createWindow(caps.productName)
+    createWindow(caps.productName, !launchHidden)
     createTray(caps.productName)
 
     // Cold-start deeplink (Windows/Linux put it on argv; macOS may have queued open-url).
@@ -676,10 +711,7 @@ if (!gotTheLock) {
     pendingDeepLink = null
     if (coldLink) void handleDeepLink(coldLink)
 
-    // Best-effort subscription refresh when already logged in
-    if (caps.supportsAuth) {
-      void syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
-    }
+    void runStartupTasks(caps)
 
     startSubscriptionUpdater()
 

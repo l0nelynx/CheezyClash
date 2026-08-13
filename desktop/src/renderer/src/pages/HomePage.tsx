@@ -45,6 +45,7 @@ export function HomePage(props: Props): React.JSX.Element {
         tun={props.tun}
         busy={props.busy}
         hasProfile={hasProfile}
+        activeProfile={props.activeProfile}
         downRateHistory={props.downRateHistory}
         downRate={props.traffic?.down ?? 0}
         upRate={props.traffic?.up ?? 0}

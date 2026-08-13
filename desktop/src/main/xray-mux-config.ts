@@ -14,9 +14,14 @@ function muxSettings(settings: AppSettings): Mapping {
     enabled: true,
     concurrency: settings.xrayMuxConcurrency,
   }
+  // 0 = pack-first / unlimited — omit so core keeps its default semantics.
   if (settings.xrayMuxMaxConnections > 0) {
     mux['max-connections'] = settings.xrayMuxMaxConnections
   }
+  if (settings.xrayMuxMaxDialsPerMinute > 0) {
+    mux['max-dials-per-minute'] = settings.xrayMuxMaxDialsPerMinute
+  }
+  // Other knobs (e.g. max-worker-uses) stay unset until explicitly configured.
   return mux
 }
 

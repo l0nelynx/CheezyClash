@@ -66,7 +66,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
         onClick={() => {
           if (selectable) setOpen((v) => !v)
         }}
-        className={`flex h-full w-full flex-col rounded-xl border border-surface-border bg-surface-raised px-4 py-3 text-left transition ${
+        className={`page-card flex h-full w-full flex-col px-4 py-3 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
           selectable
             ? 'hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-45'
             : 'cursor-default'
@@ -102,7 +102,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
         <div
           role="listbox"
           aria-label={`Servers in ${group.name}`}
-          className="absolute left-full top-0 z-40 ml-2 flex w-72 max-h-[min(20rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised shadow-lg"
+          className="page-card absolute left-full top-0 z-40 ml-2 flex w-72 max-h-[min(20rem,calc(100vh-6rem))] flex-col overflow-hidden shadow-lg"
         >
           {showSearch && (
             <div className="flex items-center gap-2 border-b border-surface-border px-3 py-2">
@@ -132,7 +132,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
                       aria-selected={active}
                       disabled={busy}
                       onClick={() => pick(name)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${
+                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
                         active
                           ? 'bg-primary/10 text-primary'
                           : 'text-ink hover:bg-surface-overlay'
