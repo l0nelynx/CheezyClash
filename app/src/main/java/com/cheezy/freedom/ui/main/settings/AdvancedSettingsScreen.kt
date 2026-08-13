@@ -166,10 +166,16 @@ fun AdvancedSettingsScreen(
                             } else {
                                 xrayMuxSettings.maxConnections.toString()
                             }
+                            val dials = if (xrayMuxSettings.maxDialsPerMinute == 0) {
+                                stringResource(R.string.settings_xray_mux_unlimited)
+                            } else {
+                                xrayMuxSettings.maxDialsPerMinute.toString()
+                            }
                             stringResource(
                                 R.string.settings_xray_mux_summary,
                                 xrayMuxSettings.concurrency,
                                 max,
+                                dials,
                             )
                         },
                     )
@@ -233,10 +239,15 @@ private fun XrayMuxSettingsDialog(
     var enabled by remember(initial) { mutableStateOf(initial.enabled) }
     var concurrency by remember(initial) { mutableStateOf(initial.concurrency.toString()) }
     var maxConnections by remember(initial) { mutableStateOf(initial.maxConnections.toString()) }
+    var maxDialsPerMinute by remember(initial) {
+        mutableStateOf(initial.maxDialsPerMinute.toString())
+    }
     val parsedConcurrency = concurrency.toIntOrNull()
     val parsedMaxConnections = maxConnections.toIntOrNull()
+    val parsedMaxDials = maxDialsPerMinute.toIntOrNull()
     val valid = parsedConcurrency != null && parsedConcurrency >= 1 &&
-        parsedMaxConnections != null && parsedMaxConnections >= 0
+        parsedMaxConnections != null && parsedMaxConnections >= 0 &&
+        parsedMaxDials != null && parsedMaxDials >= 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -267,6 +278,13 @@ private fun XrayMuxSettingsDialog(
                     supportingText = { Text(stringResource(R.string.settings_xray_mux_max_connections_hint)) },
                     singleLine = true,
                 )
+                OutlinedTextField(
+                    value = maxDialsPerMinute,
+                    onValueChange = { maxDialsPerMinute = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.settings_xray_mux_max_dials)) },
+                    supportingText = { Text(stringResource(R.string.settings_xray_mux_max_dials_hint)) },
+                    singleLine = true,
+                )
             }
         },
         confirmButton = {
@@ -278,6 +296,7 @@ private fun XrayMuxSettingsDialog(
                             enabled = enabled,
                             concurrency = parsedConcurrency ?: initial.concurrency,
                             maxConnections = parsedMaxConnections ?: initial.maxConnections,
+                            maxDialsPerMinute = parsedMaxDials ?: initial.maxDialsPerMinute,
                         ),
                     )
                 },

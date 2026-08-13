@@ -72,12 +72,14 @@
     <string name="settings_xray_mux">Xray Mux</string>
     <string name="settings_xray_mux_off">Off</string>
     <string name="settings_xray_mux_enabled">Use Mux.Cool for VLESS without flow</string>
-    <string name="settings_xray_mux_summary">On · concurrency %1$d · connections %2$s</string>
+    <string name="settings_xray_mux_summary">On · concurrency %1$d · connections %2$s · dials/min %3$s</string>
     <string name="settings_xray_mux_unlimited">unlimited</string>
     <string name="settings_xray_mux_concurrency">Concurrency</string>
-    <string name="settings_xray_mux_concurrency_hint">Active TCP streams per physical connection</string>
+    <string name="settings_xray_mux_concurrency_hint">Active TCP streams per carrier after soft-grow</string>
     <string name="settings_xray_mux_max_connections">Max connections</string>
-    <string name="settings_xray_mux_max_connections_hint">0 — unset / unlimited</string>
+    <string name="settings_xray_mux_max_connections_hint">Soft-grow target + hard cap; 0 — pack-first / unlimited</string>
+    <string name="settings_xray_mux_max_dials">Max dials per minute</string>
+    <string name="settings_xray_mux_max_dials_hint">Budget for new physical dials per minute; 0 — unlimited</string>
     <string name="settings_zashboard">Open Zashboard</string>
     <string name="settings_zashboard_summary">Web dashboard for the active core · VPN must be running</string>
     <string name="settings_wap">WAP upstream</string>

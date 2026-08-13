@@ -74,12 +74,14 @@
     <string name="settings_xray_mux">Xray Mux</string>
     <string name="settings_xray_mux_off">Выключен</string>
     <string name="settings_xray_mux_enabled">Использовать Mux.Cool для VLESS без flow</string>
-    <string name="settings_xray_mux_summary">Включён · concurrency %1$d · соединений %2$s</string>
+    <string name="settings_xray_mux_summary">Включён · concurrency %1$d · соединений %2$s · dials/min %3$s</string>
     <string name="settings_xray_mux_unlimited">без лимита</string>
     <string name="settings_xray_mux_concurrency">Concurrency</string>
-    <string name="settings_xray_mux_concurrency_hint">Активных TCP-потоков на одно физическое соединение</string>
+    <string name="settings_xray_mux_concurrency_hint">Активных TCP-потоков на carrier после soft-grow</string>
     <string name="settings_xray_mux_max_connections">Max connections</string>
-    <string name="settings_xray_mux_max_connections_hint">0 — не задано / без лимита</string>
+    <string name="settings_xray_mux_max_connections_hint">Soft-grow target + hard cap; 0 — pack-first / без лимита</string>
+    <string name="settings_xray_mux_max_dials">Max dials per minute</string>
+    <string name="settings_xray_mux_max_dials_hint">Лимит новых physical dials в минуту; 0 — без лимита</string>
     <string name="settings_zashboard">Открыть Zashboard</string>
     <string name="settings_zashboard_summary">Веб-панель активного ядра · VPN должен быть запущен</string>
     <string name="settings_wap">WAP upstream</string>

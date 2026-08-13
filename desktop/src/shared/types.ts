@@ -109,7 +109,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tunMtu: 1500,
   autoStart: false,
   autoConnect: false,
-  xrayMuxEnabled: true,
+  xrayMuxEnabled: false,
   xrayMuxConcurrency: 32,
   xrayMuxMaxConnections: 3,
   xrayMuxMaxDialsPerMinute: 3,

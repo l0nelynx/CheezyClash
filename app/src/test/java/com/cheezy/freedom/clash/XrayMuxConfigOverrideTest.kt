@@ -26,7 +26,10 @@ class XrayMuxConfigOverrideTest {
             """.trimIndent(),
         )
 
-        XrayMuxConfigOverride.apply(yaml, XrayMuxSettings(enabled = true, concurrency = 32))
+        XrayMuxConfigOverride.apply(
+            yaml,
+            XrayMuxSettings(enabled = true, concurrency = 32, maxConnections = 0, maxDialsPerMinute = 0),
+        )
 
         assertEquals(
             mapOf("enabled" to true, "concurrency" to 32),
@@ -37,18 +40,34 @@ class XrayMuxConfigOverrideTest {
     }
 
     @Test
-    fun `positive max connections is injected and zero is omitted`() {
+    fun `positive limits are injected and zero is omitted`() {
         val yaml = config("proxies: [{ name: node, type: vless }]")
-        XrayMuxConfigOverride.apply(yaml, XrayMuxSettings(maxConnections = 3))
+        XrayMuxConfigOverride.apply(
+            yaml,
+            XrayMuxSettings(enabled = true, maxConnections = 3, maxDialsPerMinute = 3),
+        )
         @Suppress("UNCHECKED_CAST")
         val mux = proxy(yaml, 0)["xray-mux"] as Map<String, Any?>
         assertEquals(3, mux["max-connections"])
+        assertEquals(3, mux["max-dials-per-minute"])
 
         val unlimited = config("proxies: [{ name: node, type: vless }]")
-        XrayMuxConfigOverride.apply(unlimited, XrayMuxSettings(maxConnections = 0))
+        XrayMuxConfigOverride.apply(
+            unlimited,
+            XrayMuxSettings(enabled = true, maxConnections = 0, maxDialsPerMinute = 0),
+        )
         @Suppress("UNCHECKED_CAST")
         val unlimitedMux = proxy(unlimited, 0)["xray-mux"] as Map<String, Any?>
         assertFalse(unlimitedMux.containsKey("max-connections"))
+        assertFalse(unlimitedMux.containsKey("max-dials-per-minute"))
+        assertFalse(unlimitedMux.containsKey("max-worker-uses"))
+    }
+
+    @Test
+    fun `default settings disable mux`() {
+        val yaml = config("proxies: [{ name: node, type: vless }]")
+        XrayMuxConfigOverride.apply(yaml, XrayMuxSettings())
+        assertEquals(mapOf("enabled" to false), proxy(yaml, 0)["xray-mux"])
     }
 
     @Test
@@ -65,10 +84,16 @@ class XrayMuxConfigOverrideTest {
             """.trimIndent(),
         )
 
-        XrayMuxConfigOverride.apply(yaml, XrayMuxSettings())
+        XrayMuxConfigOverride.apply(yaml, XrayMuxSettings(enabled = true))
 
-        assertEquals(mapOf("enabled" to true, "concurrency" to 32), proxy(yaml, 0)["xray-mux"])
-        assertEquals(mapOf("enabled" to true, "concurrency" to 32), proxy(yaml, 1)["xray-mux"])
+        val expected = mapOf(
+            "enabled" to true,
+            "concurrency" to 32,
+            "max-connections" to 3,
+            "max-dials-per-minute" to 3,
+        )
+        assertEquals(expected, proxy(yaml, 0)["xray-mux"])
+        assertEquals(expected, proxy(yaml, 1)["xray-mux"])
         for (index in 2..5) assertNull(proxy(yaml, index)["xray-mux"])
     }
 

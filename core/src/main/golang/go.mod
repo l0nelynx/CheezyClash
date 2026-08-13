@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/dlclark/regexp2 v1.12.0
-	github.com/metacubex/mihomo v1.19.30-0.20260806095019-770800e99aa8
+	github.com/metacubex/mihomo v1.19.30-0.20260807001551-dfd7e8962bfb
 	golang.org/x/sync v0.11.0
 )
 
@@ -69,7 +69,7 @@ require (
 	github.com/metacubex/jsonv2 v0.0.0-20260721082349-16b4998c8f89 // indirect
 	github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604 // indirect
 	github.com/metacubex/mhurl v0.1.0 // indirect
-	github.com/metacubex/mipstack v0.0.0-20260806094348-a7e70518fb10 // indirect
+	github.com/metacubex/mipstack v0.0.0-20260806164646-3e1cdb314f43 // indirect
 	github.com/metacubex/mlkem v0.1.0 // indirect
 	github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb // indirect
 	github.com/metacubex/qpack v0.6.0 // indirect
@@ -145,4 +145,4 @@ replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20
 
 replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260312170409-baeb46d2f908
 
-replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260806155111-5d0eb8329bad
+replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260807133330-f5adecb52a53

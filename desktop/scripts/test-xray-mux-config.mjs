@@ -25,7 +25,7 @@ const defaultMux = {
       { name: 'hysteria', type: 'vless', network: 'hysteria' },
     ],
   }
-  applyXrayMuxSettings(doc, settings())
+  applyXrayMuxSettings(doc, settings({ xrayMuxEnabled: true }))
   assert.deepEqual(doc.proxies[0]['xray-mux'], defaultMux)
   assert.deepEqual(doc.proxies[1]['xray-mux'], defaultMux)
   for (const proxy of doc.proxies.slice(2)) assert.equal(proxy['xray-mux'], undefined)
@@ -39,7 +39,7 @@ const defaultMux = {
       { name: 'other', type: 'vmess' },
     ],
   }
-  applyXrayMuxSettings(doc, settings())
+  applyXrayMuxSettings(doc, settings({ xrayMuxEnabled: true }))
   assert.deepEqual(doc.proxies[0]['xray-mux'], defaultMux)
   assert.equal(doc.proxies[1]['xray-mux'], undefined)
   assert.equal(doc.proxies[2]['xray-mux'], undefined)
@@ -64,7 +64,11 @@ const defaultMux = {
   const unlimited = { proxies: [{ name: 'node', type: 'vless' }] }
   applyXrayMuxSettings(
     unlimited,
-    settings({ xrayMuxMaxConnections: 0, xrayMuxMaxDialsPerMinute: 0 }),
+    settings({
+      xrayMuxEnabled: true,
+      xrayMuxMaxConnections: 0,
+      xrayMuxMaxDialsPerMinute: 0,
+    }),
   )
   assert.equal('max-connections' in unlimited.proxies[0]['xray-mux'], false)
   assert.equal('max-dials-per-minute' in unlimited.proxies[0]['xray-mux'], false)
@@ -73,7 +77,11 @@ const defaultMux = {
   const limited = { proxies: [{ name: 'node', type: 'vless' }] }
   applyXrayMuxSettings(
     limited,
-    settings({ xrayMuxMaxConnections: 3, xrayMuxMaxDialsPerMinute: 3 }),
+    settings({
+      xrayMuxEnabled: true,
+      xrayMuxMaxConnections: 3,
+      xrayMuxMaxDialsPerMinute: 3,
+    }),
   )
   assert.equal(limited.proxies[0]['xray-mux']['max-connections'], 3)
   assert.equal(limited.proxies[0]['xray-mux']['max-dials-per-minute'], 3)
@@ -81,7 +89,7 @@ const defaultMux = {
 
 {
   const migrated = normalizeSettings({})
-  assert.equal(migrated.xrayMuxEnabled, true)
+  assert.equal(migrated.xrayMuxEnabled, false)
   assert.equal(migrated.xrayMuxConcurrency, 32)
   assert.equal(migrated.xrayMuxMaxConnections, 3)
   assert.equal(migrated.xrayMuxMaxDialsPerMinute, 3)
