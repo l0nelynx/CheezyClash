@@ -22,15 +22,18 @@
 
 <a name="english"></a>
 
-**CheezyClash** is a modern and user-friendly graphical interface for **Clash.Meta** (Mihomo) on Android and desktop. It aims to provide a seamless proxy management experience with advanced routing capabilities.
+**CheezyClash** is a modern open-source Mihomo client for Android, Windows, macOS, and Linux with a clean and simple interface and native Remnawave subscription headers and HWID support.
 
 **Desktop (experimental):** see [`desktop/`](desktop/) — Electron client with mihomo sidecar from the same go.mod as Android (proxy MVP + TUN helper).
 
 ### 🌟 Features
 
 - **Based on Clash.Meta (Mihomo):** Leveraging the powerful core of [Mihomo](https://github.com/MetaCubeX/mihomo).
-- **Smart Group Support:** Intelligent proxy grouping and selection using the [Mihomo fork](https://github.com/vernesong/mihomo) with **LightGBM** model support.
+- **Smart Group Support:** Intelligent proxy grouping and selection based on the [Mihomo fork](https://github.com/vernesong/mihomo) with **LightGBM** model support.
 - **LAN Proxy Sharing:** Easily share your proxy connection with other devices in your local network.
+- **Xray-compatible Mux:** Support for **Mux.Cool** multiplexing on VLESS connections without flow.
+- **WAP Mode:** Route traffic through an APN/WAP upstream proxy with automatic or manual configuration.
+- **TUN Access Control:** Block or bypass selected apps in TUN mode.
 - **Remnawave Integration:**
   - HWID transmission on **all platforms** (Android, Windows, macOS, Linux) for [Remnawave Panel](https://github.com/remnawave/panel).
   - Support for subscription headers: `profile-title`, `announce`, `profile-update-interval`, `subscription-userinfo` (`total`, `expire`, `tag`).
@@ -85,13 +88,16 @@ If you like this project, please give it a **Star** ⭐
 
 <a name="русский"></a>
 
-**CheezyClash** — современный и удобный графический интерфейс для **Clash.Meta** (Mihomo) на Android и desktop. Простой прокси-клиент с мощными возможностями маршрутизации.
+**CheezyClash** — современный клиент Mihomo с открытым исходным кодом для Android, Windows, macOS и Linux, простым и понятным интерфейсом, нативной поддержкой заголовков подписок Remnawave и HWID.
 
 ### 🌟 Особенности
 
 - **На базе Clash.Meta (Mihomo):** Использует возможности ядра [Mihomo](https://github.com/MetaCubeX/mihomo).
-- **Поддержка Smart Group:** Умное управление группами прокси на базе [форка ядра](https://github.com/vernesong/mihomo) с использованием модели **LightGBM**.
+- **Поддержка Smart Group:** Интеллектуальная группировка и выбор прокси на базе [форка Mihomo](https://github.com/vernesong/mihomo) с поддержкой модели **LightGBM**.
 - **Раздача прокси в локальной сети:** Делитесь соединением с другими устройствами в вашей сети.
+- **Xray-совместимый Mux:** Поддержка мультиплексирования **Mux.Cool** для VLESS-соединений без flow.
+- **WAP-режим:** Маршрутизация трафика через APN/WAP upstream proxy с автоматической или ручной настройкой.
+- **Контроль приложений в TUN:** Блокировка или обход прокси для выбранных приложений в TUN-режиме.
 - **Интеграция с Remnawave:**
   - Передача HWID на **всех платформах** (Android, Windows, macOS, Linux) для [Remnawave Panel](https://github.com/remnawave/panel).
   - Поддержка заголовков подписки: `profile-title`, `announce`, `profile-update-interval`, `subscription-userinfo` (`total`, `expire`, `tag`).
@@ -145,5 +151,5 @@ If you like this project, please give it a **Star** ⭐
 ---
 
 <p align="center">
-  Thanks to the <a href="https://github.com/remnawave/panel">Remnawave</a> community · Спасибо комьюнити <a href="https://github.com/remnawave/panel">Remnawave</a>
+  Built for <a href="https://t.me/remnawave">❤️ Remnawave community</a> · Создано для <a href="https://t.me/remnawave">❤️ сообщества Remnawave</a>
 </p>
