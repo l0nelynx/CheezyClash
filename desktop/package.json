@@ -28,6 +28,7 @@
     "test:core-contract": "node scripts/test-core-contract.mjs",
     "test:lifecycle": "node scripts/test-lifecycle-coordinator.mjs",
     "test:network-config": "node scripts/test-network-config.mjs",
+    "test:custom-rules": "node scripts/test-custom-rules.mjs",
     "test:subscription-metadata": "node scripts/test-subscription-metadata.mjs",
     "test:startup": "node scripts/test-startup.mjs",
     "test:sparkline": "node scripts/test-sparkline.mjs",

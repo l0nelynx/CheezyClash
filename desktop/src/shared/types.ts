@@ -1,5 +1,8 @@
+import { normalizeCustomRules, type CustomRule } from './custom-rules.ts'
+
 export type ConnectionMode = 'proxy' | 'tun'
 
+/** @deprecated Persisted shape migrated to CustomRule. */
 export interface AccessControlRule {
   id: string
   processName: string
@@ -27,7 +30,7 @@ export interface AppSettings {
   xrayMuxMaxConnections: number
   /** 0 means omitted from generated YAML / unlimited. */
   xrayMuxMaxDialsPerMinute: number
-  accessControlRules: AccessControlRule[]
+  customRules: CustomRule[]
 }
 
 export interface ProfileMeta {
@@ -113,17 +116,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
   xrayMuxConcurrency: 32,
   xrayMuxMaxConnections: 3,
   xrayMuxMaxDialsPerMinute: 3,
-  accessControlRules: [],
+  customRules: [],
 }
 
 /** Normalize persisted settings and migrate legacy tunEnabled values. */
-export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
+export function normalizeSettings(
+  raw: Partial<AppSettings> & { accessControlRules?: unknown },
+): AppSettings {
+  const { accessControlRules: legacyAccessControlRules, ...canonicalRaw } = raw
   const merged: AppSettings = {
     ...DEFAULT_SETTINGS,
-    ...raw,
-    accessControlRules: Array.isArray(raw.accessControlRules)
-      ? raw.accessControlRules
-      : DEFAULT_SETTINGS.accessControlRules,
+    ...canonicalRaw,
+    customRules: normalizeCustomRules(raw.customRules, legacyAccessControlRules),
   }
 
   if (raw.connectionMode === 'proxy' || raw.connectionMode === 'tun') {
@@ -144,9 +148,7 @@ export function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
       ? raw.tunMtu
       : DEFAULT_SETTINGS.tunMtu
   merged.xrayMuxEnabled =
-    typeof raw.xrayMuxEnabled === 'boolean'
-      ? raw.xrayMuxEnabled
-      : DEFAULT_SETTINGS.xrayMuxEnabled
+    typeof raw.xrayMuxEnabled === 'boolean' ? raw.xrayMuxEnabled : DEFAULT_SETTINGS.xrayMuxEnabled
   merged.xrayMuxConcurrency =
     typeof raw.xrayMuxConcurrency === 'number' &&
     Number.isInteger(raw.xrayMuxConcurrency) &&
@@ -174,12 +176,4 @@ export const CONTROLLER_HOST = '127.0.0.1'
 export const CONTROLLER_PORT = 9090
 
 /** UI label BLOCK → Clash REJECT */
-export function policyToClash(policy: string): string {
-  if (policy === 'BLOCK') return 'REJECT'
-  return policy
-}
-
-export function clashToPolicyLabel(policy: string): string {
-  if (policy === 'REJECT') return 'BLOCK'
-  return policy
-}
+export { clashToPolicyLabel, policyToClash } from './custom-rules.ts'

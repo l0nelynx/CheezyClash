@@ -20,7 +20,7 @@ require (
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/coreos/go-iptables v0.8.0 // indirect
 	github.com/dunglas/httpsfv v1.0.2 // indirect
-	github.com/enfein/mieru/v3 v3.35.0 // indirect
+	github.com/enfein/mieru/v3 v3.36.0 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20250325060835-cd0defd64358 // indirect
 	github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 // indirect
 	github.com/ericlagergren/siv v0.0.0-20220507050439-0b757b3aa5f1 // indirect
@@ -48,7 +48,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78 // indirect
-	github.com/metacubex/amneziawg-go v0.0.0-20260726091836-16af3a7a9a29 // indirect
+	github.com/metacubex/amneziawg-go v0.0.0-20260816073447-736a78668832 // indirect
 	github.com/metacubex/ascon v0.1.0 // indirect
 	github.com/metacubex/bart v0.29.0 // indirect
 	github.com/metacubex/bbolt v0.0.0-20260706163408-d4ec34ad7c48 // indirect
@@ -69,7 +69,7 @@ require (
 	github.com/metacubex/jsonv2 v0.0.0-20260721082349-16b4998c8f89 // indirect
 	github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604 // indirect
 	github.com/metacubex/mhurl v0.1.0 // indirect
-	github.com/metacubex/mipstack v0.0.0-20260810030937-189aceb10c32 // indirect
+	github.com/metacubex/mipstack v0.0.0-20260820120222-f3276095eefa // indirect
 	github.com/metacubex/mlkem v0.1.0 // indirect
 	github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb // indirect
 	github.com/metacubex/qpack v0.6.0 // indirect
@@ -87,14 +87,14 @@ require (
 	github.com/metacubex/sing-wireguard v0.0.0-20260810013230-110eac03c3f0 // indirect
 	github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141 // indirect
 	github.com/metacubex/ssh v0.1.0 // indirect
-	github.com/metacubex/tailscale v0.0.0-20260807072706-a4fb5feabcbb // indirect
+	github.com/metacubex/tailscale v0.0.0-20260821002758-7e607643d76d // indirect
 	github.com/metacubex/tailscale-wireguard-go v0.0.0-20260725073821-e61ab99cede2 // indirect
 	github.com/metacubex/tfo-go v0.0.0-20260623020846-376a77860b8c // indirect
-	github.com/metacubex/tls v0.1.7 // indirect
+	github.com/metacubex/tls v0.1.8 // indirect
 	github.com/metacubex/utls v1.8.7 // indirect
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f // indirect
 	github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49 // indirect
-	github.com/metacubex/zerotier-go v0.0.0-20260810055754-4216d2c19212 // indirect
+	github.com/metacubex/zerotier-go v0.0.0-20260813124750-13fa6f45da5f // indirect
 	github.com/miekg/dns v1.1.63 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mroth/weightedrand/v2 v2.1.0 // indirect
@@ -145,4 +145,4 @@ replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20
 
 replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260726054410-2aa631698733
 
-replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260813190839-23e7db405400
+replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260822155345-218fd7fcf9d1

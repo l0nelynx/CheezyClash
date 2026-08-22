@@ -1,13 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  Tray,
-  Menu,
-  nativeImage,
-  ipcMain,
-  shell,
-  dialog,
-} from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog } from 'electron'
 import { join, basename } from 'path'
 import { existsSync } from 'fs'
 import {
@@ -21,6 +12,7 @@ import {
   syncManagedSystemProxy,
   ensureHelperAndStatus,
   corePresent,
+  broadcastCustomRuleDiagnostics,
 } from './core-manager'
 import { mihomoApi } from './mihomo-api'
 import {
@@ -34,13 +26,17 @@ import {
   ensureProfilesRoot,
   migrateOrphanDirs,
   rebuildActive,
+  getActiveCustomRuleContext,
   getActiveProxyGroupNames,
   getProxyGroupIcons,
   validateProcessNameRule,
+  validateGeneratedConfig,
 } from './profiles'
 import { getSettings, setSettings, getOrCreateSecret, getSelections, setSelection } from './store'
 import { listRunningProcesses } from './processes'
 import type { AccessControlRule, ConnectionMode } from '../shared/types'
+import type { CustomRule } from '../shared/custom-rules'
+import { normalizeCustomRules, validateCustomRule } from '../shared/custom-rules'
 import { getLogs, log } from './logger'
 import { coreHome } from './paths'
 import { PRIVATE_IPC, type PrivateCapabilities } from '../shared/private-api'
@@ -180,7 +176,9 @@ async function refreshTrayMenu(): Promise<void> {
     running = st.running
     modeLabel = st.mode === 'tun' ? 'TUN' : 'Proxy'
     tray.setToolTip(
-      running ? `${trayProductName} · Connected (${modeLabel})` : `${trayProductName} · Disconnected`,
+      running
+        ? `${trayProductName} · Connected (${modeLabel})`
+        : `${trayProductName} · Disconnected`,
     )
   } catch {
     tray.setToolTip(trayProductName)
@@ -330,14 +328,18 @@ function registerIpc(): void {
     const needsLiveReload =
       changesXrayMux ||
       (settings.networkOverrideEnabled &&
-      (patch.mixedPort !== undefined ||
-        patch.allowLan !== undefined ||
-        patch.tunStack !== undefined ||
-        patch.tunMtu !== undefined))
+        (patch.mixedPort !== undefined ||
+          patch.allowLan !== undefined ||
+          patch.tunStack !== undefined ||
+          patch.tunMtu !== undefined))
 
     if (needsLiveReload) {
       const path = rebuildActive(settings)
       if (path && st.running) {
+        const profileId = getActiveProfileId()
+        if (profileId) {
+          broadcastCustomRuleDiagnostics(await validateGeneratedConfig(path, profileId))
+        }
         mihomoApi.ensureSecretFromStore()
         await mihomoApi.putConfigs(path)
         await mihomoApi.applySelections(getSelections())
@@ -359,26 +361,52 @@ function registerIpc(): void {
 
   ipcMain.handle('processes:list', () => listRunningProcesses())
   ipcMain.handle('profiles:proxyGroupNames', () => getActiveProxyGroupNames())
-  ipcMain.handle('accessControl:validate', (_e, processName: string, policy: string) =>
-    validateProcessNameRule(processName, policy),
-  )
-  ipcMain.handle('accessControl:set', async (_e, rules: AccessControlRule[]) => {
-    for (const r of rules) {
-      validateProcessNameRule(r.processName, r.policy)
-    }
-    const settings = setSettings({ accessControlRules: rules })
+  ipcMain.handle('customRules:context', () => getActiveCustomRuleContext())
+  ipcMain.handle('customRules:validate', (_e, rule: CustomRule) => validateCustomRule(rule))
+
+  const saveCustomRules = async (rules: CustomRule[]) => {
+    for (const rule of rules) validateCustomRule(rule)
+    const settings = setSettings({ customRules: rules })
     const path = rebuildActive(settings)
     if (!path) return settings
     const st = await getStatus()
     if (st.running) {
+      const profileId = getActiveProfileId()
+      if (profileId) {
+        broadcastCustomRuleDiagnostics(await validateGeneratedConfig(path, profileId))
+      }
       mihomoApi.ensureSecretFromStore()
-      // Soft apply: force-reload YAML (rules) without restarting the core process.
+      // Soft apply: force-reload YAML without restarting the core process.
       await mihomoApi.putConfigs(path)
       // Reload resets selectors to profile defaults — restore user choices.
       await mihomoApi.applySelections(getSelections())
       await mihomoApi.closeAllConnections()
     }
     return settings
+  }
+
+  ipcMain.handle('customRules:set', (_e, rules: CustomRule[]) => saveCustomRules(rules))
+  ipcMain.handle('accessControl:validate', (_e, processName: string, policy: string) =>
+    validateProcessNameRule(processName, policy),
+  )
+  ipcMain.handle('accessControl:set', (_e, rules: AccessControlRule[]) =>
+    saveCustomRules(normalizeCustomRules(undefined, rules)),
+  )
+  ipcMain.handle('dialog:pickProcessPath', async (_e, kind: 'file' | 'directory') => {
+    if (kind !== 'file' && kind !== 'directory') throw new Error('invalid path picker kind')
+    const result = await dialog.showOpenDialog({
+      title: kind === 'file' ? 'Select process executable' : 'Select process directory',
+      filters:
+        kind === 'file' && process.platform === 'win32'
+          ? [
+              { name: 'Executable', extensions: ['exe', 'com', 'bat', 'cmd'] },
+              { name: 'All', extensions: ['*'] },
+            ]
+          : undefined,
+      properties: [kind === 'file' ? 'openFile' : 'openDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return result.filePaths[0]
   })
   ipcMain.handle('dialog:pickExecutable', async () => {
     const result = await dialog.showOpenDialog({
@@ -529,10 +557,7 @@ async function runStartupTasks(caps: PrivateCapabilities): Promise<void> {
 /** Extract one of our URL schemes from process argv. */
 function findDeepLinkInArgv(argv: string[]): string | null {
   for (const arg of argv) {
-    if (
-      typeof arg === 'string' &&
-      /^(?:cheezy|cheezyvpn|cheezyclash):\/\//i.test(arg)
-    ) {
+    if (typeof arg === 'string' && /^(?:cheezy|cheezyvpn|cheezyclash):\/\//i.test(arg)) {
       return arg
     }
   }
@@ -644,10 +669,7 @@ function configureProtocolClients(capabilities: PrivateCapabilities): void {
   // electron-builder writes macOS plist and Linux x-scheme-handler metadata.
   // Packaged Windows apps must register their executable in the registry.
   if (process.platform !== 'win32') return
-  const schemes = [
-    capabilities.deepLinkScheme,
-    ...(capabilities.legacyDeepLinkSchemes ?? []),
-  ]
+  const schemes = [capabilities.deepLinkScheme, ...(capabilities.legacyDeepLinkSchemes ?? [])]
   for (const scheme of schemes) {
     if (!app.setAsDefaultProtocolClient(scheme)) {
       log(`failed to register ${scheme} protocol`, 'warn')

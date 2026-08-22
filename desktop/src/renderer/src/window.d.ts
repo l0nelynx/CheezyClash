@@ -7,12 +7,13 @@ import type {
   ProxyGroupInfo,
   TrafficSnapshot,
   TunStatus,
-} from '../shared/types'
+} from '../../shared/types'
+import type { CustomRule, CustomRuleContext, CustomRuleDiagnostic } from '../../shared/custom-rules'
 import type {
   PrivateAccountSession,
   PrivateCapabilities,
   PrivateSubscriptionInfo,
-} from '../shared/private-api'
+} from '../../shared/private-api'
 import type { DeepLinkResult } from '../../shared/deep-link'
 
 export interface CheezyApi {
@@ -39,6 +40,10 @@ export interface CheezyApi {
   getLogs: () => Promise<string[]>
   listProcesses: () => Promise<{ name: string; pid: number }[]>
   getProxyGroupNames: () => Promise<string[]>
+  getCustomRuleContext: () => Promise<CustomRuleContext>
+  validateCustomRule: (rule: CustomRule) => Promise<string>
+  setCustomRules: (rules: CustomRule[]) => Promise<AppSettings>
+  pickProcessPath: (kind: 'file' | 'directory') => Promise<string | null>
   validateAccessControlRule: (processName: string, policy: string) => Promise<string>
   setAccessControlRules: (rules: AccessControlRule[]) => Promise<AppSettings>
   pickExecutable: () => Promise<string | null>
@@ -55,6 +60,7 @@ export interface CheezyApi {
   onLog: (cb: (line: string) => void) => () => void
   onStatus: (cb: (status: CoreStatus) => void) => () => void
   onProfilesChanged: (cb: () => void) => () => void
+  onCustomRuleDiagnostics: (cb: (diagnostics: CustomRuleDiagnostic[]) => void) => () => void
   consumeDeepLinkResult: () => Promise<DeepLinkResult | null>
   onDeepLinkResult: (cb: (result: DeepLinkResult) => void) => () => void
   windowMinimize: () => Promise<void>

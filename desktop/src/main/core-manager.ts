@@ -4,6 +4,7 @@ import { join } from 'path'
 import { platform } from 'os'
 import { BrowserWindow } from 'electron'
 import type { ConnectionMode, CoreStatus, TunStatus } from '../shared/types'
+import type { CustomRuleDiagnostic } from '../shared/custom-rules'
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../shared/types'
 import {
   coreBinaryPath,
@@ -28,6 +29,7 @@ import {
   readEffectiveNetworkConfig,
   resolveProfileNetwork,
   setReloadActiveCoreHook,
+  validateGeneratedConfig,
 } from './profiles'
 import { mihomoApi } from './mihomo-api'
 import { setSystemProxy } from './system-proxy'
@@ -85,6 +87,21 @@ function broadcast(status: CoreStatus): void {
   }
 }
 
+export function broadcastCustomRuleDiagnostics(diagnostics: CustomRuleDiagnostic[]): void {
+  if (diagnostics.length === 0) return
+  for (const diagnostic of diagnostics) {
+    log(
+      `skipped Custom Rule ${diagnostic.type} (${diagnostic.ruleId}) for profile=${diagnostic.profileId}: ${diagnostic.reason}`,
+      'warn',
+    )
+  }
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.send('customRules:diagnostics', diagnostics)
+    }
+  }
+}
+
 function childAlive(): boolean {
   return child != null && child.exitCode === null && child.signalCode === null
 }
@@ -103,12 +120,10 @@ export async function getStatus(): Promise<CoreStatus> {
   const desired = lifecycle.desiredTarget
   let statusMode = running && childAlive() ? mode : settings.connectionMode
   try {
-    statusMode = running && childAlive()
-      ? mode
-      : configuredMode(
-          desired?.profileId ?? getActiveProfileId(),
-          settings.connectionMode,
-        )
+    statusMode =
+      running && childAlive()
+        ? mode
+        : configuredMode(desired?.profileId ?? getActiveProfileId(), settings.connectionMode)
   } catch {
     // Config validation is reported during rebuild/connect; keep status available.
   }
@@ -186,18 +201,14 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
   const secret = getOrCreateSecret()
   mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
 
-  const coreProcess = spawn(
-    bin,
-    ['-d', home, '-f', configPath],
-    {
-      cwd: bundledCoreDir(),
-      env: {
-        ...process.env,
-        SAFE_PATHS: mihomoSafePaths(),
-      },
-      windowsHide: true,
+  const coreProcess = spawn(bin, ['-d', home, '-f', configPath], {
+    cwd: bundledCoreDir(),
+    env: {
+      ...process.env,
+      SAFE_PATHS: mihomoSafePaths(),
     },
-  )
+    windowsHide: true,
+  })
   child = coreProcess
   coreProcess.stdout?.on('data', (d) => log(`[core] ${String(d).trim()}`))
   coreProcess.stderr?.on('data', (d) => log(`[core] ${String(d).trim()}`, 'warn'))
@@ -254,12 +265,10 @@ async function onCrash(): Promise<void> {
   log(`restarting core after crash (#${crashCount})`)
   const desired = lifecycle.desiredTarget
   if (!desired?.running || !desired.profileId) return
-  void lifecycle
-    .request({ ...desired, reason: 'cold-start' })
-    .catch(async (error) => {
-      lastError = String(error)
-      broadcast(await getStatus())
-    })
+  void lifecycle.request({ ...desired, reason: 'cold-start' }).catch(async (error) => {
+    lastError = String(error)
+    broadcast(await getStatus())
+  })
 }
 
 async function reconcileLifecycle(
@@ -322,6 +331,8 @@ async function reconcileLifecycle(
     throw new Error(lastError)
   }
 
+  broadcastCustomRuleDiagnostics(await validateGeneratedConfig(configPath, profileId))
+
   await cleanupCore(false)
   if (!isCurrent()) return
   if (!settings.networkOverrideEnabled || effectiveMode === 'tun') {
@@ -330,9 +341,7 @@ async function reconcileLifecycle(
   if (!isCurrent()) return
 
   try {
-    log(
-      `lifecycle generation=${ticket.generation} profile=${profileId} reason=${target.reason}`,
-    )
+    log(`lifecycle generation=${ticket.generation} profile=${profileId} reason=${target.reason}`)
     const helperReady = effectiveMode === 'tun' && (await pingHelper())
     if (!isCurrent()) return
     if (helperReady) {
@@ -344,11 +353,7 @@ async function reconcileLifecycle(
     await mihomoApi.applySelections(getSelections(profileId))
     if (!isCurrent()) return
 
-    if (
-      settings.networkOverrideEnabled &&
-      effectiveMode === 'proxy' &&
-      settings.systemProxy
-    ) {
+    if (settings.networkOverrideEnabled && effectiveMode === 'proxy' && settings.systemProxy) {
       await setManagedSystemProxy(settings.mixedPort)
     }
     if (!isCurrent()) return
@@ -434,12 +439,7 @@ export async function setConnectionMode(next: ConnectionMode): Promise<TunStatus
 
 export async function syncManagedSystemProxy(running: boolean): Promise<void> {
   const settings = getSettings()
-  if (
-    running &&
-    settings.networkOverrideEnabled &&
-    settings.systemProxy &&
-    mode === 'proxy'
-  ) {
+  if (running && settings.networkOverrideEnabled && settings.systemProxy && mode === 'proxy') {
     await setManagedSystemProxy(settings.mixedPort)
   } else {
     await clearManagedSystemProxy()
@@ -495,6 +495,7 @@ setReloadActiveCoreHook(async (configPath, profileId) => {
     })
     return
   }
+  broadcastCustomRuleDiagnostics(await validateGeneratedConfig(configPath, profileId))
   log(`applying config profile=${profileId} reason=live-reload`)
   mihomoApi.ensureSecretFromStore()
   await mihomoApi.putConfigs(configPath)

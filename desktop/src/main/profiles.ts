@@ -7,18 +7,27 @@ import {
   rmSync,
   copyFileSync,
 } from 'fs'
+import { spawn } from 'child_process'
 import { join } from 'path'
 import yaml from 'js-yaml'
 import { v4 as uuidv4 } from 'uuid'
 import { dialog } from 'electron'
+import type { AccessControlRule, AppSettings, ProfileMeta, SubscriptionInfo } from '../shared/types'
 import type {
-  AccessControlRule,
-  AppSettings,
-  ProfileMeta,
-  SubscriptionInfo,
-} from '../shared/types'
-import { policyToClash } from '../shared/types'
-import { profileDir, profilesRoot } from './paths'
+  CustomRuleContext,
+  CustomRuleDiagnostic,
+  CustomRuleProfileContext,
+} from '../shared/custom-rules'
+import { normalizeCustomRules, validateCustomRule } from '../shared/custom-rules'
+import {
+  bundledCoreDir,
+  coreBinaryPath,
+  coreHome,
+  corePresent,
+  mihomoSafePaths,
+  profileDir,
+  profilesRoot,
+} from './paths'
 import { getSettings, getSelections, store } from './store'
 import { log } from './logger'
 import {
@@ -37,9 +46,27 @@ import {
   type EffectiveNetworkConfig,
 } from './network-config'
 import { applyXrayMuxSettings } from './xray-mux-config'
+import {
+  applyCustomRules,
+  customRuleContextFromDocument,
+  emptyCustomRuleContext,
+  parseRuleFailure,
+  type InjectedCustomRule,
+} from './custom-rules-config'
+
+export { applyCustomRules, customRuleContextFromDocument } from './custom-rules-config'
 
 const BASE = 'base.yaml'
 const CONFIG = 'config.yaml'
+
+interface GeneratedCustomRules {
+  profileId: string
+  profileName: string
+  injected: InjectedCustomRule[]
+  skipped: CustomRuleDiagnostic[]
+}
+
+const generatedCustomRules = new Map<string, GeneratedCustomRules>()
 
 /** Set from core-manager to avoid a circular profiles ↔ core-manager import. */
 let reloadActiveCore: ((configPath: string, profileId: string) => Promise<void>) | null = null
@@ -100,7 +127,11 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
   const doc = parseClashMapping(raw)
 
   applyNetworkSettings(doc, settings)
-  applyAccessControlRules(doc, settings.accessControlRules ?? [])
+  const profileName = listProfiles().find((profile) => profile.id === profileId)?.name ?? profileId
+  const customRules = applyCustomRules(doc, settings.customRules ?? [], {
+    id: profileId,
+    name: profileName,
+  })
   applyXrayMuxSettings(doc, settings)
   ensureDns(doc)
 
@@ -113,8 +144,14 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
   if (secret) doc.secret = secret
 
   const out = yaml.dump(doc, { lineWidth: -1, noRefs: true })
-  writeFileSync(join(dir, CONFIG), out, 'utf8')
-  return join(dir, CONFIG)
+  const configPath = join(dir, CONFIG)
+  writeFileSync(configPath, out, 'utf8')
+  generatedCustomRules.set(configPath, {
+    profileId,
+    profileName,
+    ...customRules,
+  })
+  return configPath
 }
 
 /** Resolve launch requirements from base.yaml without writing config.yaml. */
@@ -137,45 +174,143 @@ export function readEffectiveNetworkConfig(
   return effectiveNetworkFromDocument(doc, overrideEnabled)
 }
 
-/** Prepend PROCESS-NAME rules at the top of rules (user Access Control). */
+/** @deprecated Compatibility wrapper for legacy PROCESS-NAME callers. */
 export function applyAccessControlRules(
   doc: Record<string, unknown>,
   rules: AccessControlRule[],
 ): void {
-  const injected = rules
-    .filter((r) => r.processName?.trim() && r.policy?.trim())
-    .map((r) => `PROCESS-NAME,${r.processName.trim()},${policyToClash(r.policy.trim())}`)
+  applyCustomRules(doc, normalizeCustomRules(undefined, rules))
+}
 
-  const existing = Array.isArray(doc.rules)
-    ? (doc.rules as unknown[]).filter((x): x is string => typeof x === 'string')
-    : []
+/** Custom Rule context from the active profile base.yaml (offline-safe). */
+export function getActiveCustomRuleContext(): CustomRuleContext {
+  const empty = emptyCustomRuleContext()
+  const activeProfileId = getActiveProfileId()
+  const profiles: CustomRuleProfileContext[] = []
 
-  // Drop previously injected PROCESS-NAME lines that match our format at the head,
-  // then prepend fresh ones so rebuild is idempotent relative to base.yaml content.
-  // Base may also contain PROCESS-NAME; we only prepend store rules each rebuild from base.
-  doc.rules = [...injected, ...existing]
+  for (const profile of listProfiles()) {
+    const basePath = join(profileDir(profile.id), BASE)
+    if (!existsSync(basePath)) continue
+    try {
+      const context = customRuleContextFromDocument(
+        parseClashMapping(readFileSync(basePath, 'utf8')),
+        { id: profile.id, name: profile.name },
+      )
+      profiles.push({
+        id: profile.id,
+        name: profile.name,
+        proxyGroups: context.proxyGroups,
+        proxyNames: context.proxyNames,
+        ruleSets: context.ruleSets,
+        subRules: context.subRules,
+        profileId: profile.id,
+        resolvedProxyTarget: context.resolvedProxyTarget,
+      })
+    } catch {
+      /* A malformed profile remains visible elsewhere, but cannot provide rule dependencies. */
+    }
+  }
+
+  const active = profiles.find((profile) => profile.id === activeProfileId)
+  return {
+    proxyGroups: active?.proxyGroups ?? [],
+    proxyNames: active?.proxyNames ?? [],
+    ruleSets: active?.ruleSets ?? [],
+    subRules: active?.subRules ?? [],
+    profileId: active?.id ?? activeProfileId,
+    resolvedProxyTarget: active?.resolvedProxyTarget ?? null,
+    activeProfileId,
+    profiles,
+    platform: empty.platform,
+  }
+}
+
+interface CoreConfigTestResult {
+  ok: boolean
+  output: string
+}
+
+function testCoreConfig(configPath: string): Promise<CoreConfigTestResult> {
+  mkdirSync(coreHome(), { recursive: true })
+  mkdirSync(profilesRoot(), { recursive: true })
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(coreBinaryPath(), ['-t', '-d', coreHome(), '-f', configPath], {
+      cwd: bundledCoreDir(),
+      env: { ...globalThis.process.env, SAFE_PATHS: mihomoSafePaths() },
+      windowsHide: true,
+    })
+    let output = ''
+    const timer = setTimeout(() => {
+      childProcess.kill()
+      reject(new Error('Core config validation timed out'))
+    }, 30_000)
+    childProcess.stdout?.on('data', (chunk) => {
+      output += chunk.toString()
+    })
+    childProcess.stderr?.on('data', (chunk) => {
+      output += chunk.toString()
+    })
+    childProcess.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    childProcess.once('exit', (code) => {
+      clearTimeout(timer)
+      resolve({ ok: code === 0, output: output.trim() })
+    })
+  })
+}
+
+/**
+ * Ask the bundled core to parse the final generated YAML. Invalid injected rules
+ * are removed one at a time; failures in profile-owned YAML remain fatal.
+ */
+export async function validateGeneratedConfig(
+  configPath: string,
+  profileId: string,
+): Promise<CustomRuleDiagnostic[]> {
+  const metadata = generatedCustomRules.get(configPath)
+  if (!metadata || metadata.profileId !== profileId) return []
+  const diagnostics = [...metadata.skipped]
+  if (!corePresent()) return diagnostics
+
+  const doc = parseClashMapping(readFileSync(configPath, 'utf8'))
+  const rules = Array.isArray(doc.rules) ? [...doc.rules] : []
+  const injected = [...metadata.injected]
+
+  for (let attempt = 0; attempt <= metadata.injected.length; attempt++) {
+    const result = await testCoreConfig(configPath)
+    if (result.ok) {
+      generatedCustomRules.set(configPath, { ...metadata, injected, skipped: diagnostics })
+      return diagnostics
+    }
+
+    const failure = parseRuleFailure(result.output)
+    if (!failure || failure.index < 0 || failure.index >= injected.length) {
+      throw new Error(`Profile config validation failed: ${result.output || 'unknown error'}`)
+    }
+
+    const rejected = injected[failure.index]!
+    diagnostics.push({
+      ruleId: rejected.id,
+      profileId: metadata.profileId,
+      profileName: metadata.profileName,
+      type: rejected.type,
+      payload: rejected.payload,
+      reason: failure.reason,
+    })
+    rules.splice(failure.index, 1)
+    injected.splice(failure.index, 1)
+    doc.rules = rules
+    writeFileSync(configPath, yaml.dump(doc, { lineWidth: -1, noRefs: true }), 'utf8')
+  }
+
+  throw new Error('Profile config validation failed after removing invalid Custom Rules')
 }
 
 /** Proxy-group names from active profile base.yaml (offline-safe). */
 export function getActiveProxyGroupNames(): string[] {
-  const id = getActiveProfileId()
-  if (!id) return []
-  const basePath = join(profileDir(id), BASE)
-  if (!existsSync(basePath)) return []
-  try {
-    const doc = parseClashMapping(readFileSync(basePath, 'utf8'))
-    const groups = doc['proxy-groups']
-    if (!Array.isArray(groups)) return []
-    const names: string[] = []
-    for (const g of groups) {
-      if (g && typeof g === 'object' && typeof (g as { name?: unknown }).name === 'string') {
-        names.push((g as { name: string }).name)
-      }
-    }
-    return names
-  } catch {
-    return []
-  }
+  return getActiveCustomRuleContext().proxyGroups
 }
 
 /** Proxy-group icon URLs from active profile base.yaml (`icon: https://...`). */
@@ -205,21 +340,23 @@ export function getProxyGroupIcons(): Record<string, string> {
 
 /** Validate a single PROCESS-NAME rule via YAML round-trip. */
 export function validateProcessNameRule(processName: string, policy: string): string {
-  const name = processName.trim()
-  const pol = policyToClash(policy.trim())
-  if (!name || !pol) throw new Error('process name and policy are required')
-  if (name.includes(',') || pol.includes(',')) {
-    throw new Error('process name and policy must not contain commas')
-  }
-  const line = `PROCESS-NAME,${name},${pol}`
-  const parts = line.split(',')
-  if (parts.length !== 3 || parts[0] !== 'PROCESS-NAME' || !parts[1] || !parts[2]) {
-    throw new Error(`invalid rule format: ${line}`)
-  }
+  const line = validateCustomRule({
+    id: 'legacy-validation',
+    type: 'PROCESS-NAME',
+    payload: processName,
+    action: policy,
+    enabled: true,
+    noResolve: false,
+    profileIds: null,
+  })
   const probe = { rules: [line] }
   const dumped = yaml.dump(probe, { lineWidth: -1, noRefs: true })
   const loaded = yaml.load(dumped)
-  if (!loaded || typeof loaded !== 'object' || !Array.isArray((loaded as { rules?: unknown }).rules)) {
+  if (
+    !loaded ||
+    typeof loaded !== 'object' ||
+    !Array.isArray((loaded as { rules?: unknown }).rules)
+  ) {
     throw new Error('YAML round-trip failed for rule')
   }
   return line
@@ -290,7 +427,10 @@ export async function importFromFileDialog(): Promise<ProfileMeta | null> {
 export const MANAGED_PROFILE_ID = 'managed-primary'
 
 function managedProfileId(key: string): string {
-  const safe = key.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 64)
+  const safe = key
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .slice(0, 64)
   return safe && safe !== 'primary' ? `managed-${safe}` : MANAGED_PROFILE_ID
 }
 
@@ -424,9 +564,7 @@ export async function refreshProfile(
   }
 
   const headers = subscriptionHeaders()
-  log(
-    `refreshing profile ${id} from ${subscriptionLogOrigin(url)} (reloadCore=${opts.reloadCore})`,
-  )
+  log(`refreshing profile ${id} from ${subscriptionLogOrigin(url)} (reloadCore=${opts.reloadCore})`)
   const res = await fetch(url, { headers, redirect: 'follow' })
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')

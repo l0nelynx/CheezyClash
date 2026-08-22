@@ -38,6 +38,7 @@ export default function App(): React.JSX.Element {
   const [authHandoffError, setAuthHandoffError] = useState<string | null>(null)
   const [loginRequested, setLoginRequested] = useState(false)
   const handledDeepLinkSequence = useRef(0)
+  const lastCustomRuleDiagnosticAt = useRef(0)
 
   const refreshAuth = useCallback(async () => {
     const c = await window.cheezy.privateCapabilities()
@@ -102,13 +103,27 @@ export default function App(): React.JSX.Element {
   }, [handleDeepLinkResult])
 
   useEffect(() => {
+    return window.cheezy.onCustomRuleDiagnostics((diagnostics) => {
+      if (diagnostics.length === 0) return
+      lastCustomRuleDiagnosticAt.current = Date.now()
+      if (diagnostics.length === 1) {
+        const diagnostic = diagnostics[0]!
+        showNotice(`Custom Rule skipped for “${diagnostic.profileName}”: ${diagnostic.reason}`)
+        return
+      }
+      const profileCount = new Set(diagnostics.map((diagnostic) => diagnostic.profileId)).size
+      showNotice(
+        `${diagnostics.length} Custom Rules skipped for ${profileCount} profile${profileCount === 1 ? '' : 's'}`,
+      )
+    })
+  }, [showNotice])
+
+  useEffect(() => {
     if (caps?.productName) document.title = caps.productName
   }, [caps?.productName])
 
   const activeProfile =
-    state.activeId != null
-      ? (state.profiles.find((p) => p.id === state.activeId) ?? null)
-      : null
+    state.activeId != null ? (state.profiles.find((p) => p.id === state.activeId) ?? null) : null
 
   const healthOne = useCallback(
     async (group: string) => {
@@ -147,7 +162,9 @@ export default function App(): React.JSX.Element {
 
   if (!authReady || !caps || !state.ready) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
     )
   }
 
@@ -206,7 +223,9 @@ export default function App(): React.JSX.Element {
           groups={groups}
           latencies={state.latencies}
           busy={busy}
-          onConnect={() => run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' })}
+          onConnect={() =>
+            run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' })
+          }
           onDisconnect={() =>
             run(() => window.cheezy.disconnect(), { success: 'Disconnected', scope: 'home' })
           }
@@ -284,10 +303,12 @@ export default function App(): React.JSX.Element {
             onConnectionMode={(mode) =>
               run(() => window.cheezy.setConnectionMode(mode), { scope: 'settings' })
             }
-            onAccessControlChange={async (rules) => {
-              await window.cheezy.setAccessControlRules(rules)
+            onCustomRulesChange={async (rules) => {
+              await window.cheezy.setCustomRules(rules)
               await state.refresh()
-              showNotice('Access rules saved')
+              if (Date.now() - lastCustomRuleDiagnosticAt.current > 1_000) {
+                showNotice('Custom rules saved')
+              }
             }}
             onLogin={() => {
               setAuthHandoffError(null)
@@ -313,7 +334,9 @@ export default function App(): React.JSX.Element {
             }
           />
         ) : (
-          <div className="mx-auto max-w-3xl py-12 text-center text-sm text-muted-foreground">Loading settings…</div>
+          <div className="mx-auto max-w-3xl py-12 text-center text-sm text-muted-foreground">
+            Loading settings…
+          </div>
         ))}
 
       {tab === 'logs' && <LogsPage logs={state.logs} />}

@@ -9,6 +9,7 @@ import type {
   TrafficSnapshot,
   TunStatus,
 } from '../shared/types'
+import type { CustomRule, CustomRuleContext, CustomRuleDiagnostic } from '../shared/custom-rules'
 import {
   PRIVATE_IPC,
   type PrivateAccountSession,
@@ -19,8 +20,7 @@ import { DEEP_LINK_IPC, type DeepLinkResult } from '../shared/deep-link'
 
 const api = {
   getStatus: (): Promise<CoreStatus> => ipcRenderer.invoke('core:status'),
-  connect: (mode?: ConnectionMode): Promise<CoreStatus> =>
-    ipcRenderer.invoke('core:connect', mode),
+  connect: (mode?: ConnectionMode): Promise<CoreStatus> => ipcRenderer.invoke('core:connect', mode),
   disconnect: (): Promise<CoreStatus> => ipcRenderer.invoke('core:disconnect'),
   getTraffic: (): Promise<TrafficSnapshot> => ipcRenderer.invoke('core:traffic'),
   getGroups: (): Promise<ProxyGroupInfo[]> => ipcRenderer.invoke('proxies:groups'),
@@ -29,18 +29,13 @@ const api = {
   healthCheck: (group: string): Promise<Record<string, number>> =>
     ipcRenderer.invoke('proxies:health', group),
   listProfiles: (): Promise<ProfileMeta[]> => ipcRenderer.invoke('profiles:list'),
-  getActiveProfileId: (): Promise<string | null> =>
-    ipcRenderer.invoke('profiles:active'),
+  getActiveProfileId: (): Promise<string | null> => ipcRenderer.invoke('profiles:active'),
   importProfileUrl: (url: string, name?: string): Promise<ProfileMeta> =>
     ipcRenderer.invoke('profiles:importUrl', url, name),
-  importProfileFile: (): Promise<ProfileMeta | null> =>
-    ipcRenderer.invoke('profiles:importFile'),
-  setActiveProfile: (id: string): Promise<void> =>
-    ipcRenderer.invoke('profiles:setActive', id),
-  updateProfile: (id: string): Promise<ProfileMeta> =>
-    ipcRenderer.invoke('profiles:update', id),
-  deleteProfile: (id: string): Promise<void> =>
-    ipcRenderer.invoke('profiles:delete', id),
+  importProfileFile: (): Promise<ProfileMeta | null> => ipcRenderer.invoke('profiles:importFile'),
+  setActiveProfile: (id: string): Promise<void> => ipcRenderer.invoke('profiles:setActive', id),
+  updateProfile: (id: string): Promise<ProfileMeta> => ipcRenderer.invoke('profiles:update', id),
+  deleteProfile: (id: string): Promise<void> => ipcRenderer.invoke('profiles:delete', id),
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
   setSettings: (patch: Partial<AppSettings>): Promise<AppSettings> =>
     ipcRenderer.invoke('settings:set', patch),
@@ -53,14 +48,19 @@ const api = {
   getLogs: (): Promise<string[]> => ipcRenderer.invoke('logs:get'),
   listProcesses: (): Promise<{ name: string; pid: number }[]> =>
     ipcRenderer.invoke('processes:list'),
-  getProxyGroupNames: (): Promise<string[]> =>
-    ipcRenderer.invoke('profiles:proxyGroupNames'),
+  getProxyGroupNames: (): Promise<string[]> => ipcRenderer.invoke('profiles:proxyGroupNames'),
+  getCustomRuleContext: (): Promise<CustomRuleContext> => ipcRenderer.invoke('customRules:context'),
+  validateCustomRule: (rule: CustomRule): Promise<string> =>
+    ipcRenderer.invoke('customRules:validate', rule),
+  setCustomRules: (rules: CustomRule[]): Promise<AppSettings> =>
+    ipcRenderer.invoke('customRules:set', rules),
+  pickProcessPath: (kind: 'file' | 'directory'): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:pickProcessPath', kind),
   validateAccessControlRule: (processName: string, policy: string): Promise<string> =>
     ipcRenderer.invoke('accessControl:validate', processName, policy),
   setAccessControlRules: (rules: AccessControlRule[]): Promise<AppSettings> =>
     ipcRenderer.invoke('accessControl:set', rules),
-  pickExecutable: (): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:pickExecutable'),
+  pickExecutable: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickExecutable'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
   getCoreVersion: (): Promise<{ version?: string; meta?: boolean }> =>
     ipcRenderer.invoke('core:version'),
@@ -87,6 +87,11 @@ const api = {
     ipcRenderer.on('profiles:changed', handler)
     return () => ipcRenderer.removeListener('profiles:changed', handler)
   },
+  onCustomRuleDiagnostics: (cb: (diagnostics: CustomRuleDiagnostic[]) => void): (() => void) => {
+    const handler = (_: unknown, diagnostics: CustomRuleDiagnostic[]): void => cb(diagnostics)
+    ipcRenderer.on('customRules:diagnostics', handler)
+    return () => ipcRenderer.removeListener('customRules:diagnostics', handler)
+  },
   consumeDeepLinkResult: (): Promise<DeepLinkResult | null> =>
     ipcRenderer.invoke(DEEP_LINK_IPC.consumeResult),
   onDeepLinkResult: (cb: (result: DeepLinkResult) => void): (() => void) => {
@@ -95,8 +100,7 @@ const api = {
     return () => ipcRenderer.removeListener(DEEP_LINK_IPC.result, handler)
   },
   windowMinimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
-  windowMaximizeToggle: (): Promise<boolean> =>
-    ipcRenderer.invoke('window:maximizeToggle'),
+  windowMaximizeToggle: (): Promise<boolean> => ipcRenderer.invoke('window:maximizeToggle'),
   windowClose: (): Promise<void> => ipcRenderer.invoke('window:close'),
   windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
   onWindowMaximized: (cb: (maximized: boolean) => void): (() => void) => {

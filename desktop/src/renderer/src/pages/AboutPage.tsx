@@ -38,7 +38,7 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
 
       <section className="page-card space-y-3 p-4">
         <Row label="Application" value={`${productName} ${appVer}`} />
-        <Row label="Engine" value={coreVer} breakAll />
+        <Row label="Core" value={coreVer} breakAll />
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">Documentation</p>
           <Button

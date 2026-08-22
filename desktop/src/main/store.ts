@@ -37,7 +37,15 @@ export const store = new Store<StoreSchema>({
 })
 
 export function getSettings(): AppSettings {
-  return normalizeSettings(store.get('settings'))
+  const raw = store.get('settings') as AppSettings & {
+    accessControlRules?: unknown[]
+    customRules?: unknown[]
+  }
+  const normalized = normalizeSettings(raw)
+  if (!Array.isArray(raw.customRules) && Array.isArray(raw.accessControlRules)) {
+    store.set('settings', normalized)
+  }
+  return normalized
 }
 
 export function setSettings(patch: Partial<AppSettings>): AppSettings {

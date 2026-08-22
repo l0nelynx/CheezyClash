@@ -4,7 +4,7 @@ import { applyXrayMuxSettings } from '../src/main/xray-mux-config.ts'
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/shared/types.ts'
 
 function settings(patch = {}) {
-  return { ...DEFAULT_SETTINGS, ...patch, accessControlRules: [] }
+  return { ...DEFAULT_SETTINGS, ...patch, customRules: [] }
 }
 
 const defaultMux = {
