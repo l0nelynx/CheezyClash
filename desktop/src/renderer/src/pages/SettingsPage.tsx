@@ -24,6 +24,7 @@ interface Props {
   onPatch: (patch: Partial<AppSettings>) => void
   onConnectionMode: (mode: ConnectionMode) => void
   onAccessControlChange: (rules: AccessControlRule[]) => Promise<void> | void
+  onLogin: () => void
   onLogout: () => void
   onSyncSubscription: () => void
 }
@@ -37,6 +38,7 @@ export function SettingsPage({
   onPatch,
   onConnectionMode,
   onAccessControlChange,
+  onLogin,
   onLogout,
   onSyncSubscription,
 }: Props): React.JSX.Element {
@@ -123,6 +125,7 @@ export function SettingsPage({
   }, [settings.xrayMuxMaxDialsPerMinute])
 
   const mode = settings.connectionMode ?? (settings.tunEnabled ? 'tun' : 'proxy')
+  const signedIn = !!session?.email
   const networkLocked = busy || !settings.networkOverrideEnabled
   const ruleCount = settings.accessControlRules?.length ?? 0
 
@@ -137,19 +140,36 @@ export function SettingsPage({
         <Section title="Account">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-ink">{session?.email || 'Signed in'}</p>
+              <p className="text-sm font-medium text-ink">{session?.email || 'Not signed in'}</p>
               <p className="text-xs text-ink-dim">
-                {session?.emailVerified === false ? 'Email not verified' : 'Account'}
+                {signedIn
+                  ? session?.emailVerified === false
+                    ? 'Email not verified'
+                    : 'Account'
+                  : 'Using a subscription imported from a link'}
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onSyncSubscription}>
-                Sync
+            {signedIn ? (
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onSyncSubscription}>
+                  Sync
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={busy}
+                  onClick={onLogout}
+                >
+                  Log out
+                </Button>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onLogin}>
+                Sign in
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={onLogout}>
-                Log out
-              </Button>
-            </div>
+            )}
           </div>
         </Section>
       )}

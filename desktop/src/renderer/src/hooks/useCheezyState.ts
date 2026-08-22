@@ -42,7 +42,8 @@ export function useCheezyState() {
   const [busy, setBusy] = useState(false)
   const [busyScope, setBusyScope] = useState<Tab | 'global' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
   const runningRef = useRef(false)
   const tabRef = useRef<Tab>('home')
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -121,7 +122,9 @@ export function useCheezyState() {
           setDownRateHistory([])
         }
       } catch (e) {
-        setError(friendlyError(e))
+        setError(friendlyError(e))
+      } finally {
+        setReady(true)
       }
     },
     [applyGroups, pushDownRate],
@@ -261,7 +264,8 @@ export function useCheezyState() {
     logs,
     busy: tabBusy,
     error,
-    notice,
+    notice,
+    ready,
     clearError,
     clearNotice,
     showNotice,

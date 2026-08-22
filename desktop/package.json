@@ -23,6 +23,7 @@
     "dist:linux": "npm run fetch-core && npm run sync-version && npm run icons && npm run build && electron-builder --linux",
     "dist:mac": "npm run fetch-core && npm run sync-version && npm run icons && npm run build && electron-builder --mac",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test:auth-gate": "node scripts/test-auth-gate.mjs",
     "test:deeplink": "node scripts/test-deep-link.mjs",
     "test:core-contract": "node scripts/test-core-contract.mjs",
     "test:lifecycle": "node scripts/test-lifecycle-coordinator.mjs",

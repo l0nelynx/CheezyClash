@@ -9,6 +9,7 @@ import { LogsPage } from './pages/LogsPage'
 import { ProfilesPage } from './pages/ProfilesPage'
 import { ProxiesPage } from './pages/ProxiesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { shouldShowLogin } from './lib/auth-gate'
 import type { PrivateAccountSession, PrivateCapabilities } from '../../shared/private-api'
 import type { DeepLinkResult } from '../../shared/deep-link'
 
@@ -35,6 +36,7 @@ export default function App(): React.JSX.Element {
   const [session, setSession] = useState<PrivateAccountSession | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [authHandoffError, setAuthHandoffError] = useState<string | null>(null)
+  const [loginRequested, setLoginRequested] = useState(false)
   const handledDeepLinkSequence = useRef(0)
 
   const refreshAuth = useCallback(async () => {
@@ -61,6 +63,7 @@ export default function App(): React.JSX.Element {
       if (result.kind === 'login') {
         if (result.status === 'success') {
           setAuthHandoffError(null)
+          setLoginRequested(false)
           setTab('home')
           if (result.session?.email) {
             setSession(result.session)
@@ -77,6 +80,7 @@ export default function App(): React.JSX.Element {
           server: 'Could not complete browser sign-in. Please try again.',
         }
         setAuthHandoffError(messages[result.error])
+        setLoginRequested(true)
         return
       }
 
@@ -141,13 +145,20 @@ export default function App(): React.JSX.Element {
     }
   }, [groups, setGroupLatencies, showNotice])
 
-  if (!authReady || !caps) {
+  if (!authReady || !caps || !state.ready) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
     )
   }
 
-  if (caps.supportsAuth && !session?.email) {
+  const showLogin = shouldShowLogin({
+    supportsAuth: caps.supportsAuth,
+    hasSession: !!session?.email,
+    hasProfiles: state.profiles.length > 0,
+    loginRequested,
+  })
+
+  if (showLogin) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <TitleBar status={null} productName={caps.productName} />
@@ -155,7 +166,17 @@ export default function App(): React.JSX.Element {
           <LoginPage
             productName={caps.productName}
             handoffError={authHandoffError}
+            onImportUrl={async (url) => {
+              await window.cheezy.importProfileUrl(url)
+              await state.refresh()
+              setAuthHandoffError(null)
+              setLoginRequested(false)
+              showNotice('Subscription imported')
+            }}
+            onCancel={state.profiles.length > 0 ? () => setLoginRequested(false) : undefined}
             onLoggedIn={() => {
+              setAuthHandoffError(null)
+              setLoginRequested(false)
               void refreshAuth().then(() => state.refresh())
             }}
           />
@@ -267,6 +288,10 @@ export default function App(): React.JSX.Element {
               await window.cheezy.setAccessControlRules(rules)
               await state.refresh()
               showNotice('Access rules saved')
+            }}
+            onLogin={() => {
+              setAuthHandoffError(null)
+              setLoginRequested(true)
             }}
             onLogout={() =>
               run(
