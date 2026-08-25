@@ -154,6 +154,7 @@
     <string name="sb_subscription_transferred">Subscription transferred</string>
     <string name="sb_telegram_unlinked">Telegram unlinked</string>
     <string name="sb_start_vpn_for_ping">Start the VPN to measure ping</string>
+    <string name="error_ping_failed">Couldn\'t run the proxy check</string>
     <string name="error_no_active_profile">No active profile</string>
     <string name="error_load_failed">Load failed: %1$s</string>
     <string name="error_refresh_failed">Refresh failed: %1$s</string>

@@ -57,8 +57,9 @@ extern void  stopHttp(void);
 extern char *queryGroupNames(int excludeNotSelectable);
 extern char *queryGroup(c_string name, c_string sortMode);
 
-extern void healthCheck(void *completable, c_string name);
-extern void healthCheckAll(void);
+extern void healthCheckAll(void *completable);
+extern void healthCheckGroup(void *completable, c_string name);
+extern void healthCheckProxy(void *completable, c_string group, c_string proxy);
 
 extern int patchSelector(c_string selector, c_string name);
 

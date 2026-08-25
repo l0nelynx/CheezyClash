@@ -1,6 +1,6 @@
 package com.cheezy.freedom.clash;
 
-interface IClashCallback {
+oneway interface IClashCallback {
     void onStateChanged(boolean running, String lastError);
     void onPhaseChanged(int phase);
     void onTrafficUpdated(long bytesPerSecond);

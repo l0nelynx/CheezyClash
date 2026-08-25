@@ -65,18 +65,28 @@ func queryGroup(name C.c_string, sortMode C.c_string) *C.char {
 	return marshalJson(response)
 }
 
-//export healthCheck
-func healthCheck(completable unsafe.Pointer, name C.c_string) {
+//export healthCheckGroup
+func healthCheckGroup(completable unsafe.Pointer, name C.c_string) {
 	go func(name string) {
-		tunnel.HealthCheck(name)
-
-		C.complete(completable, nil)
+		defer C.release_object(completable)
+		C.complete(completable, marshalString(tunnel.HealthCheckGroup(name)))
 	}(C.GoString(name))
 }
 
 //export healthCheckAll
-func healthCheckAll() {
-	tunnel.HealthCheckAll()
+func healthCheckAll(completable unsafe.Pointer) {
+	go func() {
+		defer C.release_object(completable)
+		C.complete(completable, marshalString(tunnel.HealthCheckAll()))
+	}()
+}
+
+//export healthCheckProxy
+func healthCheckProxy(completable unsafe.Pointer, group, proxy C.c_string) {
+	go func(group, proxy string) {
+		defer C.release_object(completable)
+		C.complete(completable, marshalString(tunnel.HealthCheckProxy(group, proxy)))
+	}(C.GoString(group), C.GoString(proxy))
 }
 
 //export patchSelector

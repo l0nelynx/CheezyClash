@@ -1,5 +1,5 @@
 package com.cheezy.freedom.clash;
 
-interface ILogcatCallback {
+oneway interface ILogcatCallback {
     void onLogReceived(String jsonPayload);
 }

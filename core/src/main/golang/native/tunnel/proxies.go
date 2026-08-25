@@ -265,18 +265,34 @@ func delayFromHistories(preferred, fallback []C.DelayHistory) (delay int, availa
 	return int(last), true
 }
 
-func groupTestURL(group outboundgroup.ProxyGroup) string {
+func groupTestMetadata(group outboundgroup.ProxyGroup) (testURL, expectedStatus string, err error) {
 	raw, err := group.MarshalJSON()
 	if err != nil {
-		return ""
+		return "", "", err
 	}
+	return parseGroupTestMetadata(raw)
+}
+
+func parseGroupTestMetadata(raw []byte) (testURL, expectedStatus string, err error) {
 	var payload struct {
-		TestURL string `json:"testUrl"`
+		TestURL        string `json:"testUrl"`
+		ExpectedStatus string `json:"expectedStatus"`
 	}
-	if json.Unmarshal(raw, &payload) != nil {
-		return ""
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", "", err
 	}
-	return payload.TestURL
+	if payload.TestURL == "" {
+		payload.TestURL = C.DefaultTestURL
+	}
+	return payload.TestURL, payload.ExpectedStatus, nil
+}
+
+func groupTestURL(group outboundgroup.ProxyGroup) string {
+	testURL, _, err := groupTestMetadata(group)
+	if err != nil {
+		return C.DefaultTestURL
+	}
+	return testURL
 }
 
 func proxyTestURL(proxy C.Proxy, preferred string) string {

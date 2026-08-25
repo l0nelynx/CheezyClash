@@ -56,6 +56,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PASSIVE_PROXY_REFRESH_MS = 15_000L
 
+internal fun isCurrentProfileSnapshot(expectedProfileId: String?, currentProfileId: String?): Boolean =
+    expectedProfileId == currentProfileId
+
 sealed class MainEffect {
     data class LaunchVerify(val email: String?) : MainEffect()
     data class ShowSnackbar(val text: String) : MainEffect()
@@ -416,7 +419,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _wapSettings.value = settings
             if (wasRunning) {
                 ClashVpnService.stop(context)
-                delay(750)
                 ClashVpnService.start(context)
             }
         }
@@ -432,7 +434,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _xrayMuxSettings.value = settings
             if (wasRunning) {
                 ClashVpnService.stop(context)
-                delay(750)
                 ClashVpnService.start(context)
             }
         }
@@ -688,6 +689,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun reloadProxyGroupsInternal(forceLoad: Boolean) {
         if (!ClashRemoteManager.connected.value) return
+        val requestedProfileId = ProfileStore.activeId(context)
 
         val result = withContext(Dispatchers.IO) {
             runCatching {
@@ -730,6 +732,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         result.onSuccess { (snapshot, icons) ->
+            if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@onSuccess
             applyRuntimeSnapshot(snapshot, replaceGroups = forceLoad)
             _groupIcons.value = icons
             if (snapshot.groups.isNotEmpty()) {
@@ -740,6 +743,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun refreshRuntimeProxySnapshot() {
         if (!ClashRemoteManager.connected.value || !ClashState.running.value) return
+        val requestedProfileId = ProfileStore.activeId(context)
         val result = withContext(Dispatchers.IO) {
             runCatching {
                 proxySnapshotMutex.withLock {
@@ -753,6 +757,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         result.onSuccess { snapshot ->
+            if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@onSuccess
             snapshot?.let { applyRuntimeSnapshot(it, replaceGroups = false) }
         }
     }
@@ -810,32 +815,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         viewModelScope.launch {
+            val requestedProfileId = ProfileStore.activeId(context)
             _isPinging.value = true
             try {
                 val current = _proxyGroups.value ?: return@launch
-                val targetGroups = current.map { it.first }.toMutableSet()
-                current.forEach { (_, proxies) ->
-                    proxies.forEach { p ->
-                        if (p.type == "URLTest" || p.type == "Fallback" || p.type == "LoadBalance" || p.type == "Selector" || p.type == "Smart")
-                            targetGroups.add(p.name)
-                    }
+                if (current.isEmpty()) return@launch
+                val ok = withContext(Dispatchers.IO) {
+                    withTimeoutOrNull(9_000L) { ClashRemoteManager.healthCheckAll() } ?: false
                 }
-
-                withContext(Dispatchers.IO) {
-                    coroutineScope {
-                        targetGroups.map { name ->
-                            async {
-                                withTimeoutOrNull(5000L) {
-                                    runCatching { ClashRemoteManager.healthCheck(name) }
-                                }
-                            }
-                        }.awaitAll()
-                    }
-                    // Give some time for pings to complete on the service side
-                    kotlinx.coroutines.delay(2000)
-
-                }
+                if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@launch
                 refreshRuntimeProxySnapshot()
+                if (!ok) {
+                    _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_ping_failed)))
+                }
             } finally {
                 _isPinging.value = false
             }
@@ -884,25 +876,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun pingGroup(groupName: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                withTimeoutOrNull(5_000L) {
-                    runCatching { ClashRemoteManager.healthCheck(groupName) }
-                }
-                delay(2000)
+            val requestedProfileId = ProfileStore.activeId(context)
+            val ok = withContext(Dispatchers.IO) {
+                withTimeoutOrNull(8_000L) {
+                    ClashRemoteManager.healthCheckGroup(groupName)
+                } ?: false
             }
+            if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@launch
             refreshRuntimeProxySnapshot()
+            if (!ok) {
+                _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_ping_failed)))
+            }
         }
     }
 
     fun pingProxy(groupName: String, proxyName: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                withTimeoutOrNull(5_000L) {
-                    runCatching { ClashRemoteManager.healthCheck(proxyName) }
-                }
-                delay(2000)
+            val requestedProfileId = ProfileStore.activeId(context)
+            val ok = withContext(Dispatchers.IO) {
+                withTimeoutOrNull(8_000L) {
+                    ClashRemoteManager.healthCheckProxy(groupName, proxyName)
+                } ?: false
             }
+            if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@launch
             refreshRuntimeProxySnapshot()
+            if (!ok) {
+                _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.error_ping_failed)))
+            }
         }
     }
 

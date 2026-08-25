@@ -17,6 +17,15 @@ type message struct {
 	Time    int64  `json:"time"`
 }
 
+const expectedControllerClose = "External controller serve error: http: Server closed"
+
+func effectiveLogLevel(event log.Event) log.LogLevel {
+	if event.LogLevel == log.ERROR && strings.TrimSpace(event.Payload) == expectedControllerClose {
+		return log.DEBUG
+	}
+	return event.LogLevel
+}
+
 func init() {
 	go func() {
 		sub := log.Subscribe()
@@ -24,8 +33,9 @@ func init() {
 
 		for msg := range sub {
 			cPayload := C.CString(msg.Payload)
+			level := effectiveLogLevel(msg)
 
-			switch msg.LogLevel {
+			switch level {
 			case log.INFO:
 				C.log_info(cPayload)
 			case log.ERROR:
@@ -48,12 +58,13 @@ func subscribeLogcat(remote unsafe.Pointer) {
 		defer log.UnSubscribe(sub)
 
 		for msg := range sub {
-			if msg.LogLevel < log.Level() && !strings.HasPrefix(msg.Payload, "[APP]") {
+			level := effectiveLogLevel(msg)
+			if level < log.Level() && !strings.HasPrefix(msg.Payload, "[APP]") {
 				continue
 			}
 
 			rMsg := &message{
-				Level:   msg.LogLevel.String(),
+				Level:   level.String(),
 				Message: msg.Payload,
 				Time:    time.Now().UnixNano() / 1000 / 1000,
 			}

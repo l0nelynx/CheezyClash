@@ -134,12 +134,20 @@ object Clash {
     }
 
     suspend fun healthCheckAll() {
-        Bridge.nativeHealthCheckAll()
+        val deferred = CompletableDeferred<Unit>()
+        Bridge.nativeHealthCheckAll(deferred)
+        deferred.await()
     }
 
-    suspend fun healthCheck(name: String) {
+    suspend fun healthCheckGroup(name: String) {
         val deferred = CompletableDeferred<Unit>()
-        Bridge.nativeHealthCheck(deferred, name)
+        Bridge.nativeHealthCheckGroup(deferred, name)
+        deferred.await()
+    }
+
+    suspend fun healthCheckProxy(group: String, proxy: String) {
+        val deferred = CompletableDeferred<Unit>()
+        Bridge.nativeHealthCheckProxy(deferred, group, proxy)
         deferred.await()
     }
 

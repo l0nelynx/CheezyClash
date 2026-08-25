@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"golang.org/x/sync/semaphore"
@@ -22,7 +23,7 @@ type remoteTun struct {
 	closer   io.Closer
 	callback unsafe.Pointer
 
-	closed bool
+	closed atomic.Bool
 	limit  *semaphore.Weighted
 }
 
@@ -30,7 +31,7 @@ func (t *remoteTun) markSocket(fd int) bool {
 	_ = t.limit.Acquire(context.Background(), 1)
 	defer t.limit.Release(1)
 
-	if t.closed {
+	if t.closed.Load() {
 		return false
 	}
 
@@ -41,7 +42,7 @@ func (t *remoteTun) querySocketUid(protocol int, source, target string) int {
 	_ = t.limit.Acquire(context.Background(), 1)
 	defer t.limit.Release(1)
 
-	if t.closed {
+	if t.closed.Load() {
 		return -1
 	}
 
@@ -49,16 +50,24 @@ func (t *remoteTun) querySocketUid(protocol int, source, target string) int {
 }
 
 func (t *remoteTun) close() {
-	_ = t.limit.Acquire(context.TODO(), 4)
-	defer t.limit.Release(4)
+	if !t.closed.CompareAndSwap(false, true) {
+		return
+	}
 
-	t.closed = true
+	// Stop publishing callbacks before tearing the listener down. Calls already
+	// in flight keep their semaphore permit and the JNI object remains alive
+	// until they return; newly arriving calls observe closed=true and fail fast.
+	app.ApplyTunContext(nil, nil)
 
+	// Closing the listener closes the TUN fd. This must happen before waiting for
+	// cellular Network.bindSocket/protect callbacks, otherwise one stuck Binder
+	// call can keep Android's VPN interface alive indefinitely.
 	if t.closer != nil {
 		_ = t.closer.Close()
 	}
 
-	app.ApplyTunContext(nil, nil)
+	_ = t.limit.Acquire(context.Background(), 4)
+	defer t.limit.Release(4)
 
 	C.release_object(t.callback)
 }
@@ -79,7 +88,7 @@ func startTun(fd C.int, stack, gateway, portal, dns C.c_string, callback unsafe.
 	p := C.GoString(portal)
 	d := C.GoString(dns)
 
-	remote := &remoteTun{callback: callback, closed: false, limit: semaphore.NewWeighted(4)}
+	remote := &remoteTun{callback: callback, limit: semaphore.NewWeighted(4)}
 
 	app.ApplyTunContext(remote.markSocket, remote.querySocketUid)
 

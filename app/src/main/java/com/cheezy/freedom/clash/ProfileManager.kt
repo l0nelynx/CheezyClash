@@ -6,7 +6,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import kotlinx.coroutines.delay
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -156,7 +155,6 @@ object ProfileManager {
         ConfigOverrideManager.rebuild(context, dir)
         if (ClashState.running.value) {
             ClashVpnService.stop(context)
-            delay(400) // let the old tunnel tear down before starting the new one
             ClashVpnService.start(context)
         } else if (ClashRemoteManager.connected.value) {
             ConfigManager.reloadAndReapplySelections(context, dir)

@@ -157,6 +157,7 @@
     <string name="sb_subscription_transferred">Подписка перенесена</string>
     <string name="sb_telegram_unlinked">Telegram отвязан</string>
     <string name="sb_start_vpn_for_ping">Запустите VPN для замера пинга</string>
+    <string name="error_ping_failed">Не удалось выполнить проверку прокси</string>
     <string name="error_no_active_profile">Нет активного профиля</string>
     <string name="error_load_failed">Загрузка не удалась: %1$s</string>
     <string name="error_refresh_failed">Обновление не удалось: %1$s</string>

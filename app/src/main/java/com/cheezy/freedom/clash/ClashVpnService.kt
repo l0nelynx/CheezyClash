@@ -11,7 +11,9 @@ import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.net.Network
 import android.os.Build
+import android.os.IInterface
 import android.service.quicksettings.TileService
+import android.os.SystemClock
 import android.util.Log
 import android.os.RemoteCallbackList
 import android.os.RemoteException
@@ -20,6 +22,7 @@ import com.cheezy.freedom.R
 import com.cheezy.freedom.VpnTileService
 import com.github.kr328.clash.core.Clash
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -27,8 +30,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.net.URL
@@ -39,9 +43,15 @@ class ClashVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** Dedicated pool for binder stubs — avoids starving the default IO pool / binder threads indefinitely. */
     private val binderDispatcher = Dispatchers.IO.limitedParallelism(1)
+    /** Health checks may take several seconds and must not block state/config Binder queries. */
+    private val healthDispatcher = Dispatchers.IO.limitedParallelism(1)
+    private val lifecycleMutex = Mutex()
     private var startJob: Job? = null
+    private var stopJob: Job? = null
     private var trafficJob: Job? = null
     private var logJob: Job? = null
+    @Volatile private var lastStartId: Int = 0
+    @Volatile private var pendingStopStartId: Int = 0
 
     // AC settings captured from the start Intent (written by the main process).
     // SharedPreferences cannot be relied on across processes — the :vpn process
@@ -153,12 +163,12 @@ class ClashVpnService : VpnService() {
         scope.launch {
             ClashState.setError(message)
             ClashState.setPhase(ConnectionPhase.ERROR)
-            stopClash(cancelStartJob = false)
+            requestStop(preserveError = true)
         }
     }
 
-    private val callbacks = RemoteCallbackList<IClashCallback>()
-    private val logCallbacks = RemoteCallbackList<ILogcatCallback>()
+    private val callbacks = newCallbackList<IClashCallback>()
+    private val logCallbacks = newCallbackList<ILogcatCallback>()
 
     private val binder = object : IClashInterface.Stub() {
         override fun registerCallback(callback: IClashCallback) {
@@ -181,7 +191,7 @@ class ClashVpnService : VpnService() {
         override fun isRunning(): Boolean = ClashState.running.value
 
         override fun stopVpn() {
-            stopClash()
+            requestStop()
         }
 
         override fun loadConfig(path: String) = runBlocking(binderDispatcher) {
@@ -229,13 +239,31 @@ class ClashVpnService : VpnService() {
             }
         }
 
-        override fun healthCheck(name: String) {
-            scope.launch { Clash.healthCheck(name) }
+        override fun healthCheckAll(): Boolean = runBlocking(healthDispatcher) {
+            runCatching { withTimeout(8_000) { Clash.healthCheckAll() } }
+                .onFailure { Log.w(TAG, "Health check all failed", it) }
+                .isSuccess
+        }
+
+        override fun healthCheckGroup(name: String): Boolean = runBlocking(healthDispatcher) {
+            runCatching { withTimeout(7_000) { Clash.healthCheckGroup(name) } }
+                .onFailure { Log.w(TAG, "Health check group failed: $name", it) }
+                .isSuccess
+        }
+
+        override fun healthCheckProxy(group: String, proxy: String): Boolean = runBlocking(healthDispatcher) {
+            runCatching { withTimeout(7_000) { Clash.healthCheckProxy(group, proxy) } }
+                .onFailure { Log.w(TAG, "Health check proxy failed: $group -> $proxy", it) }
+                .isSuccess
         }
 
         override fun subscribeLogcat(callback: ILogcatCallback) {
             logCallbacks.register(callback)
             ensureLogSubscription()
+        }
+
+        override fun unsubscribeLogcat(callback: ILogcatCallback) {
+            logCallbacks.unregister(callback)
         }
     }
 
@@ -244,19 +272,7 @@ class ClashVpnService : VpnService() {
         logJob = scope.launch {
             com.github.kr328.clash.core.bridge.Bridge.nativeSubscribeLogcat(object : com.github.kr328.clash.core.bridge.LogcatInterface {
                 override fun received(jsonPayload: String) {
-                    synchronized(logCallbacks) {
-                        val n = logCallbacks.beginBroadcast()
-                        try {
-                            for (i in 0 until n) {
-                                try {
-                                    logCallbacks.getBroadcastItem(i).onLogReceived(jsonPayload)
-                                } catch (e: RemoteException) {
-                                }
-                            }
-                        } finally {
-                            logCallbacks.finishBroadcast()
-                        }
-                    }
+                    broadcastRemote(logCallbacks) { it.onLogReceived(jsonPayload) }
                 }
             })
         }
@@ -315,28 +331,58 @@ class ClashVpnService : VpnService() {
         }
     }
 
-    private fun broadcast(action: (IClashCallback) -> Unit) = synchronized(callbacks) {
-        val n = callbacks.beginBroadcast()
-        try {
-            for (i in 0 until n) {
+    private fun broadcast(action: (IClashCallback) -> Unit) {
+        broadcastRemote(callbacks, action)
+    }
+
+    private fun <T : IInterface> newCallbackList(): RemoteCallbackList<T> =
+        if (Build.VERSION.SDK_INT >= 36) {
+            RemoteCallbackList.Builder<T>(RemoteCallbackList.FROZEN_CALLEE_POLICY_DROP).build()
+        } else {
+            RemoteCallbackList()
+        }
+
+    private fun <T : IInterface> broadcastRemote(
+        list: RemoteCallbackList<T>,
+        action: (T) -> Unit,
+    ) = synchronized(list) {
+        if (Build.VERSION.SDK_INT >= 36) {
+            list.broadcast { callback ->
                 try {
-                    action(callbacks.getBroadcastItem(i))
+                    action(callback)
                 } catch (e: RemoteException) {
                     Log.w(TAG, "Dead callback during broadcast", e)
                 }
             }
-        } finally {
-            callbacks.finishBroadcast()
+        } else {
+            val n = list.beginBroadcast()
+            try {
+                for (i in 0 until n) {
+                    try {
+                        action(list.getBroadcastItem(i))
+                    } catch (e: RemoteException) {
+                        Log.w(TAG, "Dead callback during broadcast", e)
+                    }
+                }
+            } finally {
+                list.finishBroadcast()
+            }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         when (intent?.action) {
             ACTION_STOP -> {
-                stopClash()
+                requestStop(startId)
                 return START_NOT_STICKY
             }
         }
+        if (intent == null && !isRequestedRunning()) {
+            requestStop(startId)
+            return START_NOT_STICKY
+        }
+        setRequestedRunning(true)
         // Read AC settings + active profile dir from Intent extras (provided by the
         // main process in start()). Falls back to SharedPreferences only when intent
         // is null (OS restart after OOM kill), in which case the :vpn process is fresh
@@ -378,7 +424,20 @@ class ClashVpnService : VpnService() {
 
     private fun startClash() {
         if (startJob?.isActive == true) return
+        if (ClashState.running.value && stopJob?.isActive != true) return
+        val pendingStop = stopJob?.takeIf { it.isActive }
         startJob = scope.launch {
+            pendingStop?.join()
+            if (!isRequestedRunning()) return@launch
+            lifecycleMutex.withLock {
+                performStartClash()
+            }
+        }
+    }
+
+    private suspend fun performStartClash() {
+            if (!isRequestedRunning()) return
+
             var fd = -1
             var fdOwned = true
             try {
@@ -454,6 +513,8 @@ class ClashVpnService : VpnService() {
                     querySocketUid = { _, _, _ -> 0 },
                 )
                 fdOwned = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to start Clash", t)
                 if (fdOwned && fd >= 0) {
@@ -469,35 +530,47 @@ class ClashVpnService : VpnService() {
                 // Push error to main UI before teardown (lastError collector → AIDL).
                 ClashState.setError(t.message ?: t.javaClass.simpleName)
                 ClashState.setPhase(ConnectionPhase.ERROR)
-                // Do not cancel this startJob from inside itself — that can abort
-                // the catch via CancellationException before phase/error settle.
-                stopClash(cancelStartJob = false)
+                setRequestedRunning(false)
+                performStopClash(lastStartId, preserveError = true)
+            }
+    }
+
+    private fun requestStop(stopStartId: Int = lastStartId, preserveError: Boolean = false) {
+        setRequestedRunning(false)
+        pendingStopStartId = maxOf(pendingStopStartId, stopStartId)
+        trafficJob?.cancel()
+        trafficJob = null
+        startJob?.cancel()
+        startJob = null
+
+        if (stopJob?.isActive == true) return
+
+        if (!preserveError) ClashState.setPhase(ConnectionPhase.STOPPING)
+        stopJob = scope.launch {
+            lifecycleMutex.withLock {
+                performStopClash(stopStartId, preserveError)
             }
         }
     }
 
-    private fun stopClash(cancelStartJob: Boolean = true) {
+    private suspend fun performStopClash(stopStartId: Int, preserveError: Boolean) {
+        if (!preserveError) ClashState.setPhase(ConnectionPhase.STOPPING)
         trafficJob?.cancel()
         trafficJob = null
-        if (cancelStartJob) {
-            startJob?.cancel()
-            startJob = null
-        }
-        // Bound the native teardown so binder/main callers cannot hang forever.
-        runBlocking(Dispatchers.IO) {
-            withTimeoutOrNull(5_000) {
-                runCatching { Clash.stopTun() }
-                runCatching { Clash.stopHttp() }
-                runCatching { Clash.clearSocketPolicy() }
-                runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
-            }
-        }
+
         wapSession?.close()
         wapSession = null
+
+        stopStage("tun-close") { Clash.stopTun() }
+        stopStage("http-close") { Clash.stopHttp() }
+        stopStage("socket-policy") { Clash.clearSocketPolicy() }
+        stopStage("core-reset") { com.github.kr328.clash.core.bridge.Bridge.nativeReset() }
+
         runtimeConfigPrepared = false
         ClashState.setRunning(false)
-        // Keep ERROR phase + lastError when tearing down a failed start.
-        if (ClashState.phase.value != ConnectionPhase.ERROR) {
+        if (preserveError) {
+            ClashState.setPhase(ConnectionPhase.ERROR)
+        } else {
             ClashState.setPhase(ConnectionPhase.IDLE)
         }
         ClashState.setTunAddress(null)
@@ -505,7 +578,19 @@ class ClashVpnService : VpnService() {
         ClashState.setActiveProxy(null)
         updateTile()
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
-        stopSelf()
+        val effectiveStopStartId = maxOf(stopStartId, pendingStopStartId)
+        if (effectiveStopStartId > 0) {
+            stopSelfResult(effectiveStopStartId)
+        } else {
+            stopSelf()
+        }
+    }
+
+    private suspend fun stopStage(name: String, action: suspend () -> Unit) {
+        val startedAt = SystemClock.elapsedRealtime()
+        runCatching { action() }
+            .onFailure { Log.w(TAG, "VPN stop stage failed: $name", it) }
+        Log.i(TAG, "VPN stop stage $name completed in ${SystemClock.elapsedRealtime() - startedAt} ms")
     }
 
     private fun updateTile() {
@@ -563,13 +648,30 @@ class ClashVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        stopClash()
+        requestStop()
     }
 
     override fun onDestroy() {
-        stopClash()
+        trafficJob?.cancel()
+        startJob?.cancel()
+        stopJob?.cancel()
+        wapSession?.close()
+        wapSession = null
+        runCatching { com.github.kr328.clash.core.bridge.Bridge.nativeStopTun() }
+        callbacks.kill()
+        logCallbacks.kill()
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun isRequestedRunning(): Boolean =
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE).getBoolean(KEY_REQUESTED_RUNNING, false)
+
+    private fun setRequestedRunning(value: Boolean) {
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_REQUESTED_RUNNING, value)
+            .commit()
     }
 
     private fun startForegroundCompat() {
@@ -622,6 +724,8 @@ class ClashVpnService : VpnService() {
         private const val TAG = "ClashVpnService"
         private const val CHANNEL_ID = "cheezy.vpn"
         private const val NOTIFICATION_ID = 7
+        private const val STATE_PREFS = "cheezy.vpn.state"
+        private const val KEY_REQUESTED_RUNNING = "requested_running"
 
         const val ACTION_STOP = "com.cheezy.freedom.action.STOP"
 

@@ -6,6 +6,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.github.kr328.clash.core.model.LogMessage
 import com.github.kr328.clash.core.model.ProxyGroup
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +29,7 @@ object ClashRemoteManager {
     private const val TAG = "ClashRemote"
     private var service: IClashInterface? = null
     private lateinit var appContext: Context
+    private var bound = false
     
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -59,9 +64,15 @@ object ClashRemoteManager {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             Log.d(TAG, "Service connected")
-            service = IClashInterface.Stub.asInterface(binder)
-            runCatching { service?.registerCallback(callback) }
-            _connected.value = true
+            val remote = IClashInterface.Stub.asInterface(binder)
+            service = remote
+            val registered = runCatching {
+                remote.registerCallback(callback)
+                true
+            }.onFailure { Log.w(TAG, "Failed to register service callback", it) }
+                .getOrDefault(false)
+            _connected.value = registered
+            if (!registered) service = null
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -69,14 +80,62 @@ object ClashRemoteManager {
             service = null
             _connected.value = false
         }
+
+        override fun onBindingDied(name: ComponentName?) {
+            Log.w(TAG, "Service binding died")
+            service = null
+            _connected.value = false
+            synchronized(this@ClashRemoteManager) {
+                if (bound) runCatching { appContext.unbindService(this) }
+                bound = false
+            }
+            if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                bind()
+            }
+        }
+
+        override fun onNullBinding(name: ComponentName?) {
+            Log.e(TAG, "Service returned a null binding")
+            service = null
+            _connected.value = false
+            synchronized(this@ClashRemoteManager) {
+                if (bound) runCatching { appContext.unbindService(this) }
+                bound = false
+            }
+        }
+    }
+
+    private val processObserver = object : DefaultLifecycleObserver {
+        override fun onStart(owner: LifecycleOwner) = bind()
+        override fun onStop(owner: LifecycleOwner) = unbind()
     }
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        val intent = Intent(context, ClashVpnService::class.java).apply {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
+        if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            bind()
+        }
+    }
+
+    @Synchronized
+    private fun bind() {
+        if (bound) return
+        val intent = Intent(appContext, ClashVpnService::class.java).apply {
             action = "com.cheezy.freedom.clash.IClashInterface"
         }
-        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        bound = appContext.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        if (!bound) Log.e(TAG, "Failed to bind VPN service")
+    }
+
+    @Synchronized
+    private fun unbind() {
+        if (!bound) return
+        runCatching { service?.unregisterCallback(callback) }
+        runCatching { appContext.unbindService(connection) }
+        service = null
+        bound = false
+        _connected.value = false
     }
 
     fun subscribeLogcat(): Flow<LogMessage> = callbackFlow {
@@ -87,21 +146,22 @@ object ClashRemoteManager {
                 }
             }
         }
-        val s = service
-        if (s != null) {
-            runCatching { s.subscribeLogcat(logCallback) }
-        }
-        
+        var registeredService: IClashInterface? = null
         launch {
-            connected.collect { isConnected ->
+            connected.collectLatest { isConnected ->
                 if (isConnected) {
-                    runCatching { service?.subscribeLogcat(logCallback) }
+                    val current = service
+                    if (current != null && current !== registeredService) {
+                        runCatching { current.subscribeLogcat(logCallback) }
+                        registeredService = current
+                    }
+                } else {
+                    registeredService = null
                 }
             }
         }
-        awaitClose { 
-            // Unfortunately, RemoteCallbackList.unregister happens on the service
-            // side automatically when the process dies, or we need an unsubscribe method.
+        awaitClose {
+            runCatching { registeredService?.unsubscribeLogcat(logCallback) }
         }
     }
 
@@ -128,8 +188,16 @@ object ClashRemoteManager {
         ok
     }
 
-    suspend fun healthCheck(name: String) = withContext(Dispatchers.IO) {
-        runCatching { service?.healthCheck(name) }
+    suspend fun healthCheckAll(): Boolean = withContext(Dispatchers.IO) {
+        runCatching { service?.healthCheckAll() ?: false }.getOrDefault(false)
+    }
+
+    suspend fun healthCheckGroup(name: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { service?.healthCheckGroup(name) ?: false }.getOrDefault(false)
+    }
+
+    suspend fun healthCheckProxy(group: String, proxy: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { service?.healthCheckProxy(group, proxy) ?: false }.getOrDefault(false)
     }
 
     suspend fun isRunning(): Boolean = withContext(Dispatchers.IO) {

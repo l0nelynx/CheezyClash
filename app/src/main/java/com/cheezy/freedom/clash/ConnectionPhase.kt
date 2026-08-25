@@ -24,10 +24,13 @@ enum class ConnectionPhase {
     /** Tunnel is up and carrying traffic. */
     CONNECTED,
 
+    /** A stop request was accepted and native resources are being torn down. */
+    STOPPING,
+
     /** The attempt failed; see [ClashState.lastError]. */
     ERROR;
 
     /** True while a start attempt is in flight (spinner states). */
     val isBusy: Boolean
-        get() = this == LOADING || this == ESTABLISHING || this == STARTING
+        get() = this == LOADING || this == ESTABLISHING || this == STARTING || this == STOPPING
 }
