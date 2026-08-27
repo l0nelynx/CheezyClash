@@ -12,6 +12,8 @@ object Bridge {
         private set
 
     external fun nativeReset()
+    /** Borrows fd; Go retains its own duplicate. -1 disables the extra crash stream. */
+    external fun nativeConfigureCrashOutput(fd: Int): Boolean
     external fun nativeForceGc()
     external fun nativeSuspend(suspend: Boolean)
     external fun nativeQueryTunnelState(): String

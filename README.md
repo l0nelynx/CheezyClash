@@ -52,6 +52,9 @@
 
 ### 🔧 Build & CI
 
+Native builds require Python 3 (symbol pairing/verification), Go 1.23+ and the
+Android NDK version pinned in `core/build.gradle.kts`, in addition to the Android toolchain.
+
 **Local build (open flavor):**
 
 ```bash
@@ -74,7 +77,29 @@ Auto dispatch to the proprietary overlay (private `l0nelynx/CheezyVPN_android`) 
 
 ### Firebase
 
-Release builds include **Firebase Crashlytics** for automatic crash reporting.
+Builds with `app/google-services.json` include Firebase Analytics and Crashlytics.
+“Send analytics and reports” is **ON by default** and controls both Firebase
+Analytics and Crashlytics. It is inside “Analytics and crashes”, the last settings
+item. An existing opt-out is preserved and also disables Analytics after updating.
+Additional Go / `:vpn` crash and system-ANR reports contain source versions, safe
+metadata and sanitized stack frames, never panic/exception messages, configs,
+subscriptions, traffic addresses, Logcat, registers or memory. They appear as
+**non-fatals**, outside the main process crash-free metric.
+
+Capture: JVM/Go on Android 9–10; system exit reasons/ANR on Android 11; native
+tombstones when available on Android 12+. Private no-backup raw dumps are removed
+after processing. The sanitized queue is capped at 16 reports / 7 days / 64 KiB
+each. Background collection does not require opening the UI or starting the VPN;
+SDK delivery may wait for the next process launch. Turning the switch off stops
+Analytics collection and clears local Analytics data / resets its app instance ID.
+It also clears our crash queue and requests deletion of unsent Crashlytics reports;
+full automatic Crashlytics upload disabling applies on the next launch. The shared
+setting persists across launches. Already sent data cannot be recalled, and
+Crashlytics can still maintain its own local cache.
+
+Without `google-services.json` Firebase and diagnostic capture/jobs are disabled,
+and the switch is hidden. Test this mode explicitly with `-PfirebaseEnabled=false`.
+See [diagnostic architecture, symbols and device checks](docs/crash-reporting.md).
 
 ### 📄 License
 
@@ -116,6 +141,9 @@ If you like this project, please give it a **Star** ⭐
 
 ### 🔧 Сборка и CI
 
+Для native-сборки дополнительно нужны Python 3 (проверка пар бинарников/символов),
+Go 1.23+ и версия Android NDK, указанная в `core/build.gradle.kts`.
+
 **Локально (open flavor):**
 
 ```bash
@@ -138,7 +166,31 @@ If you like this project, please give it a **Star** ⭐
 
 ### Firebase
 
-В release-сборках подключён **Firebase Crashlytics** для автоматического сбора крашей.
+В сборках с `app/google-services.json` доступны Firebase Analytics и Crashlytics.
+Переключатель «Отправлять аналитику и отчёты» **включён по умолчанию** и управляет
+Firebase Analytics и Crashlytics одновременно. Он находится в окне «Аналитика и
+сбои», последнем пункте настроек. Ранее выключенная настройка сохраняется и после
+обновления отключает также Analytics. Дополнительный сбор охватывает падения
+Go / `:vpn` и системные ANR: исходные версии, безопасные метаданные и очищенные
+стеки. Тексты panic/exception, конфиги, подписки, адреса трафика, Logcat, память и
+регистры не передаются. Такие события отображаются как **non-fatal**, отдельно
+от crash-free метрики основного процесса.
+
+Android 9–10: JVM/Go; Android 11: также системные причины завершения и ANR;
+Android 12+: native tombstone, если он сохранён системой. Сырые дампы находятся
+только в приватной no-backup области и удаляются после обработки. Очищенная
+очередь ограничена 16 отчётами / 7 днями / 64 KiB на отчёт. Фоновый сбор не
+открывает UI и не запускает VPN; отправка SDK может ждать следующего запуска
+процесса. Выключение прекращает сбор Analytics, очищает его локальные данные и
+сбрасывает идентификатор экземпляра приложения. Также очищается наша очередь и
+запрашивается удаление неотправленных отчётов Crashlytics. Полное отключение
+автоматической отправки Crashlytics применяется со следующего запуска. Общая
+настройка сохраняется после перезапуска; уже переданные данные не отзываются,
+локальный кеш Crashlytics возможен.
+
+Без `google-services.json` Firebase, дополнительный сбор и задания отключены,
+переключатель скрыт. Для проверки этого режима: `-PfirebaseEnabled=false`.
+[Архитектура, символы и проверки на устройствах](docs/crash-reporting.md).
 
 ### 📄 Лицензия
 

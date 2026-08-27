@@ -1,4 +1,8 @@
 <resources>
+    <string name="crash_reporting_settings">Analytics and crashes</string>
+    <string name="crash_reporting_title">Send analytics and reports</string>
+    <string name="crash_reporting_summary">One switch controls Firebase Analytics and Crashlytics. Analytics collects app usage statistics. Crashlytics receives app and VPN crash reports: versions, failure type and technical stack traces. Additional core reports exclude configurations and traffic logs.\n\nTurning this off stops Analytics collection and clears its local data. Additional core crash capture stops and its queue is deleted. The setting persists across app launches.\n\nDisabling automatic Crashlytics uploads takes full effect on the next app launch. Data already sent cannot be recalled; Crashlytics may keep a local cache.</string>
+    <string name="crash_reporting_save_failed">Could not change analytics and reporting</string>
     <!-- app_name is a brand name (CheezyClash / CheezyVPN per flavor) — not localized here. -->
     <string name="title_logs">Logs</string>
     <string name="title_proxies">Rules</string>

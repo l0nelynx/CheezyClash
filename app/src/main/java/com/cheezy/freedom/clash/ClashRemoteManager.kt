@@ -76,12 +76,14 @@ object ClashRemoteManager {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            com.cheezy.freedom.diagnostics.CrashReporting.serviceDisconnected(appContext)
             Log.d(TAG, "Service disconnected")
             service = null
             _connected.value = false
         }
 
         override fun onBindingDied(name: ComponentName?) {
+            com.cheezy.freedom.diagnostics.CrashReporting.serviceDisconnected(appContext)
             Log.w(TAG, "Service binding died")
             service = null
             _connected.value = false
@@ -187,6 +189,8 @@ object ClashRemoteManager {
         }
         ok
     }
+
+    fun refreshCrashReportingPolicy() { runCatching { service?.refreshCrashReportingPolicy() } }
 
     suspend fun healthCheckAll(): Boolean = withContext(Dispatchers.IO) {
         runCatching { service?.healthCheckAll() ?: false }.getOrDefault(false)

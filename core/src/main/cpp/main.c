@@ -13,6 +13,11 @@
 #define GIT_VERSION "cheezy-prebuilt"
 #endif
 
+JNIEXPORT jboolean JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeConfigureCrashOutput(JNIEnv *env, jobject thiz, jint fd) {
+    return configureCrashOutput(fd) ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL
 Java_com_github_kr328_clash_core_bridge_Bridge_nativeInit(JNIEnv *env, jobject thiz,
                                                           jstring home,

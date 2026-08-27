@@ -74,6 +74,22 @@ jobs:
           path: app/build/outputs/apk/directOpen/release/*.apk
           retention-days: 3
 
+      - name: Archive exact native symbols and R8 mapping
+        run: |
+          python3 scripts/native_symbols.py archive \
+            --apk-dir app/build/outputs/apk/directOpen/release \
+            --mapping app/build/outputs/mapping/directOpenRelease/mapping.txt \
+            --version "${{ github.ref_name }}" --commit "${{ github.sha }}" \
+            --output "app/build/outputs/symbols/CheezyClash-${{ github.ref_name }}-symbols.zip"
+
+      - name: Upload symbol archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheezyClash-symbols
+          path: app/build/outputs/symbols/*.zip
+          retention-days: 90
+          if-no-files-found: error
+
   desktop-check:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -277,6 +293,7 @@ jobs:
         with:
           files: |
             release-assets/CheezyClash-APKs/*
+            release-assets/CheezyClash-symbols/*
             release-assets/CheezyClash-desktop-win/*
             release-assets/CheezyClash-desktop-linux/*
             release-assets/CheezyClash-desktop-mac-arm64/*

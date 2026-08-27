@@ -171,6 +171,7 @@ class ClashVpnService : VpnService() {
     private val logCallbacks = newCallbackList<ILogcatCallback>()
 
     private val binder = object : IClashInterface.Stub() {
+        override fun refreshCrashReportingPolicy() = com.cheezy.freedom.diagnostics.CrashReporting.refreshVpnPolicy()
         override fun registerCallback(callback: IClashCallback) {
             callbacks.register(callback)
             // Immediately send current state to the new subscriber
@@ -287,6 +288,7 @@ class ClashVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        com.cheezy.freedom.diagnostics.CrashReporting.stage("SERVICE_CREATE")
         ClashCore.init(this)
         // Default to the active profile dir from disk; overridden by the start
         // Intent extra / loadConfig(path) during normal operation.
@@ -308,6 +310,7 @@ class ClashVpnService : VpnService() {
         }
         scope.launch {
             ClashState.phase.collect { p ->
+                com.cheezy.freedom.diagnostics.CrashReporting.stage(p.name)
                 broadcast { it.onPhaseChanged(p.ordinal) }
             }
         }
@@ -662,6 +665,7 @@ class ClashVpnService : VpnService() {
         logCallbacks.kill()
         scope.cancel()
         super.onDestroy()
+        com.cheezy.freedom.diagnostics.CrashReporting.stage("SERVICE_DESTROY", serviceActive = false)
     }
 
     private fun isRequestedRunning(): Boolean =

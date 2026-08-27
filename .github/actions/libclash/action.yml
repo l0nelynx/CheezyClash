@@ -1,7 +1,7 @@
 name: Acquire libclash
 description: >
-  Restore libclash.so from Actions cache, GitHub Release (libclash-HASH.zip),
-  or optionally smoke-build arm64 when allow-build-fallback is true.
+  Restore libclash.so and matching symbols from Actions cache or GitHub Release
+  (libclash-v2-HASH.zip), or build all ABIs when allow-build-fallback is true.
 
 inputs:
   go-sources-path:
@@ -13,7 +13,7 @@ inputs:
     required: false
     default: core/build/generatedJniLibs
   allow-build-fallback:
-    description: Smoke-build arm64 on cache+release miss (open repo CI only)
+    description: Build all ABIs on cache+release miss (open repo CI only)
     required: false
     default: 'false'
   release-repo:
@@ -55,7 +55,7 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ${{ inputs.jni-libs-path }}
-        key: libclash-${{ steps.hash.outputs.go_hash }}
+        key: libclash-v2-${{ steps.hash.outputs.go_hash }}
 
     - name: Mark cache hit
       id: from-cache
@@ -77,7 +77,7 @@ runs:
         JNI_PATH: ${{ inputs.jni-libs-path }}
       run: |
         TAG="libclash-${GO_HASH}"
-        ZIP="libclash-${GO_HASH}.zip"
+        ZIP="libclash-v2-${GO_HASH}.zip"
         URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP}"
         echo "Trying release download: $URL"
         if curl -fL --retry 3 --retry-delay 2 -o "/tmp/${ZIP}" "$URL"; then
@@ -92,7 +92,7 @@ runs:
           echo "source=none" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Smoke-build arm64 libclash
+    - name: Build libclash and symbols for all ABIs
       id: from-build
       if: >-
         steps.cache-libclash.outputs.cache-hit != 'true' &&
@@ -101,7 +101,7 @@ runs:
       shell: bash
       run: |
         chmod +x gradlew
-        ./gradlew --no-daemon :core:buildGoClashArm64V8a :core:assembleGoJniLibs
+        ./gradlew --no-daemon :core:assembleGoJniLibs
         test -f "${{ inputs.jni-libs-path }}/arm64-v8a/libclash.so"
         echo "source=build" >> "$GITHUB_OUTPUT"
 
@@ -120,6 +120,11 @@ runs:
           2. Wait for libclash-${{ steps.hash.outputs.go_hash }} GitHub Release to be published
         EOF
         exit 1
+
+    - name: Verify paired symbols and build IDs (cache format v2)
+      shell: bash
+      run: |
+        python3 "${{ inputs.go-sources-path }}/../../../../scripts/native_symbols.py" verify-core --input "${{ inputs.jni-libs-path }}"
 
     - name: Set result source
       id: result

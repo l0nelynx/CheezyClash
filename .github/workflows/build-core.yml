@@ -2,7 +2,7 @@ name: Build Clash Core
 
 # Builds libclash.so for all ABIs and desktop mihomo sidecars from the same
 # Go sources hash. Publishes under tag libclash-<go_hash>:
-#   - libclash-<hash>.zip
+#   - libclash-v2-<hash>.zip (paired stripped binaries + original symbols)
 #   - mihomo-<hash>-<goos>-<goarch>.zip (windows/linux/darwin × amd64/arm64)
 # Consumed by Android CI and desktop `npm run fetch-core`.
 
@@ -17,6 +17,7 @@ on:
     paths:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
+      - 'scripts/native_symbols.py'
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
@@ -29,6 +30,7 @@ on:
     paths:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
+      - 'scripts/native_symbols.py'
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
@@ -73,7 +75,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: core/build/generatedJniLibs
-          key: libclash-${{ steps.hash.outputs.go_hash }}
+          key: libclash-v2-${{ steps.hash.outputs.go_hash }}
 
       - name: Skip build if already cached
         if: steps.cache-libclash.outputs.cache-hit == 'true'
@@ -114,6 +116,7 @@ jobs:
 
       - name: Verify outputs
         run: |
+          python3 scripts/native_symbols.py verify-core --input core/build/generatedJniLibs
           for abi in arm64-v8a armeabi-v7a x86_64; do
             f="core/build/generatedJniLibs/$abi/libclash.so"
             test -f "$f" || { echo "ERROR: $f missing"; exit 1; }
@@ -126,14 +129,14 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: core/build/generatedJniLibs
-          key: libclash-${{ steps.hash.outputs.go_hash }}
+          key: libclash-v2-${{ steps.hash.outputs.go_hash }}
 
       - name: Package libclash zip
         run: |
           HASH="${{ steps.hash.outputs.go_hash }}"
-          ZIP="libclash-${HASH}.zip"
+          ZIP="libclash-v2-${HASH}.zip"
           cd core/build/generatedJniLibs
-          zip -r "/tmp/${ZIP}" arm64-v8a armeabi-v7a x86_64
+          zip -r "/tmp/${ZIP}" arm64-v8a armeabi-v7a x86_64 symbols symbols-manifest.json
           ls -lh "/tmp/${ZIP}"
 
       - name: Build desktop mihomo sidecars
@@ -200,7 +203,7 @@ jobs:
           set -euo pipefail
           HASH="${{ steps.hash.outputs.go_hash }}"
           TAG="libclash-${HASH}"
-          LIBZIP="/tmp/libclash-${HASH}.zip"
+          LIBZIP="/tmp/libclash-v2-${HASH}.zip"
           SIDE_DIR="$PWD/core/build/mihomo-sidecars"
           NOTES="Prebuilt libclash.so and desktop mihomo sidecars for Go sources hash \`${HASH}\`. Used by CheezyVPN / desktop fetch-core."
 
@@ -258,8 +261,8 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
         with:
-          name: libclash-${{ steps.hash.outputs.go_hash }}
-          path: core/build/generatedJniLibs/**/libclash.so
+          name: libclash-v2-${{ steps.hash.outputs.go_hash }}
+          path: core/build/generatedJniLibs/
           retention-days: 3
           if-no-files-found: error
 

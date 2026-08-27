@@ -1,18 +1,24 @@
 package com.cheezy.freedom
 
 import android.app.Application
+import androidx.work.Configuration
 import com.cheezy.freedom.clash.AppHolder
 import com.cheezy.freedom.clash.ClashCore
 import com.cheezy.freedom.clash.ClashRemoteManager
 import com.cheezy.freedom.clash.ProfileManager
 
-class CheezyApp : Application() {
+class CheezyApp : Application(), Configuration.Provider {
+    // WorkManager must not allocate our diagnostic JobScheduler IDs (0x434301/2).
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setJobSchedulerJobIdRange(0, 1_000_000).build()
+
     override fun onCreate() {
         super.onCreate()
 
         // Firebase Analytics / Crashlytics initialize via FirebaseInitProvider when
-        // app/google-services.json is present (both main and :vpn processes). No
-        // explicit FirebaseApp.initializeApp() needed.
+        // enabled in the build. FirebaseInitProvider only runs in main, NOT :vpn.
+        // The VPN process stores diagnostics locally and never initializes Firebase.
+        // CrashReporting applies the same saved switch to Analytics and Crashlytics.
         
         val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
             getProcessName()
@@ -23,7 +29,9 @@ class CheezyApp : Application() {
             am.runningAppProcesses?.find { it.pid == pid }?.processName
         }
 
-        if (processName?.endsWith(":vpn") == true) {
+        val vpn = processName?.endsWith(":vpn") == true
+        runCatching { com.cheezy.freedom.diagnostics.CrashReporting.initialize(this, vpn) }
+        if (vpn) {
             ClashCore.init(this)
         } else {
             // Main process needs AppHolder too — ClashRemoteManager persists proxy

@@ -103,6 +103,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _wapSettings = MutableStateFlow(WapSettingsStore.load(context))
     val wapSettings: StateFlow<WapSettings> = _wapSettings.asStateFlow()
+    private val _crashReportingEnabled = MutableStateFlow(com.cheezy.freedom.diagnostics.CrashReporting.enabled(context))
+    val crashReportingEnabled = _crashReportingEnabled.asStateFlow()
+
+    fun saveCrashReportingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    com.cheezy.freedom.diagnostics.CrashReporting.setEnabled(context, enabled)
+                    ClashRemoteManager.refreshCrashReportingPolicy()
+                }.isSuccess
+            }
+            if (saved) _crashReportingEnabled.value = enabled
+            else _effects.emit(MainEffect.ShowSnackbar(context.getString(R.string.crash_reporting_save_failed)))
+        }
+    }
 
     private val _xrayMuxSettings = MutableStateFlow(XrayMuxSettingsStore.load(context))
     val xrayMuxSettings: StateFlow<XrayMuxSettings> = _xrayMuxSettings.asStateFlow()

@@ -9,6 +9,7 @@ interface IClashInterface {
 
     boolean isRunning();
     void stopVpn();
+    oneway void refreshCrashReportingPolicy();
 
     void loadConfig(String path);
 

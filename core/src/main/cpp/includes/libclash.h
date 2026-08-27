@@ -33,6 +33,7 @@ extern int  (*open_content_func)(const char *url, char *error, int error_length)
 
 /* ---- Go functions exported by libclash.so. ---- */
 extern void coreInit(c_string home, c_string versionName, c_string gitVersion, int sdkVersion);
+extern int configureCrashOutput(int fd);
 extern void reset(void);
 extern void forceGc(void);
 extern void suspend(int suspended);

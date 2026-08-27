@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
@@ -60,6 +61,8 @@ import com.cheezy.freedom.clash.XrayMuxSettings
 
 @Composable
 fun SettingsTab(
+    crashReportingEnabled: Boolean,
+    onCrashReportingChanged: (Boolean) -> Unit,
     userEmail: String?,
     tgId: Long?,
     isCheckingUpdate: Boolean,
@@ -88,12 +91,20 @@ fun SettingsTab(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showCrashReportingDialog by rememberSaveable { mutableStateOf(false) }
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
     // ListItems default to an opaque `surface` container; on the tab card that
     // reads as white strips. Make them transparent so they take the card colour.
     val transparentList = ListItemDefaults.colors(containerColor = Color.Transparent)
 
     if (showInfoDialog) AppInfoDialog { showInfoDialog = false }
+    if (BuildConfig.FIREBASE_ENABLED && showCrashReportingDialog) {
+        CrashReportingDialog(
+            enabled = crashReportingEnabled,
+            onEnabledChange = onCrashReportingChanged,
+            onDismiss = { showCrashReportingDialog = false },
+        )
+    }
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
     if (showAdvanced) {
         AdvancedSettingsScreen(
@@ -217,6 +228,18 @@ fun SettingsTab(
                 .testTag("settings_info")
                 .clickable { showInfoDialog = true }
         )
+
+        if (BuildConfig.FIREBASE_ENABLED) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.crash_reporting_settings)) },
+                leadingContent = { Icon(Icons.Default.BugReport, null) },
+                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                colors = transparentList,
+                modifier = Modifier
+                    .testTag("settings_crash_reporting")
+                    .clickable { showCrashReportingDialog = true },
+            )
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 

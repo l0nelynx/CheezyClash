@@ -126,6 +126,7 @@ fun MainScreen(
     val proxyname by ClashState.activeProxy.collectAsState()
     val running by ClashState.running.collectAsState()
     val phase by ClashState.phase.collectAsState()
+    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     val tunAddress by ClashState.tunAddress.collectAsState()
     val localIp by ClashState.localIp.collectAsState()
     // trafficNow ticks ~once per second. We don't collect it at the MainScreen
@@ -464,6 +465,8 @@ fun MainScreen(
                     }
                     MainTab.SETTINGS -> TabCard(title = stringResource(MainTab.SETTINGS.titleRes)) {
                         SettingsTab(
+                            crashReportingEnabled = crashReportingEnabled,
+                            onCrashReportingChanged = viewModel::saveCrashReportingEnabled,
                             userEmail = userEmail,
                             tgId = tgId,
                             isCheckingUpdate = isCheckingUpdate,

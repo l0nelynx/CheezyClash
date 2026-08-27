@@ -22,6 +22,9 @@ val verMinor = versionProps.getProperty("VERSION_MINOR").toInt()
 val verBuild = versionProps.getProperty("VERSION_BUILD").toInt()
 val baseVersionCode = verMajor * 1_000_000 + verMinor * 10_000 + verBuild
 val baseVersionName = "$verMajor.$verMinor.$verBuild"
+val firebaseEnabled = providers.gradleProperty("firebaseEnabled").orNull?.toBooleanStrict()
+    ?: file("google-services.json").exists()
+require(!firebaseEnabled || file("google-services.json").exists()) { "Firebase requires app/google-services.json" }
 
 val abiVersionCodeOffset = mapOf(
     "armeabi-v7a" to 1,
@@ -40,6 +43,7 @@ android {
         targetSdk = 37
         versionCode = baseVersionCode
         versionName = baseVersionName
+        buildConfigField("boolean", "FIREBASE_ENABLED", firebaseEnabled.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -253,6 +257,7 @@ dependencies {
     implementation(libs.androidx.startup.runtime)
     implementation("com.google.zxing:core:3.5.3")
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.snakeyaml)
     testImplementation(libs.junit)
@@ -281,8 +286,8 @@ run {
 // (merged clients for com.cheezy.freedom.clash and com.cheezy.freedom).
 // See google-services.json.example and README. Without the file, Firebase is omitted
 // so CI/local builds still succeed.
-val googleServicesJson = file("google-services.json")
-if (googleServicesJson.exists()) {
+android.sourceSets.getByName("main").kotlin.directories += if (firebaseEnabled) "src/firebase/java" else "src/noFirebase/java"
+if (firebaseEnabled) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
     dependencies {
@@ -292,7 +297,7 @@ if (googleServicesJson.exists()) {
     }
 } else {
     logger.warn(
-        "app/google-services.json missing — Firebase Analytics/Crashlytics disabled. " +
+        "Firebase Analytics/Crashlytics disabled (configuration absent or -PfirebaseEnabled=false). " +
             "Copy google-services.json.example → google-services.json from Firebase Console."
     )
 }

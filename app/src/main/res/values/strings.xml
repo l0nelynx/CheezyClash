@@ -1,4 +1,8 @@
 <resources>
+    <string name="crash_reporting_settings">Аналитика и сбои</string>
+    <string name="crash_reporting_title">Отправлять аналитику и отчёты</string>
+    <string name="crash_reporting_summary">Один переключатель управляет Firebase Analytics и Crashlytics. Analytics собирает статистику использования приложения. Crashlytics получает отчёты о падениях приложения и VPN: версии, тип сбоя и технический стек. Дополнительные отчёты ядра не содержат конфигов и журналов трафика.\n\nПри выключении сбор Analytics прекращается, его локальные данные очищаются. Дополнительный сбор падений ядра отключается, очередь удаляется. Настройка сохраняется после перезапуска.\n\nПолное отключение автоматической отправки Crashlytics применяется со следующего запуска приложения. Уже отправленные данные не отзываются; возможен локальный кеш Crashlytics.</string>
+    <string name="crash_reporting_save_failed">Не удалось изменить настройку аналитики и отчётов</string>
     <string name="app_name" translatable="false">CheezyVPN</string>
     <string name="title_logs">Логи</string>
     <string name="title_proxies">Правила</string>

@@ -5,10 +5,12 @@ project(bridge C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Release flags: оптимизация по размеру/скорости + удаление debug-инфо.
+# Keep debug information until packaging; archive symbols from these exact binaries.
+add_compile_options(-g)
+add_link_options(-Wl,--build-id=sha1)
 if (NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     add_compile_options(-O3 -fno-exceptions -fvisibility=hidden)
-    add_link_options(-Wl,--gc-sections -Wl,--strip-all)
+    add_link_options(-Wl,--gc-sections)
 endif ()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/includes)
@@ -50,6 +52,11 @@ add_library(bridge SHARED
         main.c
         jni_helper.c
         bridge_helper.c)
+
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    target_sources(bridge PRIVATE crash_test.c)
+    target_link_libraries(bridge dl)
+endif ()
 
 target_link_libraries(bridge
         clash

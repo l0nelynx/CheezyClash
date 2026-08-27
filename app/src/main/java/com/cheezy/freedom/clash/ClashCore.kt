@@ -19,6 +19,8 @@ object ClashCore {
                 app.packageManager.getPackageInfo(app.packageName, 0).versionName
             }.getOrNull() ?: "unknown"
             Bridge.attachContext(app)
+            Bridge.ensureLoaded()
+            runCatching { com.cheezy.freedom.diagnostics.CrashReporting.attachNative() }
             Bridge.init(home.absolutePath, versionName, Build.VERSION.SDK_INT)
             initialized = true
         }

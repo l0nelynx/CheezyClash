@@ -11,6 +11,7 @@ on:
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle.properties'
+      - 'scripts/native_symbols.py'
       - '.github/workflows/pr-check.yml'
       - '.github/actions/libclash/**'
 
@@ -26,12 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Acquire libclash
-        id: libclash
-        uses: ./.github/actions/libclash
-        with:
-          allow-build-fallback: 'true'
-
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -44,6 +39,20 @@ jobs:
         with:
           packages: "ndk;28.2.13676358 cmake;3.22.1"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Acquire libclash
+        id: libclash
+        uses: ./.github/actions/libclash
+        with:
+          allow-build-fallback: 'true'
+
+      - name: Go crash output and tunnel regression tests
+        working-directory: core/src/main/golang
+        run: go test ./native/crashoutput ./native/tunnel
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -53,6 +62,7 @@ jobs:
             assembleDirectOpenDebug \
             testDirectOpenDebugUnitTest \
             lintDirectOpenDebug \
+            -PfirebaseEnabled=false \
             -x :core:buildGoClashArm64V8a \
             -x :core:buildGoClashArmeabiV7a \
             -x :core:buildGoClashX86_64 \

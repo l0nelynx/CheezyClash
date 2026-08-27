@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val goSrcDir = layout.projectDirectory.dir("src/main/golang")
+
 android {
     namespace = "com.cheezy.freedom.core"
     compileSdk = 37
@@ -14,6 +16,7 @@ android {
 
     defaultConfig {
         minSdk = 28
+        buildConfigField("String", "CORE_VERSION", "\"${readMihomoVersion()}\"")
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
@@ -37,6 +40,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    buildFeatures { buildConfig = true }
 }
 
 dependencies {
@@ -67,11 +71,14 @@ val goAbis = listOf(
     GoAbi("x86_64",      "x86_64-linux-android28-clang",     "amd64", null),
 )
 
-val goSrcDir = layout.projectDirectory.dir("src/main/golang")
 // Build the main package cheezy/native (contains func main and //export functions).
 // Activation of all Mihomo plugin inits is done via blank import in native/import_all.go.
 val goEntryPkg = "./native"
 val goOutBase = layout.buildDirectory.dir("intermediates/golang")
+val crashTestHooks = providers.gradleProperty("crashTestHooks").orNull == "true"
+require(!crashTestHooks || gradle.startParameter.taskNames.none {
+    it.contains("release", ignoreCase = true) || it.contains("benchmark", ignoreCase = true)
+}) { "Crash test hooks are forbidden in release/benchmark builds" }
 
 /**
  * Extracts mihomo version from go.mod during the configuration phase. Passed
@@ -149,6 +156,8 @@ goAbis.forEach { abi ->
         // no *.go files changed.
         inputs.dir(goSrcDir).withPropertyName("goSrc")
         inputs.property("mihomoVersion", providers.provider { readMihomoVersion() })
+        inputs.property("nativeSymbolsFormat", 2)
+        inputs.property("crashTestHooks", crashTestHooks)
         val outDir = goOutBase.map { it.dir(abi.androidAbi) }
         outputs.dir(outDir).withPropertyName("goOut")
 
@@ -172,7 +181,7 @@ goAbis.forEach { abi ->
             abi.goArm?.let { environment("GOARM", it) }
 
             // CMFA tags: foss + with_gvisor + cmfa. Without them, mihomo will be incomplete.
-            val buildTags = "foss,with_gvisor,cmfa,no_zerotier"
+            val buildTags = "foss,with_gvisor,cmfa,no_zerotier" + if (crashTestHooks) ",crash_test_hooks" else ""
 
             // Mihomo version compiled into libclash.so. Passed via -X
             // main.mihomoVersion — the Go linker will write the string to native/version.go.
@@ -183,12 +192,13 @@ goAbis.forEach { abi ->
             // Go build entry point — the main package cheezy/native.
             // Build with -buildmode=c-shared to get libclash.so + libclash.h.
             // -trimpath removes absolute host paths from the binary (important for reproducibility).
-            // -ldflags='-s -w' strips debug info (release-only optimization — I'll keep it always).
+            // Keep DWARF and derive a GNU build ID from the Go build ID. Packaging
+            // strips a copy; the original is the only source of release symbols.
             commandLine = listOf(
                 "go", "build",
                 "-buildmode=c-shared",
                 "-trimpath",
-                "-ldflags=-s -w -buildid= -X main.mihomoVersion=$mihomoVersion",
+                "-ldflags=-B gobuildid -X main.mihomoVersion=$mihomoVersion",
                 "-tags", buildTags,
                 "-o", outFile.get(),
                 goEntryPkg,
@@ -207,18 +217,30 @@ goAbis.forEach { abi ->
 // Directory build/generatedJniLibs/<abi>/libclash.so.
 val generatedJniLibsDir = layout.buildDirectory.dir("generatedJniLibs")
 
-val assembleGoJniLibs = tasks.register<Sync>("assembleGoJniLibs") {
+val assembleGoJniLibs = tasks.register<Exec>("assembleGoJniLibs") {
     group = "build"
-    description = "Collects Go-built libclash.so files into ABI subdirs for AGP packaging"
+    description = "Prepare paired stripped libraries and exact build-ID checked symbols (cache v2)"
+    inputs.dir(goOutBase)
+    inputs.file(rootProject.file("scripts/native_symbols.py"))
+    outputs.dir(generatedJniLibsDir)
     goAbis.forEach { abi ->
-        from(goOutBase.map { it.dir(abi.androidAbi) }) {
-            include("libclash.so")
-            into(abi.androidAbi)
-        }
         dependsOn("buildGoClash" + abi.androidAbi.replaceFirstChar { it.uppercase() }
             .replace("-v", "V").replace("-", ""))
     }
-    into(generatedJniLibsDir)
+    doFirst {
+        val clang = File(ndkClangExecutable(goAbis.first().clangTriple))
+        commandLine(if (OperatingSystem.current().isWindows) "python" else "python3",
+            rootProject.file("scripts/native_symbols.py"), "prepare-core",
+            "--input", goOutBase.get().asFile, "--output", generatedJniLibsDir.get().asFile,
+            "--llvm", clang.parentFile)
+    }
+}
+
+// Also catch aggregate task names (e.g. assemble) whose graph includes a release.
+gradle.taskGraph.whenReady {
+    check(!crashTestHooks || allTasks.none { it.name.contains("release", true) || it.name.contains("benchmark", true) }) {
+        "Crash test hooks are forbidden in release/benchmark task graphs"
+    }
 }
 
 // AGP 9 Variant API: add generatedJniLibsDir as another jniLibs-source.
@@ -241,6 +263,14 @@ androidComponents.onVariants { variant ->
     // mergeJniLibFolders must run after Go build + Sync.
     val mergeJni = "merge${variant.name.replaceFirstChar { it.uppercase() }}JniLibFolders"
     tasks.matching { it.name == mergeJni }.configureEach { dependsOn(assembleGoJniLibs) }
+    if (variant.buildType != "debug") {
+        val verify = tasks.register<Exec>("verify${variant.name.replaceFirstChar { it.uppercase() }}CoreSymbols") {
+            dependsOn(assembleGoJniLibs)
+            commandLine(if (OperatingSystem.current().isWindows) "python" else "python3",
+                rootProject.file("scripts/native_symbols.py"), "verify-core", "--input", generatedJniLibsDir.get().asFile)
+        }
+        tasks.matching { it.name == mergeJni }.configureEach { dependsOn(verify) }
+    }
 }
 
 // ============================================================================
