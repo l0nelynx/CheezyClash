@@ -29,6 +29,7 @@ import {
   profilesRoot,
 } from './paths'
 import { getSettings, getSelections, store } from './store'
+import { applyControllerDefaults } from './controller-config'
 import { log } from './logger'
 import {
   decodeMaybeBase64Header,
@@ -135,13 +136,7 @@ export function rebuildConfig(profileId: string, settings: AppSettings = getSett
   applyXrayMuxSettings(doc, settings)
   ensureDns(doc)
 
-  // Always bind controller to loopback for the desktop UI.
-  doc['external-controller'] = '127.0.0.1:9090'
-  if (!doc['external-ui-url']) {
-    doc['external-ui-url'] = 'https://metacubex.github.io/metacubexd/'
-  }
-  const secret = store.get('controllerSecret')
-  if (secret) doc.secret = secret
+  applyControllerDefaults(doc)
 
   const out = yaml.dump(doc, { lineWidth: -1, noRefs: true })
   const configPath = join(dir, CONFIG)

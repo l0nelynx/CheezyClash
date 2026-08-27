@@ -1,5 +1,5 @@
 import Store from 'electron-store'
-import { randomFillSync } from 'crypto'
+import type { ControllerRuntime } from './controller-config'
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -13,7 +13,8 @@ interface StoreSchema {
   settings: AppSettings
   profiles: ProfileMeta[]
   activeProfileId: string | null
-  controllerSecret: string
+  /** Snapshot of the controller actually started, not an override for profile YAML. */
+  controllerRuntime: ControllerRuntime | null
   /** @deprecated migrated to selectionsByProfile */
   selections: Record<string, string>
   selectionsByProfile: Record<string, Record<string, string>>
@@ -28,7 +29,7 @@ export const store = new Store<StoreSchema>({
     settings: { ...DEFAULT_SETTINGS },
     profiles: [],
     activeProfileId: null,
-    controllerSecret: '',
+    controllerRuntime: null,
     selections: {},
     selectionsByProfile: {},
     desktopHwid: '',
@@ -69,15 +70,6 @@ export function setSystemProxyOwned(owned: boolean): void {
   store.set('systemProxyOwned', owned)
 }
 
-export function getOrCreateSecret(): string {
-  let s = store.get('controllerSecret')
-  if (!s) {
-    s = cryptoRandom(24)
-    store.set('controllerSecret', s)
-  }
-  return s
-}
-
 function activeProfileIdForSelections(profileId?: string | null): string | null {
   return profileId ?? store.get('activeProfileId')
 }
@@ -105,13 +97,4 @@ export function setSelection(group: string, proxy: string, profileId?: string | 
   const byProfile = { ...(store.get('selectionsByProfile') ?? {}) }
   byProfile[id] = { ...(byProfile[id] ?? {}), [group]: proxy }
   store.set('selectionsByProfile', byProfile)
-}
-
-function cryptoRandom(len: number): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let out = ''
-  const arr = new Uint8Array(len)
-  randomFillSync(arr)
-  for (let i = 0; i < len; i++) out += chars[arr[i]! % chars.length]
-  return out
 }

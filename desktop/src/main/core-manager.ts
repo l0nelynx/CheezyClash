@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { mkdirSync, existsSync, copyFileSync } from 'node:fs'
+import { mkdirSync, existsSync, copyFileSync, readFileSync } from 'node:fs'
 import { join } from 'path'
 import { platform } from 'os'
 import { BrowserWindow } from 'electron'
@@ -16,7 +16,7 @@ import {
   profilesRoot,
 } from './paths'
 import {
-  getOrCreateSecret,
+  store,
   getSettings,
   setSettings,
   getSelections,
@@ -25,6 +25,7 @@ import {
 } from './store'
 import {
   rebuildConfig,
+  activeConfigPath,
   getActiveProfileId,
   readEffectiveNetworkConfig,
   resolveProfileNetwork,
@@ -45,12 +46,60 @@ import {
 import { authorizeForTun, privilegesOk } from './privileges'
 import { log } from './logger'
 import { LatestWinsCoordinator, type LifecycleTicket } from './lifecycle-coordinator'
+import {
+  controllerRequiresRestart,
+  readControllerConfig,
+  zashboardUrl,
+  type ControllerRuntime,
+} from './controller-config'
 
 let child: ChildProcess | null = null
 let mode: ConnectionMode = 'proxy'
 let lastError: string | undefined
 let crashCount = 0
 const intentionalStops = new WeakSet<ChildProcess>()
+let controllerRuntime: ControllerRuntime | null = null
+
+/** Restore only once, before IPC/auto-updates can rebuild profile files. */
+export function restoreControllerAuth(): void {
+  try {
+    const saved = store.get('controllerRuntime')
+    if (saved && typeof saved.profileId === 'string' && typeof saved.secret === 'string' &&
+        typeof saved.externalUi === 'string' && typeof saved.externalUiName === 'string') {
+      controllerRuntime = { ...saved }
+    } else {
+      // Upgrade compatibility: an already-running helper may still be using the
+      // old generated config, not the current base.yaml. Never read the legacy
+      // global controllerSecret or substitute it into a newly built profile.
+      const profileId = getActiveProfileId()
+      const path = activeConfigPath()
+      if (profileId && path && existsSync(path)) {
+        controllerRuntime = { profileId, ...readControllerConfig(readFileSync(path, 'utf8')) }
+        store.set('controllerRuntime', controllerRuntime)
+      }
+    }
+    if (controllerRuntime) {
+      mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, controllerRuntime.secret)
+    }
+  } catch {
+    log('Could not restore controller credentials from the last applied configuration', 'warn')
+  }
+}
+
+function useControllerConfig(configPath: string, profileId: string): void {
+  const next = { profileId, ...readControllerConfig(readFileSync(configPath, 'utf8')) }
+  // Persist before spawn so a restarted UI can reconnect to the helper even if
+  // a background subscription refresh later rewrites config.yaml without reload.
+  store.set('controllerRuntime', next)
+  controllerRuntime = next
+  mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, next.secret)
+}
+
+export async function getDashboardUrl(): Promise<string> {
+  const status = await getStatus()
+  if (!status.running || !controllerRuntime) throw new Error('Start the VPN before opening Zashboard')
+  return zashboardUrl(controllerRuntime)
+}
 
 type ConfigApplyReason = 'cold-start' | 'profile-switch' | 'live-reload'
 
@@ -107,8 +156,7 @@ function childAlive(): boolean {
 }
 
 export async function getStatus(): Promise<CoreStatus> {
-  const secret = getOrCreateSecret()
-  mihomoApi.ensureSecretFromStore()
+  const secret = mihomoApi.getSecret()
   const helperReady = await pingHelper()
   const settings = getSettings()
   let running = false
@@ -145,7 +193,6 @@ export async function getTunStatus(): Promise<TunStatus> {
   const settings = getSettings()
   const svc = platform() === 'win32' ? await queryWindowsService() : 'none'
   const helperRunning = await pingHelper()
-  mihomoApi.ensureSecretFromStore()
   const running = childAlive() || (helperRunning && (await mihomoApi.ping()))
   const desired = lifecycle.desiredTarget
   let effectiveMode = running ? mode : settings.connectionMode
@@ -198,9 +245,6 @@ async function spawnCoreDirect(configPath: string): Promise<void> {
   const bin = coreBinaryPath()
   if (!existsSync(bin)) throw new Error(`mihomo binary missing: ${bin}. Run npm run fetch-core.`)
 
-  const secret = getOrCreateSecret()
-  mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
-
   const coreProcess = spawn(bin, ['-d', home, '-f', configPath], {
     cwd: bundledCoreDir(),
     env: {
@@ -225,8 +269,6 @@ async function spawnCoreElevated(configPath: string): Promise<void> {
   mkdirSync(home, { recursive: true })
   mkdirSync(profilesRoot(), { recursive: true })
   ensureWintun()
-  const secret = getOrCreateSecret()
-  mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
   const arg = `-d "${home}" -f "${configPath}"`
   const ok = await startCoreByHelper(arg, home, mihomoSafePaths())
   if (!ok) throw new Error('helper failed to start core')
@@ -323,7 +365,7 @@ async function reconcileLifecycle(
     : settings
 
   const configPath =
-    target.preparedConfigPath && !settings.networkOverrideEnabled
+    target.preparedConfigPath && effectiveMode === target.mode
       ? target.preparedConfigPath
       : rebuildConfig(profileId, rebuildSettings)
   if (!existsSync(configPath)) {
@@ -332,6 +374,23 @@ async function reconcileLifecycle(
   }
 
   broadcastCustomRuleDiagnostics(await validateGeneratedConfig(configPath, profileId))
+
+  if (!isCurrent()) return
+  const nextController = readControllerConfig(readFileSync(configPath, 'utf8'))
+  if (target.reason === 'live-reload' && effectiveMode === mode &&
+      !controllerRequiresRestart(controllerRuntime, profileId, nextController) &&
+      await mihomoApi.ping()) {
+    if (!isCurrent()) return
+    // Serialized with start/stop/profile switches; authenticate using the
+    // applied controller snapshot, not a just-rebuilt YAML or global setting.
+    log(`applying config profile=${profileId} reason=live-reload`)
+    await mihomoApi.putConfigs(configPath)
+    if (!isCurrent()) return
+    await mihomoApi.applySelections(getSelections(profileId))
+    if (!isCurrent()) return
+    await mihomoApi.closeAllConnections()
+    return
+  }
 
   await cleanupCore(false)
   if (!isCurrent()) return
@@ -344,6 +403,7 @@ async function reconcileLifecycle(
     log(`lifecycle generation=${ticket.generation} profile=${profileId} reason=${target.reason}`)
     const helperReady = effectiveMode === 'tun' && (await pingHelper())
     if (!isCurrent()) return
+    useControllerConfig(configPath, profileId)
     if (helperReady) {
       await spawnCoreElevated(configPath)
     } else {
@@ -479,26 +539,21 @@ export function coreBinarySha256(): string | null {
 // re-export for index
 export { corePresent }
 
-// Break profiles ↔ core-manager cycle: profiles calls this after a live reload.
-setReloadActiveCoreHook(async (configPath, profileId) => {
-  const st = await getStatus()
-  if (!st.running) return
+/** All soft reloads share lifecycle serialization; controller changes restart. */
+export async function reloadActiveConfig(configPath: string, profileId: string): Promise<void> {
   if (getActiveProfileId() !== profileId) return
+  const desired = lifecycle.desiredTarget
+  const running = desired?.running ?? (await getStatus()).running
+  if (!running || lifecycle.desiredTarget?.running === false || getActiveProfileId() !== profileId) return
   const network = readEffectiveNetworkConfig(configPath)
-  if (network.mode !== mode) {
-    await lifecycle.request({
-      running: true,
-      mode: network.mode,
-      profileId,
-      reason: 'live-reload',
-      preparedConfigPath: configPath,
-    })
-    return
-  }
-  broadcastCustomRuleDiagnostics(await validateGeneratedConfig(configPath, profileId))
-  log(`applying config profile=${profileId} reason=live-reload`)
-  mihomoApi.ensureSecretFromStore()
-  await mihomoApi.putConfigs(configPath)
-  await mihomoApi.applySelections(getSelections(profileId))
-  await mihomoApi.closeAllConnections()
-})
+  await lifecycle.request({
+    running: true,
+    mode: network.mode,
+    profileId,
+    reason: 'live-reload',
+    preparedConfigPath: configPath,
+  })
+}
+
+// Break profiles ↔ core-manager cycle.
+setReloadActiveCoreHook(reloadActiveConfig)

@@ -13,7 +13,6 @@ import {
 import type { CustomRule } from '../../../shared/custom-rules'
 import type { AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
-import { CONTROLLER_HOST, CONTROLLER_PORT } from '../../../shared/types'
 import { CustomRulesModal } from '../components/CustomRulesModal'
 import { Switch } from '../components/ui/switch'
 import { Button } from '../components/ui/button'
@@ -57,6 +56,7 @@ export function SettingsPage({
 }: Props): React.JSX.Element {
   const [section, setSection] = useState<SettingsSection | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [portDraft, setPortDraft] = useState(String(settings.mixedPort))
   const [mtuDraft, setMtuDraft] = useState(String(settings.tunMtu))
   const [muxConcurrencyDraft, setMuxConcurrencyDraft] = useState(
@@ -69,8 +69,12 @@ export function SettingsPage({
     String(settings.xrayMuxMaxDialsPerMinute),
   )
 
-  const openDashboard = () =>
-    void window.cheezy.openExternal(`http://${CONTROLLER_HOST}:${CONTROLLER_PORT}/ui/`)
+  const openDashboard = (): void => {
+    setDashboardError(null)
+    void window.cheezy.openDashboard().catch(() => {
+      setDashboardError('Could not open Zashboard. Check that the VPN is running and try again.')
+    })
+  }
   const commitPort = (): void => {
     const next = Number(portDraft)
     if (!Number.isFinite(next) || next < 1024 || next > 65535)
@@ -367,12 +371,15 @@ export function SettingsPage({
             />
             <MenuRow
               icon={<LayoutDashboard className="h-4 w-4" />}
-              title="Dashboard"
-              detail="Open the local Mihomo dashboard"
+              title="Zashboard"
+              detail="Open with the active controller credentials"
               disabled={busy || !status?.running}
               trailing={<ExternalLink className="h-4 w-4" />}
               onClick={openDashboard}
             />
+            {dashboardError && (
+              <p role="alert" className="px-4 text-sm text-destructive">{dashboardError}</p>
+            )}
           </nav>
         </>
       )}

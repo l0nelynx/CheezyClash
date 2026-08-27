@@ -111,7 +111,7 @@ jobs:
           npm run sync-version
           test "$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME#v}"
       - name: Typecheck and Desktop tests
-        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle && npm run test:network-config
+        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer
 
   desktop:
     if: github.event_name == 'push'
@@ -172,6 +172,9 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
+      - name: Check Windows installer (compile only, no installation)
+        if: matrix.target == 'win'
+        run: npm run icons && npm run test:installer -- --compile
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

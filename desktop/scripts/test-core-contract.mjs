@@ -11,11 +11,13 @@ const initialApply = coreManager.slice(
   coreManager.indexOf('export async function connect'),
 )
 assert.ok(initialApply.includes('spawnCoreDirect(configPath)'), 'cold start must spawn with -f')
-assert.ok(!initialApply.includes('putConfigs('), 'cold start must not PUT /configs after -f')
+const afterSpawn = initialApply.slice(initialApply.indexOf('await spawnCoreDirect(configPath)'))
+assert.ok(!afterSpawn.includes('putConfigs('), 'cold start must not PUT /configs after -f')
 
-const liveReload = coreManager.slice(coreManager.indexOf('setReloadActiveCoreHook'))
-assert.ok(liveReload.includes('putConfigs(configPath)'), 'live reload must keep PUT /configs')
-assert.ok(liveReload.includes('reason=live-reload'), 'live reload must be logged')
+const liveReload = coreManager.slice(coreManager.indexOf('export async function reloadActiveConfig'))
+assert.ok(initialApply.includes('putConfigs(configPath)'), 'unchanged-controller reload must keep PUT /configs')
+assert.ok(initialApply.includes('reason=live-reload'), 'live reload must be logged')
+assert.match(initialApply, /target\.reason === 'live-reload'[\s\S]*controllerRequiresRestart[\s\S]*putConfigs\(configPath\)/)
 
 const activate = profiles.slice(
   profiles.indexOf('export function setActiveProfile'),
@@ -49,8 +51,8 @@ assert.match(
 )
 assert.match(
   liveReload,
-  /network\.mode !== mode[\s\S]*lifecycle\.request/,
-  'a subscription mode change must restart through the lifecycle coordinator',
+  /lifecycle\.request\([\s\S]*mode: network\.mode/,
+  'all subscription reloads must run through the lifecycle coordinator',
 )
 assert.match(
   index,

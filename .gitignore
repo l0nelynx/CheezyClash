@@ -34,3 +34,5 @@ desktop/*.tsbuildinfo
 !desktop/build/
 desktop/build/**
 !desktop/build/installer.nsh
+!desktop/build/installer-overrides.nsh
+!desktop/build/installer-processes.ps1

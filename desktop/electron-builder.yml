@@ -39,8 +39,11 @@ win:
   artifactName: CheezyClash-win-${arch}.${ext}
 nsis:
   oneClick: false
+  installerLanguages:
+    - en_US
+    - ru_RU
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: always
+  createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: CheezyClash
   uninstallDisplayName: CheezyClash

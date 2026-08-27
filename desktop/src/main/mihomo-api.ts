@@ -2,7 +2,7 @@ import { CONTROLLER_HOST, CONTROLLER_PORT } from '../shared/types'
 import type { ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
 import { readFileSync } from 'fs'
 import { log } from './logger'
-import { getOrCreateSecret } from './store'
+import { readControllerConfig } from './controller-config'
 
 type DelayHistory = { time?: string; delay?: number }
 
@@ -43,12 +43,12 @@ export class MihomoApi {
     this.host = host
     this.port = port
     this.secret = secret
+    this.groupsInFlight = null
+    this.trafficPrev = null
   }
 
-  /** Ensure controller secret matches the one written into config.yaml. */
-  ensureSecretFromStore(): void {
-    const secret = getOrCreateSecret()
-    this.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, secret)
+  getSecret(): string {
+    return this.secret
   }
 
   private url(path: string): string {
@@ -94,7 +94,6 @@ export class MihomoApi {
   }
 
   async getVersion(): Promise<{ version?: string; meta?: boolean }> {
-    this.ensureSecretFromStore()
     return this.request('GET', '/version')
   }
 
@@ -108,21 +107,23 @@ export class MihomoApi {
   }
 
   async putConfigs(configPath: string): Promise<void> {
-    this.ensureSecretFromStore()
     // Prefer payload over path: mihomo only allows path reloads under SAFE_PATHS
     // (-d home). Our config.yaml lives in profiles/<id>/, outside that allowlist.
     const payload = readFileSync(configPath, 'utf8')
+    // Mihomo's PUT /configs does not recreate the controller. Never switch the
+    // client to new credentials while the server is still using the old ones.
+    if (readControllerConfig(payload).secret !== this.secret) {
+      throw new Error('Changing the controller secret requires a core restart')
+    }
     await this.request('PUT', '/configs?force=true', { payload })
   }
 
   async patchConfigs(patch: Record<string, unknown>): Promise<void> {
-    this.ensureSecretFromStore()
     await this.request('PATCH', '/configs', patch)
   }
 
   /** Close all live connections so new proxy/rules take effect immediately. */
   async closeAllConnections(): Promise<void> {
-    this.ensureSecretFromStore()
     try {
       await this.request('DELETE', '/connections')
     } catch (e) {
@@ -131,17 +132,17 @@ export class MihomoApi {
   }
 
   async getProxies(): Promise<Record<string, MihomoProxy>> {
-    this.ensureSecretFromStore()
     const data = await this.request<{ proxies: Record<string, MihomoProxy> }>('GET', '/proxies')
     return data.proxies || {}
   }
 
   async getGroups(): Promise<ProxyGroupInfo[]> {
     if (this.groupsInFlight) return this.groupsInFlight
-    this.groupsInFlight = this.loadGroups().finally(() => {
-      this.groupsInFlight = null
+    const pending = this.loadGroups().finally(() => {
+      if (this.groupsInFlight === pending) this.groupsInFlight = null
     })
-    return this.groupsInFlight
+    this.groupsInFlight = pending
+    return pending
   }
 
   private async loadGroups(): Promise<ProxyGroupInfo[]> {
@@ -203,7 +204,6 @@ export class MihomoApi {
   }
 
   async selectProxy(group: string, name: string): Promise<boolean> {
-    this.ensureSecretFromStore()
     await this.request('PUT', `/proxies/${encodeURIComponent(group)}`, { name })
     return true
   }
@@ -212,7 +212,6 @@ export class MihomoApi {
   async applySelections(selections: Record<string, string>): Promise<void> {
     const entries = Object.entries(selections)
     if (entries.length === 0) return
-    this.ensureSecretFromStore()
     for (const [group, name] of entries) {
       try {
         await this.request('PUT', `/proxies/${encodeURIComponent(group)}`, { name })
@@ -223,7 +222,6 @@ export class MihomoApi {
   }
 
   async healthCheck(group: string): Promise<Record<string, number>> {
-    this.ensureSecretFromStore()
     const data = await this.request<Record<string, number>>(
       'GET',
       `/group/${encodeURIComponent(group)}/delay?timeout=5000&url=${encodeURIComponent('https://www.gstatic.com/generate_204')}`,

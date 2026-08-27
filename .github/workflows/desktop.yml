@@ -51,7 +51,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Deep-link matrix / privacy
-        run: npm run test:deeplink && npm run test:core-contract && npm run test:lifecycle && npm run test:network-config
+        run: npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer
       - name: Build
         run: npm run build
   package:
@@ -96,6 +96,9 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: npm run build:helper
+      - name: Check Windows installer (compile only, no installation)
+        if: matrix.target == 'win'
+        run: npm run icons && npm run test:installer -- --compile
       - name: Package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

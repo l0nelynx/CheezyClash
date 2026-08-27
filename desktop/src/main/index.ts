@@ -12,7 +12,9 @@ import {
   syncManagedSystemProxy,
   ensureHelperAndStatus,
   corePresent,
-  broadcastCustomRuleDiagnostics,
+  restoreControllerAuth,
+  reloadActiveConfig,
+  getDashboardUrl,
 } from './core-manager'
 import { mihomoApi } from './mihomo-api'
 import {
@@ -30,9 +32,8 @@ import {
   getActiveProxyGroupNames,
   getProxyGroupIcons,
   validateProcessNameRule,
-  validateGeneratedConfig,
 } from './profiles'
-import { getSettings, setSettings, getOrCreateSecret, getSelections, setSelection } from './store'
+import { getSettings, setSettings, setSelection } from './store'
 import { listRunningProcesses } from './processes'
 import type { AccessControlRule, ConnectionMode } from '../shared/types'
 import type { CustomRule } from '../shared/custom-rules'
@@ -338,13 +339,7 @@ function registerIpc(): void {
       if (path && st.running) {
         const profileId = getActiveProfileId()
         if (profileId) {
-          broadcastCustomRuleDiagnostics(await validateGeneratedConfig(path, profileId))
-        }
-        mihomoApi.ensureSecretFromStore()
-        await mihomoApi.putConfigs(path)
-        await mihomoApi.applySelections(getSelections())
-        if (changesXrayMux) {
-          await mihomoApi.closeAllConnections()
+          await reloadActiveConfig(path, profileId)
         }
       }
     }
@@ -373,14 +368,8 @@ function registerIpc(): void {
     if (st.running) {
       const profileId = getActiveProfileId()
       if (profileId) {
-        broadcastCustomRuleDiagnostics(await validateGeneratedConfig(path, profileId))
+        await reloadActiveConfig(path, profileId)
       }
-      mihomoApi.ensureSecretFromStore()
-      // Soft apply: force-reload YAML without restarting the core process.
-      await mihomoApi.putConfigs(path)
-      // Reload resets selectors to profile defaults — restore user choices.
-      await mihomoApi.applySelections(getSelections())
-      await mihomoApi.closeAllConnections()
     }
     return settings
   }
@@ -431,7 +420,6 @@ function registerIpc(): void {
       return { version: labeled.version, source: labeled.source }
     }
     try {
-      mihomoApi.ensureSecretFromStore()
       const v = await mihomoApi.getVersion()
       const apiVersion = (v.version || '').trim()
       if (isUsefulCoreLabel(apiVersion)) {
@@ -475,6 +463,15 @@ function registerIpc(): void {
         releasesUrl,
         error: e instanceof Error ? e.message : String(e),
       }
+    }
+  })
+  ipcMain.handle('dashboard:open', async () => {
+    const url = await getDashboardUrl()
+    try {
+      await shell.openExternal(url)
+    } catch {
+      // openExternal errors can contain the full URL, including the secret.
+      throw new Error('Could not open Zashboard in the browser')
     }
   })
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
@@ -708,10 +705,10 @@ if (!gotTheLock) {
       )
     }
 
-    getOrCreateSecret()
     ensureProfilesRoot()
     migrateOrphanDirs()
     mkdirSilent(coreHome())
+    restoreControllerAuth()
 
     if (!corePresent()) {
       log('mihomo binary not found — run npm run fetch-core', 'warn')

@@ -72,6 +72,7 @@ const api = {
     error?: string
   }> => ipcRenderer.invoke('app:checkUpdate'),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  openDashboard: (): Promise<void> => ipcRenderer.invoke('dashboard:open'),
   onLog: (cb: (line: string) => void): (() => void) => {
     const handler = (_: unknown, line: string): void => cb(line)
     ipcRenderer.on('logs:line', handler)

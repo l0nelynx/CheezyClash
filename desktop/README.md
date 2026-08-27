@@ -42,7 +42,31 @@ Filenames omit the version so GitHub `…/releases/latest/download/CheezyClash-w
 
 On Windows, packaging skips code signing (`signAndEditExecutable: false`) so electron-builder does not need Developer Mode for winCodeSign symlinks. Set `CSC_IDENTITY_AUTO_DISCOVERY=false` if a local cache still tries to extract signing tools.
 
-The NSIS installer stops/recreates `CheezyHelperService` from `resources/helper`. First TUN connect still syncs the core SHA256 allowlist via the app (same as `Ensure helper` on Home).
+When a registered installation is found, the RU/EN NSIS wizard defaults to
+**Update in place**. This keeps its installation scope, directory, AppUserModelID
+and existing Desktop/Start Menu shortcuts (including intentionally deleted
+shortcuts). It does not run the old uninstaller, unregister the app or remove
+Windows pins. A silent installation also updates the existing location; `/D`
+does not relocate an update. Select **Change installation location or users**
+for a reinstall instead; moving an installation can reset shortcuts/pins.
+
+Before replacing files, the installer stops the helper service owned by that
+directory, then terminates the installed app/core and waits for exit. It uses
+exact executable paths, not process names; another installed/portable copy or
+another product's helper is left alone. If stopping fails (for example, service
+control requires administrator rights), installation aborts before replacement;
+rerun the installer as administrator. Updating reuses the helper service rather
+than deleting/recreating it. First TUN connect still syncs the core SHA256
+allowlist via the app (same as `Ensure helper` on Home).
+
+`npm run test:installer` checks the upstream NSIS extension contract and, on
+Windows, mocked process/service isolation. `npm run test:installer -- --compile`
+compiles tiny CheezyClash/CheezyVPN installer fixtures on Windows, including the
+uninstaller; it never installs them or launches the app. The fixtures omit the
+updater's separate `elevate.exe` payload (not used by the installer UAC flow).
+Before release, check an actual old-version → new-version upgrade in a disposable
+Windows environment: pin the app, hash the `.lnk` files, start a tunnel, update,
+verify unchanged links/pins and the new version, then verify normal uninstall.
 
 Linux / macOS: `npm run dist:linux` / `npm run dist:mac`. Linux publishes both
 AppImage and `.deb`; install the `.deb` when you need reliable
@@ -56,6 +80,31 @@ integration tool before the browser can discover its custom-scheme handler.
 - Development runs never register production schemes to `electron.exe`; pass a
   URL in argv when testing the parser locally.
 - CheezyVPN uses its own `cheezyvpn://` scheme. Android keeps `cheezy://`.
+
+## Zashboard and controller password
+
+Desktop preserves `secret` from the active profile YAML; it never replaces it
+with a generated global password. Missing, null or explicitly empty `secret`
+means no controller authentication. The controller remains bound to loopback
+(`127.0.0.1:9090`); use a non-empty secret if other local software is untrusted.
+
+Without dashboard settings, Desktop supplies `external-ui: ui` and the Zashboard
+FiraSans ZIP URL. Explicit UI paths/download URLs are preserved. The Zashboard
+button opens the local panel with the applied controller's host, port and secret
+in `#/setup?...`, using URL encoding. The fragment is not sent in the HTTP request
+but can remain in browser history; do not share the complete setup URL.
+
+Both direct and helper launches read credentials from the effective YAML.
+Subscription updates that are not applied do not change the client's credentials.
+Changing `secret` or the UI directory requires a coordinated core restart because
+Mihomo's soft `PUT /configs` does not recreate the controller. Other live changes
+still use a soft reload, serialized with start/stop/profile switching.
+
+A last-applied controller snapshot allows a restarted UI to reconnect to a helper
+even when the on-disk profile has since been refreshed. During upgrade, the old
+generated `config.yaml` is used only to reconnect to an already-running core;
+the next start/reload uses the source YAML password. The legacy global
+`controllerSecret` setting is no longer read or written.
 
 ## Scripts
 
@@ -71,6 +120,7 @@ integration tool before the browser can discover its custom-scheme handler.
 | `npm run icons` | Rasterize black OS logos → PNG/ICO for tray & installer |
 | `npm run smoke` | Smoke-test mixed-port (core must be running) |
 | `npm run typecheck` | TypeScript check |
+| `npm run test:controller` | YAML credentials, HTTP auth, reload/profile races and Zashboard setup URL (no real VPN/browser) |
 
 ## Layout
 

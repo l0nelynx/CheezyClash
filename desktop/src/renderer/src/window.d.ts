@@ -57,6 +57,7 @@ export interface CheezyApi {
     error?: string
   }>
   openExternal: (url: string) => Promise<void>
+  openDashboard: () => Promise<void>
   onLog: (cb: (line: string) => void) => () => void
   onStatus: (cb: (status: CoreStatus) => void) => () => void
   onProfilesChanged: (cb: () => void) => () => void
