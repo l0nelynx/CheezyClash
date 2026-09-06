@@ -336,8 +336,13 @@ fun MainScreen(
 
     if (showUrlDialog) {
         val prefill by viewModel.urlDialogPrefill.collectAsState()
+        val importing by viewModel.importing.collectAsState()
+        val importError by viewModel.importError.collectAsState()
         UrlDialog(
             initial = prefill,
+            onValueChange = viewModel::updateUrlDraft,
+            busy = importing,
+            error = importError,
             onDismiss = { viewModel.dismissUrlDialog() },
             onConfirm = { url -> viewModel.importFromUrl(url) }
         )

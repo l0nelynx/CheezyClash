@@ -18,8 +18,8 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import com.cheezy.freedom.R
 
 @Composable
-fun UrlDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var text by remember { mutableStateOf(initial) }
+fun UrlDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit,
+              onValueChange: (String) -> Unit, busy: Boolean = false, error: String? = null) {
     AlertDialog(
         // Dialog is a separate window — expose testTags for UiAutomator (baseline profile).
         modifier = Modifier
@@ -29,16 +29,19 @@ fun UrlDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Uni
         title = { Text(stringResource(R.string.url_title)) },
         text = {
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
+                value = initial,
+                onValueChange = onValueChange,
+                enabled = !busy,
+                isError = error != null,
+                supportingText = { if (error != null) Text(error) },
                 singleLine = true,
                 label = { Text(stringResource(R.string.url_hint)) },
                 modifier = Modifier.fillMaxWidth()
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) {
-                Text(stringResource(R.string.url_load))
+            TextButton(onClick = { onConfirm(initial.trim()) }, enabled = initial.isNotBlank() && !busy) {
+                if (busy) androidx.compose.material3.CircularProgressIndicator() else Text(stringResource(R.string.url_load))
             }
         },
         dismissButton = {

@@ -67,7 +67,7 @@ sealed class MainEffect {
     data object CloseDialogs : MainEffect()
 }
 
-class MainViewModel(app: Application) : AndroidViewModel(app) {
+class MainViewModel(app: Application, private val savedStateHandle: androidx.lifecycle.SavedStateHandle) : AndroidViewModel(app) {
 
     private val context: Context get() = getApplication()
 
@@ -86,8 +86,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val refreshingProfiles: StateFlow<Set<String>> = _refreshingProfiles.asStateFlow()
 
     // Prefill for the add/URL dialog (used by the "add subscription" deep link).
-    private val _urlDialogPrefill = MutableStateFlow("")
+    private val _urlDialogPrefill = MutableStateFlow(savedStateHandle.get<String>("urlDraft") ?: "")
     val urlDialogPrefill: StateFlow<String> = _urlDialogPrefill.asStateFlow()
+
+    private val _importing = MutableStateFlow(false)
+    val importing = _importing.asStateFlow()
+    private val _importError = MutableStateFlow<String?>(null)
+    val importError = _importError.asStateFlow()
+    private var importJob: kotlinx.coroutines.Job? = null
+    fun updateUrlDraft(value: String) {
+        _urlDialogPrefill.value = value
+        savedStateHandle["urlDraft"] = value
+        _importError.value = null
+    }
 
     private val _userEmail = MutableStateFlow<String?>(null)
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
@@ -216,12 +227,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissUpdateDialog() { _updateInfo.value = null }
     fun openUrlDialog(prefill: String = "") {
-        _urlDialogPrefill.value = prefill
+        if (prefill.isNotBlank()) updateUrlDraft(prefill)
         _showUrlDialog.value = true
     }
     fun dismissUrlDialog() {
+        importJob?.cancel()
         _showUrlDialog.value = false
-        _urlDialogPrefill.value = ""
     }
 
     private fun refreshProfilesState() {
@@ -431,21 +442,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun addProfile(url: String) {
-        _showUrlDialog.value = false
-        _urlDialogPrefill.value = ""
+        if (importJob?.isActive == true) return
+        updateUrlDraft(url)
+        _importing.value = true
         _loading.value = true
+        _importError.value = null
         ClashState.setError(null)
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                AppDeps.subscriptionGateway.addProfile(context, url)
-            }
-            _loading.value = false
-            result.onSuccess {
+        importJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { AppDeps.subscriptionGateway.addProfile(context, url) }.getOrThrow()
                 _needsAuth.value = false
+                _showUrlDialog.value = false
+                updateUrlDraft("")
                 refreshProfilesState()
                 syncSubscriptionState()
                 reloadProxyGroups(forceLoad = true)
-            }.onFailure { ClashState.setError(context.getString(R.string.error_load_failed, it.message ?: "")) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _importError.value = context.getString(R.string.error_load_failed, error.message ?: "")
+            } finally {
+                _loading.value = false
+                _importing.value = false
+            }
         }
     }
 
