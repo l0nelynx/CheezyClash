@@ -69,6 +69,14 @@ interface GeneratedCustomRules {
 
 const generatedCustomRules = new Map<string, GeneratedCustomRules>()
 
+interface ProfileRefreshQueue {
+  tail: Promise<unknown>
+}
+
+// Serialize updates of the same profile, including the optional core reload.
+// Removing a queue invalidates downloads and queued work for that identity.
+const profileRefreshQueues = new Map<string, ProfileRefreshQueue>()
+
 /** Set from core-manager to avoid a circular profiles ↔ core-manager import. */
 let reloadActiveCore: ((configPath: string, profileId: string) => Promise<void>) | null = null
 
@@ -483,6 +491,7 @@ export async function upsertManagedProfile(
     list.find((p) => p.managedKey === managedKey) ??
     list.find((p) => p.id === MANAGED_PROFILE_ID && !p.managedKey && p.url === url)
   const id = existing?.id ?? managedProfileId(managedKey)
+  profileRefreshQueues.delete(id)
   const dir = profileDir(id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, BASE), text, 'utf8')
@@ -550,8 +559,36 @@ export async function refreshProfile(
   id: string,
   opts: { reloadCore: boolean },
 ): Promise<ProfileMeta> {
-  const list = store.get('profiles')
-  const existing = list.find((p) => p.id === id)
+  let queue = profileRefreshQueues.get(id)
+  if (!queue) {
+    queue = { tail: Promise.resolve() }
+    profileRefreshQueues.set(id, queue)
+  }
+  const currentQueue = queue
+  const pending = queue.tail
+    .catch(() => undefined)
+    .then(() => refreshProfileInQueue(id, opts, currentQueue))
+    .finally(() => {
+      if (profileRefreshQueues.get(id) === currentQueue && currentQueue.tail === pending) {
+        profileRefreshQueues.delete(id)
+      }
+    })
+  queue.tail = pending
+  return pending
+}
+
+async function refreshProfileInQueue(
+  id: string,
+  opts: { reloadCore: boolean },
+  queue: ProfileRefreshQueue,
+): Promise<ProfileMeta> {
+  const assertCurrent = (): void => {
+    if (profileRefreshQueues.get(id) !== queue) {
+      throw new Error('Profile was deleted or replaced while updating. Refresh the profile list and try again.')
+    }
+  }
+  assertCurrent()
+  const existing = store.get('profiles').find((p) => p.id === id)
   if (!existing) throw new Error('unknown profile')
   const url = existing.url
   if (!url || !/^https:\/\//i.test(url)) {
@@ -572,19 +609,28 @@ export async function refreshProfile(
   const text = normalizeSubscriptionBody(raw)
   parseClashMapping(text)
 
+  // Network awaits allow imports, deletion and account sync to change the store.
+  // Check identity before any filesystem writes and merge into the latest list.
+  assertCurrent()
+  const list = store.get('profiles')
+  const current = list.find((p) => p.id === id)
+  if (!current || current.url !== url) {
+    throw new Error('Profile was deleted or replaced while updating. Refresh the profile list and try again.')
+  }
+
   const subscription = subscriptionFromHeaders(res.headers)
   const updateIntervalHours = parseUpdateIntervalHours(res.headers)
   const title =
     parseContentDispositionFilename(res.headers.get('content-disposition')) ||
     subscription.title ||
-    existing.name
+    current.name
 
   const dir = profileDir(id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, BASE), text, 'utf8')
 
   const meta: ProfileMeta = {
-    ...existing,
+    ...current,
     name: displayProfileName(title),
     url,
     updatedAt: Date.now(),
@@ -614,6 +660,7 @@ export function deleteProfile(id: string): boolean {
   if (target?.managedKey || id === MANAGED_PROFILE_ID) {
     throw new Error('Cannot delete the managed CheezyVPN profile')
   }
+  profileRefreshQueues.delete(id)
   const wasActive = getActiveProfileId() === id
   const list = store.get('profiles').filter((p) => p.id !== id)
   store.set('profiles', list)
