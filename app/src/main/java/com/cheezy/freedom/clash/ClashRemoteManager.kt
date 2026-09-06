@@ -212,6 +212,10 @@ object ClashRemoteManager {
         runCatching { service?.stopVpn() }
     }
 
+    suspend fun loadConfigChecked(path: String) = withContext(Dispatchers.IO) {
+        checkNotNull(service) { "VPN service is not connected" }.loadConfig(path)
+    }
+
     suspend fun loadConfig(path: String) = withContext(Dispatchers.IO) {
         runCatching { service?.loadConfig(path) }
     }

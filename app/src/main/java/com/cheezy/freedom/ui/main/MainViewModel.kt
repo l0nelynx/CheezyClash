@@ -838,9 +838,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _selectingProxy.value = proxyName
             try {
-                val ok = withContext(Dispatchers.IO) {
-                    ClashRemoteManager.patchSelector(groupName, proxyName)
-                }
+                val profileId = ProfileStore.activeId(context)
+                val ok = runCatching {
+                    withContext(Dispatchers.IO) {
+                        ProfileManager.selectProxy(context, profileId, groupName, proxyName)
+                    }
+                }.getOrDefault(false)
                 if (ok) {
                     applySelectedProxy(groupName, proxyName)
                     refreshRuntimeProxySnapshot()

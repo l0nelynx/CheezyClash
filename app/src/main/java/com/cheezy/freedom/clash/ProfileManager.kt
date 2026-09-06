@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -42,6 +43,25 @@ object ProfileManager {
         ProfileOperations.run { refreshProfileLocked(context, id) }
 
     suspend fun remove(context: Context, id: String) = ProfileOperations.run { removeLocked(context, id) }
+
+    suspend fun selectProxy(context: Context, expectedId: String?, group: String, proxy: String): Boolean = ProfileOperations.run {
+        if (expectedId == null || ProfileStore.activeId(context) != expectedId) return@run false
+        val dir = ProfileStore.dir(context, expectedId)
+        if (PendingConfig.promote(dir)) {
+            ConfigOverrideManager.rebuild(context, dir)
+            try {
+                ClashRemoteManager.loadConfigChecked(dir.absolutePath)
+                ConfigManager.getSavedSelections(context).forEach { (name, selection) ->
+                    ClashRemoteManager.patchSelector(name, selection)
+                }
+            } catch (error: Exception) {
+                val pending = PendingConfig.directory(dir).apply { mkdirs() }.resolve("base.yaml")
+                if (!pending.exists()) ConfigFiles.writeAtomically(pending, dir.resolve("base.yaml").readText())
+                throw error
+            }
+        }
+        ClashRemoteManager.patchSelector(group, proxy)
+    }
 
     // --- Import ------------------------------------------------------------
 
@@ -104,8 +124,10 @@ object ProfileManager {
             }
         val id = existing?.id ?: if (safeKey == "primary") MANAGED_ID else "managed-$safeKey"
         val dir = ProfileStore.dir(context, id)
-        val meta = ConfigManager.downloadBase(context, url, dir, validateHeaders)
-        ConfigOverrideManager.rebuild(context, dir)
+        val deferred = currentCoroutineContext()[DeferProfileUpdates.Key] != null
+        val targetDir = if (deferred) PendingConfig.directory(dir) else dir
+        val meta = ConfigManager.downloadBase(context, url, targetDir, validateHeaders)
+        if (!deferred) { ConfigOverrideManager.rebuild(context, dir); PendingConfig.discard(dir) }
 
         val profile = Profile(
             id = id,
@@ -122,11 +144,11 @@ object ProfileManager {
         ensureUpdateScheduled(context)
 
         when (ProfileStore.activeId(context)) {
-            null -> switchToLocked(context, id, forceReload = true)
+            null -> if (deferred) ProfileStore.setActive(context, id) else switchToLocked(context, id, forceReload = true)
             id -> {
                 ClashState.setSubscription(meta.subscription)
                 ClashState.setLastUpdateTime(profile.lastUpdateTime)
-                if (ClashRemoteManager.isRunning()) {
+                if (!deferred && ClashRemoteManager.isRunning()) {
                     ConfigManager.reloadAndReapplySelections(context, dir)
                 }
             }
@@ -164,6 +186,7 @@ object ProfileManager {
      */
     private suspend fun applyActive(context: Context) {
         val dir = ProfileStore.activeDir(context)
+        PendingConfig.promote(dir)
         // Overrides (e.g. Local Proxy / "Share VPN") are global state applied into a
         // profile's config.yaml only at rebuild time. Rebuild the now-active profile
         // so its config reflects the current override state before the core loads it.
@@ -183,8 +206,10 @@ object ProfileManager {
         val profile = ProfileStore.get(context, id) ?: return@runCatching
         val url = profile.url ?: return@runCatching
         val dir = ProfileStore.dir(context, id)
-        val meta = ConfigManager.downloadBase(context, url, dir)
-        ConfigOverrideManager.rebuild(context, dir)
+        val deferred = currentCoroutineContext()[DeferProfileUpdates.Key] != null
+        val targetDir = if (deferred) PendingConfig.directory(dir) else dir
+        val meta = ConfigManager.downloadBase(context, url, targetDir)
+        if (!deferred) { ConfigOverrideManager.rebuild(context, dir); PendingConfig.discard(dir) }
 
         ProfileStore.upsert(
             context,
@@ -200,7 +225,7 @@ object ProfileManager {
         if (ProfileStore.activeId(context) == id) {
             ClashState.setSubscription(meta.subscription)
             ClashState.setLastUpdateTime(System.currentTimeMillis())
-            if (ClashRemoteManager.isRunning()) {
+            if (!deferred && ClashRemoteManager.isRunning()) {
                 ConfigManager.reloadAndReapplySelections(context, dir)
             }
         }

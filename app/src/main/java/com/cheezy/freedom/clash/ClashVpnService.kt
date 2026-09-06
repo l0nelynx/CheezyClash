@@ -448,6 +448,7 @@ class ClashVpnService : VpnService() {
                 ClashState.setPhase(ConnectionPhase.LOADING)
                 filesDir.resolve("clash").apply { mkdirs() } // core HOME (shared static)
                 activeConfigDir.mkdirs()
+                if (PendingConfig.promote(activeConfigDir)) runtimeConfigPrepared = false
                 ensureConfigLoaded()
 
                 // Apply user-saved proxies (snapshot from main via Intent extras).

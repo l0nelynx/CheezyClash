@@ -18,16 +18,16 @@ class ConfigUpdateWorker(
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO + DeferProfileUpdates) {
         val ctx = applicationContext
         ProfileManager.migrateLegacyIfNeeded(ctx)
 
         // Managed (backend-owned) profile is refreshed by the gateway sync
         // (proprietary re-fetches /me and re-imports; open is a no-op).
-        AppDeps.subscriptionGateway.syncFromBackend(ctx)
+        val backendResult = AppDeps.subscriptionGateway.syncFromBackend(ctx)
 
         val now = System.currentTimeMillis()
-        var anyFailure = false
+        var anyFailure = backendResult.isFailure
 
         ProfileStore.list(ctx).forEach { profile ->
             if (profile.managed) return@forEach          // handled by syncFromBackend
