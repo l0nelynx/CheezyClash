@@ -220,16 +220,18 @@ export function useCheezyState() {
     async (
       fn: () => Promise<unknown>,
       opts?: { success?: string; scope?: Tab | 'global' },
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       setBusy(true)
       setBusyScope(opts?.scope ?? tab)
       setError(null)
       try {
         const result = await fn()
         await refresh({ includeLogs: tabRef.current === 'logs' })
-        if (opts?.success && result !== null && result !== false) showNotice(opts.success)
+        if (opts?.success && result !== null && result !== false) showNotice(opts.success)
+        return result !== null && result !== false
       } catch (e) {
-        setError(friendlyError(e))
+        setError(friendlyError(e))
+        return false
       } finally {
         setBusy(false)
         setBusyScope(null)

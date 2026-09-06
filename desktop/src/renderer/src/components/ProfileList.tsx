@@ -9,7 +9,7 @@ interface Props {
   profiles: ProfileMeta[]
   activeId: string | null
   busy: boolean
-  onImportUrl: (url: string) => Promise<void>
+  onImportUrl: (url: string) => Promise<boolean>
   onImportFile: () => void
   onActivate: (id: string) => void
   onUpdate: (id: string) => void
@@ -48,7 +48,7 @@ export function ProfileList({
             disabled={busy || !importUrl.trim()}
             onClick={() => {
               const url = importUrl.trim()
-              void onImportUrl(url).then(() => setImportUrl(''))
+              void onImportUrl(url).then((success) => { if (success) setImportUrl('') })
             }}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

@@ -280,7 +280,7 @@ export default function App(): React.JSX.Element {
           activeId={state.activeId}
           busy={busy}
           onImportUrl={async (url) => {
-            await run(() => window.cheezy.importProfileUrl(url), {
+            return run(() => window.cheezy.importProfileUrl(url), {
               success: 'Profile imported',
               scope: 'profiles',
             })
