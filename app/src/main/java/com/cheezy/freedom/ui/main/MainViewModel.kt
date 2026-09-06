@@ -333,33 +333,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun syncSubscriptionState() {
         val active = ProfileStore.active(context)
-        val cachedFromYaml = active?.subscription
-        val snap = (AppDeps.accountProvider.state.value as? AccountState.Authenticated)?.snapshot
-        val merged = mergeSubscription(cachedFromYaml, snap)
-        if (merged != null) {
-            ClashState.setSubscription(merged)
-            // Persist merged state onto the active profile to avoid data loss on restart.
-            if (active != null) {
-                ProfileStore.updateExisting(context, active.id) { it.copy(subscription = merged) }
-                _profiles.value = ProfileStore.list(context)
-            }
-        }
-    }
-
-    private fun mergeSubscription(
-        fromYaml: SubscriptionInfo?,
-        snap: SubscriptionSnapshot?,
-    ): SubscriptionInfo? {
-        if (fromYaml == null && snap == null) return null
-        val used = snap?.usedBytes ?: 0L
-        return SubscriptionInfo(
-            title = fromYaml?.title ?: snap?.tariff ?: "None",
-            announce = fromYaml?.announce,
-            upload = if (snap != null) used / 2 else (fromYaml?.upload ?: 0L),
-            download = if (snap != null) (used - used / 2) else (fromYaml?.download ?: 0L),
-            total = if (snap != null) snap.totalBytes else (fromYaml?.total ?: 0L),
-            expire = if (snap != null) snap.expireEpochSeconds else (fromYaml?.expire ?: 0L),
-        )
+        val snapshot = (AppDeps.accountProvider.state.value as? AccountState.Authenticated)?.snapshot
+        // Derived display state: never write account totals back into subscription metadata.
+        ClashState.setSubscription(com.cheezy.freedom.clash.subscriptionForProfile(active, snapshot))
     }
 
     private suspend fun migrateClashCacheIfVersionChanged() {
