@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
 
 enum class ServerSort { PROFILE, NAME, LATENCY }
 class ServerBrowserState {
+    var searchVisible by mutableStateOf(false)
     var query by mutableStateOf("")
     var sort by mutableStateOf(ServerSort.PROFILE)
     val expanded = mutableStateMapOf<String, Boolean>()

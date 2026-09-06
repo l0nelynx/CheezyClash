@@ -3,6 +3,7 @@ package com.cheezy.freedom.ui.main.proxies
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,6 +77,8 @@ fun ProxiesTab(
     // instead of recreating the entire collection (as `expandedGroups +/- groupName` did).
     val profileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
     val browser = viewModel.serverBrowser(profileId)
+    val searchFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     val expandedGroups = browser.expanded
     var sortMenu by remember { mutableStateOf(false) }
     val pingingGroups = remember { mutableStateMapOf<String, Boolean>() }
@@ -91,24 +99,42 @@ fun ProxiesTab(
             ?.filter { (_, proxies) -> browser.query.isBlank() || proxies.isNotEmpty() }
     }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(value = browser.query, onValueChange = { browser.query = it },
-            label = { Text(stringResource(R.string.server_search)) }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
-        Box {
-            TextButton(onClick = { sortMenu = true }) { Text(stringResource(when (browser.sort) {
-                ServerSort.PROFILE -> R.string.server_sort_profile
-                ServerSort.NAME -> R.string.server_sort_name
-                ServerSort.LATENCY -> R.string.server_sort_latency
-            })) }
-            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                ServerSort.entries.forEach { sort ->
-                    DropdownMenuItem(text = { Text(stringResource(when (sort) {
-                        ServerSort.PROFILE -> R.string.server_sort_profile
-                        ServerSort.NAME -> R.string.server_sort_name
-                        ServerSort.LATENCY -> R.string.server_sort_latency
-                    })) }, onClick = { browser.sort = sort; sortMenu = false })
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                TextButton(onClick = { sortMenu = true }) { Text(stringResource(when (browser.sort) {
+                    ServerSort.PROFILE -> R.string.server_sort_profile
+                    ServerSort.NAME -> R.string.server_sort_name
+                    ServerSort.LATENCY -> R.string.server_sort_latency
+                })) }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    ServerSort.entries.forEach { sort ->
+                        DropdownMenuItem(text = { Text(stringResource(when (sort) {
+                            ServerSort.PROFILE -> R.string.server_sort_profile
+                            ServerSort.NAME -> R.string.server_sort_name
+                            ServerSort.LATENCY -> R.string.server_sort_latency
+                        })) }, onClick = { browser.sort = sort; sortMenu = false })
+                    }
                 }
             }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = {
+                browser.searchVisible = !browser.searchVisible
+                if (!browser.searchVisible) {
+                    browser.query = ""
+                    focusManager.clearFocus()
+                }
+            }) {
+                Icon(
+                    if (browser.searchVisible) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = stringResource(if (browser.searchVisible) R.string.ac_close else R.string.server_search)
+                )
+            }
+        }
+        if (browser.searchVisible) {
+            OutlinedTextField(value = browser.query, onValueChange = { browser.query = it },
+                label = { Text(stringResource(R.string.server_search)) }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).focusRequester(searchFocus))
+            LaunchedEffect(browser) { searchFocus.requestFocus() }
         }
         if (error != null) {
             Text(error!!, modifier = Modifier.padding(12.dp))
