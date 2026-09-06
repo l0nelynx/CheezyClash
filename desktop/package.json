@@ -27,6 +27,7 @@
     "test:deeplink": "node scripts/test-deep-link.mjs",
     "test:core-contract": "node scripts/test-core-contract.mjs",
     "test:controller": "node scripts/test-controller.mjs",
+    "test:helper-lifecycle": "node scripts/test-helper-lifecycle.mjs",
     "test:installer": "node scripts/test-installer.mjs",
     "test:lifecycle": "node scripts/test-lifecycle-coordinator.mjs",
     "test:network-config": "node scripts/test-network-config.mjs",

@@ -108,6 +108,24 @@ the next start/reload uses the source YAML password. The legacy global
 
 ## Scripts
 
+Windows installers now require administrator rights before running, including
+per-user updates; existing install locations and shortcut identities are retained.
+The helper is registered with Manual startup and is started for TUN on demand.
+Interactive users receive only the additional service start/stop rights, preserving
+the existing ACL. A normal app exit disconnects first, then stops this installation's
+helper; closing to the tray keeps it running. Old portable installations may need
+one elevated helper repair to migrate their service configuration. A service owned
+by another installation is not replaced or stopped.
+
+Update preparation waits for the owned service to stop before replacing files.
+Unknown executable paths now block replacement instead of being treated as absent.
+On the development host, the legacy CheezyVPN service was Automatic and its ACL
+did not grant interactive users start/stop access; its privileged process path was
+invisible to an unelevated process query. This explains the permissions obstacle;
+the original failing installer was not replayed. Tests mock service mutations, and
+installer compilation verifies the actual EXE's `requireAdministrator` manifest.
+The running host service was left unchanged during validation.
+
 | Script | Purpose |
 |--------|---------|
 | `npm run dev` | Dev app |
@@ -125,6 +143,8 @@ the next start/reload uses the source YAML password. The legacy global
 | `npm run test:system-proxy` | Windows proxy snapshot, conditional restoration, partial failure/restart recovery, and legacy ownership checks (mock registry; no network changes) |
 | `npm run test:subscription-download` | Download deadline, size limits, HTTPS redirects, errors and cancellation |
 | `npm run test:traffic-stream` | Stream chunking, deduplication, reset and invalid frames |
+| `npm run test:helper-lifecycle` | Client exit, restart, literal paths and one-time repair with OS boundaries mocked |
+| `npm run test:installer -- --compile` | Mock service lifecycle/ACL tests and compile both branded installers; assert elevation in the generated EXE manifest (no installation) |
 | `npm run test:ui` | After `npm run build`: isolated Electron UI checks with mocked IPC, blocked HTTP(S), temporary preferences and screenshots |
 
 Appearance settings offer English/Russian and system/light/dark themes. Preferences

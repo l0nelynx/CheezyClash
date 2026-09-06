@@ -15,6 +15,8 @@ files:
 asar: true
 afterPack: scripts/after-pack.mjs
 extraResources:
+  - from: build/installer-processes.ps1
+    to: helper-control.ps1
   - from: resources/core
     to: core
     filter:

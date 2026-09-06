@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import yaml from 'js-yaml'
+import * as ResEdit from 'resedit'
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFile(join(projectDir, path), 'utf8')
@@ -14,6 +15,7 @@ const overrides = await read('build/installer-overrides.nsh')
 const stock = await read('node_modules/app-builder-lib/templates/nsis/installSection.nsh')
 const stockUtil = await read('node_modules/app-builder-lib/templates/nsis/include/installUtil.nsh')
 
+assert.match(hooks, /RequestExecutionLevel admin/)
 assert.equal(config.nsis.oneClick, false)
 assert.equal(config.nsis.createDesktopShortcut, true)
 assert.equal(config.appId, 'com.cheezy.freedom.desktop')
@@ -71,6 +73,13 @@ if (process.argv.includes('--compile')) {
         },
         publish: 'never',
       })
+      const setup = await readFile(join(scratch, productName, 'output', 'CheezyClash-win-x64.exe'))
+      const exe = ResEdit.NtExecutable.from(setup, { ignoreCert: true })
+      const resources = ResEdit.NtExecutableResource.from(exe)
+      const manifest = resources.entries.filter(entry => entry.type === 24)
+        .map(entry => Buffer.from(entry.bin).toString('utf8')).join('')
+      assert.match(manifest, /requestedExecutionLevel[^>]*level=["']requireAdministrator["']/,
+        'Actual installer PE manifest must require administrator rights')
       console.log(`${productName}: installer and uninstaller compile OK (not installed)`)
     }
   } finally {

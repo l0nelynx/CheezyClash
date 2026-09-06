@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { createHash } from 'crypto'
@@ -5,7 +6,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 import { platform } from 'os'
 import { HELPER_PORT, HELPER_IDENTITY } from '../shared/types'
-import { coreBinaryPath, helperBinaryPath, bundledHelperDir } from './paths'
+import { coreBinaryPath, helperBinaryPath } from './paths'
 import { log } from './logger'
 
 const execFileAsync = promisify(execFile)
@@ -201,87 +202,57 @@ export async function queryWindowsService(): Promise<'none' | 'presence' | 'runn
   }
 }
 
-/** Try start existing service without UAC. */
-export async function tryStartExistingService(): Promise<boolean> {
-  if (platform() !== 'win32') return pingHelper()
-  const status = await queryWindowsService()
-  if (status === 'running') return true
-  if (status === 'none') return false
-  try {
-    await execFileAsync('sc', ['start', SERVICE_NAME])
-    await new Promise((r) => setTimeout(r, 500))
-    return (await queryWindowsService()) === 'running'
-  } catch {
-    return false
+/** Shared, path-scoped service operations. Packaged outside ASAR for PowerShell. */
+async function controlWindowsHelper(action: 'StartHelper' | 'StopHelper' | 'RepairHelper', elevated = false): Promise<void> {
+  const script = app.isPackaged
+    ? join(process.resourcesPath, 'helper-control.ps1')
+    : join(dirname(dirname(helperBinaryPath())), '..', 'build', 'installer-processes.ps1')
+  const installDir = dirname(dirname(dirname(helperBinaryPath())))
+  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script,
+    '-InstallDir', installDir, '-AppExecutable', 'CheezyClash.exe', '-Action', action]
+  if (elevated) {
+    // Encode the wrapper, keeping paths literal (including apostrophes and $).
+    const literals = args.map(value => "'" + ('"' + value + '"').replace(/'/g, "''") + "'").join(',')
+    const command = `$ErrorActionPreference = 'Stop'; $p = Start-Process -FilePath powershell.exe -ArgumentList @(${literals}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode`
+    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', Buffer.from(command, 'utf16le').toString('base64')], { windowsHide: true })
+  } else {
+    await execFileAsync('powershell.exe', args, { windowsHide: true, timeout: 20_000 })
   }
 }
 
-/**
- * Install / repair helper with UAC.
- * Always stop+delete+create so a zombie service (bound to a dead port / old binary) is replaced.
- */
-export async function installWindowsHelper(): Promise<boolean> {
-  if (platform() !== 'win32') return false
-  const helper = helperBinaryPath()
-  if (!existsSync(helper)) {
-    log(`helper binary missing at ${helper}`, 'error')
-    return false
-  }
-  mkdirSync(bundledHelperDir(), { recursive: true })
-  if (existsSync(coreBinaryPath())) {
-    const hash = sha256File(coreBinaryPath())
-    writeFileSync(join(dirname(helper), 'allowed_core.sha256'), hash, 'utf8')
-    log(`pre-install allowlist ${hash.slice(0, 12)}…`)
-  }
+/** Stop only this installation's registered service, never another portable copy. */
+export async function stopHelperOnExit(): Promise<void> {
+  if (platform() !== 'win32') return
+  try { await controlWindowsHelper('StopHelper') }
+  catch (error) { log(`helper exit cleanup failed; repair helper permissions: ${error}`, 'warn') }
+}
 
-  // stop/delete may fail if absent — ignore via `&` chain
-  const command = [
-    'sc',
-    'stop',
-    SERVICE_NAME,
-    '&',
-    'sc',
-    'delete',
-    SERVICE_NAME,
-    '&',
-    'sc',
-    'create',
-    SERVICE_NAME,
-    `binPath= "${helper}"`,
-    'start= auto',
-    '&&',
-    'sc',
-    'start',
-    SERVICE_NAME,
-  ].join(' ')
-
-  const ps = `Start-Process -FilePath cmd.exe -ArgumentList '/c ${command.replace(/'/g, "''")}' -Verb RunAs -Wait`
-  log(`installing helper service (port ${HELPER_PORT})…`)
+export async function tryStartExistingService(): Promise<boolean> {
+  if (platform() !== 'win32') return pingHelper()
   try {
-    await execFileAsync('powershell.exe', ['-NoProfile', '-Command', ps], {
-      windowsHide: true,
-    })
-    // Wait for listener
+    await controlWindowsHelper('StartHelper')
     for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 400))
-      if (await pingHelper()) {
-        log('helper service reachable')
-        return true
-      }
+      if (await pingHelper()) return true
+      await new Promise(resolve => setTimeout(resolve, 250))
     }
-    log(
-      `helper service installed but not reachable on 127.0.0.1:${HELPER_PORT} — is another app blocking?`,
-      'error',
-    )
-    return false
-  } catch (e) {
-    log(`install helper UAC failed: ${e}`, 'error')
+  } catch (error) { log(`helper start requires setup: ${error}`, 'warn') }
+  return false
+}
+
+/** One-time registration/permissions migration. Never delete or hijack a service. */
+export async function installWindowsHelper(): Promise<boolean> {
+  if (platform() !== 'win32' || !existsSync(helperBinaryPath())) return false
+  try {
+    await controlWindowsHelper('RepairHelper', true)
+    return await tryStartExistingService()
+  } catch (error) {
+    log(`helper setup failed or cancelled: ${error}`, 'error')
     return false
   }
 }
 
 export async function ensureHelper(): Promise<boolean> {
-  if (await pingHelper()) {
+  if (platform() !== 'win32' && await pingHelper()) {
     await syncHelperAllowlist()
     return true
   }

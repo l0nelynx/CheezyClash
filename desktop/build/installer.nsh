@@ -23,6 +23,11 @@
 !endif
 
 !macro customHeader
+  ; Require service-control rights for install/update/uninstall while retaining
+  ; the existing per-user/per-machine location and shortcut handling.
+  !ifndef BUILD_UNINSTALLER
+    RequestExecutionLevel admin
+  !endif
   !ifndef BUILD_UNINSTALLER
     LangString cheezyUpdateTitle ${LANG_ENGLISH} "Update ${PRODUCT_NAME}"
     LangString cheezyUpdateTitle ${LANG_RUSSIAN} "Обновление ${PRODUCT_NAME}"
@@ -91,6 +96,14 @@
 !macroend
 
 !macro cheezyStopProcesses
+  !ifdef BUILD_UNINSTALLER
+    ; Keep the build-time uninstaller generator unelevated; elevate the actual
+    ; uninstaller before service control even for a per-user installation.
+    ${IfNot} ${UAC_IsAdmin}
+      !insertmacro UAC_RunElevated
+      Quit
+    ${EndIf}
+  !endif
   InitPluginsDir
   File /oname=$PLUGINSDIR\cheezy-installer-processes.ps1 "${CHEEZY_INSTALLER_DIR}\installer-processes.ps1"
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cheezy-installer-processes.ps1" -InstallDir "$INSTDIR" -AppExecutable "${APP_EXECUTABLE_FILENAME}" -Action Stop'

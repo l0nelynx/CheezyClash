@@ -1,3 +1,4 @@
+import { stopHelperOnExit } from './helper'
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog } from 'electron'
 import { join, basename } from 'path'
 import { existsSync } from 'fs'
@@ -63,6 +64,7 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let quitCleanupDone = false
+let quitCleanupStarted = false
 let trayProductName = 'CheezyClash'
 /** Queued until the window is ready (cold-start deeplink). */
 let pendingDeepLink: string | null = null
@@ -776,10 +778,13 @@ if (!gotTheLock) {
   app.on('before-quit', (e) => {
     if (quitCleanupDone) return
     e.preventDefault()
+    if (quitCleanupStarted) return
+    quitCleanupStarted = true
     quitting = true
     stopSubscriptionUpdater()
     void disconnect()
-      .catch(() => undefined)
+      .catch((error) => log(`disconnect during exit failed: ${error}`, 'warn'))
+      .then(() => stopHelperOnExit())
       .finally(() => {
         quitCleanupDone = true
         app.quit()

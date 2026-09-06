@@ -1,7 +1,7 @@
 param(
     [string]$InstallDir,
     [string]$AppExecutable,
-    [ValidateSet('Stop', 'InstallHelper', 'RemoveHelper')][string]$Action,
+    [ValidateSet('Stop', 'InstallHelper', 'RemoveHelper', 'StartHelper', 'StopHelper', 'RepairHelper')][string]$Action,
     [string]$ProductName = 'CheezyClash'
 )
 
@@ -52,22 +52,28 @@ function Get-InstallerProcesses {
     param([string[]]$AllowedPaths)
     # Failure to enumerate is not proof that files are safe to overwrite.
     @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+        if (-not $_.ExecutablePath -and $_.Name -in @($AllowedPaths | ForEach-Object { [IO.Path]::GetFileName($_) })) {
+            throw "Cannot inspect process $($_.Name) (PID $($_.ProcessId)); administrator rights are required to verify file ownership."
+        }
         Test-InstallerProcessPath $_.ExecutablePath $AllowedPaths
     })
 }
 
+function Stop-OwnedHelper {
+    param([string]$HelperPath)
+    $helperService = Get-InstallerService
+    if (-not $helperService -or -not (Test-InstallerServicePath $helperService.PathName $HelperPath)) { return }
+    $controller = Get-Service -Name CheezyHelperService -ErrorAction Stop
+    if ($controller.Status -ne 'Stopped') {
+        Write-Output "Stopping owned helper: $($helperService.PathName)"
+        if ($controller.Status -ne 'StopPending') { $controller.Stop() }
+        $controller.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(8))
+    }
+}
+
 function Stop-InstallerProcesses {
     param([string[]]$AllowedPaths)
-    $helperService = Get-InstallerService
-    if ($helperService -and (Test-InstallerServicePath $helperService.PathName $AllowedPaths[2])) {
-        # The service's normal Stop handler releases its core first. No deletion
-        # on upgrade, no service-recovery restart racing with file replacement.
-        $controller = Get-Service -Name CheezyHelperService -ErrorAction Stop
-        if ($controller.Status -ne 'Stopped') {
-            $controller.Stop()
-            $controller.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(8))
-        }
-    }
+    Stop-OwnedHelper $AllowedPaths[2]
 
     foreach ($entry in @(Get-InstallerProcesses $AllowedPaths)) {
         $runningProcess = Get-Process -Id $entry.ProcessId -ErrorAction SilentlyContinue
@@ -84,6 +90,59 @@ function Stop-InstallerProcesses {
     }
 }
 
+function Invoke-HelperSc {
+    param([string[]]$Arguments)
+    $output = & "$env:SystemRoot\System32\sc.exe" @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "Helper service command failed ($LASTEXITCODE): $($output -join ' ')" }
+    $output
+}
+
+function Get-HelperSecurity {
+    $output = Invoke-HelperSc @('sdshow', 'CheezyHelperService')
+    $sddl = ($output | Where-Object { $_ -match '^D:' }) -join ''
+    if (-not $sddl) { throw 'Helper service security descriptor is missing.' }
+    [Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+}
+
+function Grant-HelperControl {
+    # Preserve the service's existing ACL. Interactive users receive ONLY start
+    # and stop rights, never service reconfiguration, deletion or DACL ownership.
+    $descriptor = Get-HelperSecurity
+    $sid = [Security.Principal.SecurityIdentifier]::new('S-1-5-4')
+    $ace = [Security.AccessControl.CommonAce]::new(
+        [Security.AccessControl.AceFlags]::None,
+        [Security.AccessControl.AceQualifier]::AccessAllowed, 0x30, $sid, $false, $null)
+    $descriptor.DiscretionaryAcl.InsertAce($descriptor.DiscretionaryAcl.Count, $ace)
+    $sddl = $descriptor.GetSddlForm([Security.AccessControl.AccessControlSections]::Access)
+    Invoke-HelperSc @('sdset', 'CheezyHelperService', $sddl) | Out-Null
+}
+
+function Test-HelperControl {
+    $descriptor = Get-HelperSecurity
+    $allowed = 0
+    foreach ($ace in $descriptor.DiscretionaryAcl) {
+        if ($ace -is [Security.AccessControl.CommonAce] -and $ace.SecurityIdentifier.Value -eq 'S-1-5-4' -and
+            $ace.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed) { $allowed = $allowed -bor $ace.AccessMask }
+    }
+    return ($allowed -band 0x30) -eq 0x30
+}
+
+function Start-OwnedHelper {
+    param([string]$HelperPath)
+    $helperService = Get-InstallerService
+    if (-not $helperService) { throw 'Helper service is not installed.' }
+    if (-not (Test-InstallerServicePath $helperService.PathName $HelperPath)) {
+        throw "Helper belongs to another installation: $($helperService.PathName)"
+    }
+    if ($helperService.StartMode -ne 'Manual' -or -not (Test-HelperControl)) {
+        throw 'Helper requires a one-time repair to enable start on demand and exit cleanup.'
+    }
+    $controller = Get-Service -Name CheezyHelperService -ErrorAction Stop
+    if ($controller.Status -eq 'StopPending') { $controller.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(8)); $controller.Refresh() }
+    if ($controller.Status -eq 'Stopped') { $controller.Start() }
+    $controller.WaitForStatus('Running', [TimeSpan]::FromSeconds(8))
+}
+
 function Install-InstallerHelper {
     param([string]$HelperPath, [string]$DisplayProductName)
     if (-not (Test-Path -LiteralPath $HelperPath -PathType Leaf)) { return }
@@ -95,16 +154,12 @@ function Install-InstallerHelper {
             Write-Output 'Helper belongs to another installation; left unchanged.'
             return
         }
-        Set-Service -Name CheezyHelperService -StartupType Automatic -ErrorAction Stop
+        Set-Service -Name CheezyHelperService -StartupType Manual -ErrorAction Stop
     } else {
         New-Service -Name CheezyHelperService -BinaryPathName ('"' + $HelperPath + '"') `
-            -DisplayName "$DisplayProductName Helper" -StartupType Automatic -ErrorAction Stop | Out-Null
+            -DisplayName "$DisplayProductName Helper" -StartupType Manual -ErrorAction Stop | Out-Null
     }
-    $controller = Get-Service -Name CheezyHelperService -ErrorAction Stop
-    if ($controller.Status -ne 'Running') {
-        $controller.Start()
-        $controller.WaitForStatus('Running', [TimeSpan]::FromSeconds(8))
-    }
+    if (-not (Test-HelperControl)) { Grant-HelperControl }
 }
 
 function Remove-InstallerHelper {
@@ -124,6 +179,9 @@ if ($MyInvocation.InvocationName -ne '.') {
             'Stop' { Stop-InstallerProcesses $allowedPaths }
             'InstallHelper' { Install-InstallerHelper $allowedPaths[2] $ProductName }
             'RemoveHelper' { Remove-InstallerHelper $allowedPaths[2] }
+            'StartHelper' { Start-OwnedHelper $allowedPaths[2] }
+            'StopHelper' { Stop-OwnedHelper $allowedPaths[2] }
+            'RepairHelper' { Install-InstallerHelper $allowedPaths[2] $ProductName; Start-OwnedHelper $allowedPaths[2] }
             default { throw 'Installer action is required.' }
         }
         exit 0
