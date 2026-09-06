@@ -121,6 +121,18 @@ the next start/reload uses the source YAML password. The legacy global
 | `npm run smoke` | Smoke-test mixed-port (core must be running) |
 | `npm run typecheck` | TypeScript check |
 | `npm run test:controller` | YAML credentials, HTTP auth, reload/profile races and Zashboard setup URL (no real VPN/browser) |
+| `npm run test:profile-races` | Subscription refresh versus import, deletion, account replacement, and concurrent refreshes (mock HTTP, isolated temporary profiles) |
+| `npm run test:system-proxy` | Windows proxy snapshot, conditional restoration, partial failure/restart recovery, and legacy ownership checks (mock registry; no network changes) |
+
+On Windows, enabling the system proxy saves its previous address, bypass list,
+and enabled state. Disconnect restores these values only while the current
+registry values still match the client's writes. Changes made by another app
+are preserved. Reconnect after an external change captures a new baseline.
+A persistent write-ahead snapshot supports recovery from partial writes; startup
+retries restoration when no running core is detected. Installations upgraded
+from a version without snapshots can only disable a matching legacy client proxy;
+their original settings cannot be recovered retroactively. This restoration
+behavior currently applies to Windows; macOS/Linux restoration remains pending.
 
 ## Layout
 

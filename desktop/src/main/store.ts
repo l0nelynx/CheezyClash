@@ -1,5 +1,6 @@
 import Store from 'electron-store'
 import type { ControllerRuntime } from './controller-config'
+import type { WindowsProxySnapshot } from './windows-proxy-state'
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -21,6 +22,7 @@ interface StoreSchema {
   desktopHwid: string
   /** True only after this app successfully enabled the OS proxy. */
   systemProxyOwned: boolean
+  windowsProxySnapshot: WindowsProxySnapshot | null
 }
 
 export const store = new Store<StoreSchema>({
@@ -34,6 +36,7 @@ export const store = new Store<StoreSchema>({
     selectionsByProfile: {},
     desktopHwid: '',
     systemProxyOwned: false,
+    windowsProxySnapshot: null,
   },
 })
 
@@ -63,7 +66,7 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
 }
 
 export function isSystemProxyOwned(): boolean {
-  return store.get('systemProxyOwned') === true
+  return store.get('systemProxyOwned') === true || !!store.get('windowsProxySnapshot')
 }
 
 export function setSystemProxyOwned(owned: boolean): void {

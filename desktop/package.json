@@ -32,6 +32,8 @@
     "test:network-config": "node scripts/test-network-config.mjs",
     "test:custom-rules": "node scripts/test-custom-rules.mjs",
     "test:subscription-metadata": "node scripts/test-subscription-metadata.mjs",
+    "test:profile-races": "node scripts/test-profile-races.mjs",
+    "test:system-proxy": "node scripts/test-system-proxy.mjs",
     "test:startup": "node scripts/test-startup.mjs",
     "test:sparkline": "node scripts/test-sparkline.mjs",
     "test:xray-mux-config": "node scripts/test-xray-mux-config.mjs",

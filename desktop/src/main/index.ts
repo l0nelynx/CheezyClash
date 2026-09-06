@@ -33,7 +33,7 @@ import {
   getProxyGroupIcons,
   validateProcessNameRule,
 } from './profiles'
-import { getSettings, setSettings, setSelection } from './store'
+import { getSettings, setSettings, setSelection, isSystemProxyOwned } from './store'
 import { listRunningProcesses } from './processes'
 import type { AccessControlRule, ConnectionMode } from '../shared/types'
 import type { CustomRule } from '../shared/custom-rules'
@@ -691,7 +691,7 @@ if (!gotTheLock) {
     enqueueOrHandleDeepLink(url)
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     // Hide File/Edit/View application menu
     Menu.setApplicationMenu(null)
 
@@ -709,6 +709,16 @@ if (!gotTheLock) {
     migrateOrphanDirs()
     mkdirSilent(coreHome())
     restoreControllerAuth()
+
+    // A crashed UI/core can leave its proxy journal behind. Recover before IPC
+    // and auto-connect start; preserve an already-running helper connection.
+    try {
+      if (process.platform === 'win32' && isSystemProxyOwned() && !(await getStatus()).running) {
+        await syncManagedSystemProxy(false)
+      }
+    } catch (e) {
+      log(`system proxy recovery failed: ${e}`, 'warn')
+    }
 
     if (!corePresent()) {
       log('mihomo binary not found — run npm run fetch-core', 'warn')
