@@ -77,7 +77,7 @@ object ProfileManager {
     ): Profile {
         val duplicate = ProfileStore.list(context).firstOrNull { it.url == url }
         if (duplicate != null) {
-            refreshProfileLocked(context, duplicate.id)
+            refreshProfileLocked(context, duplicate.id, validateHeaders).getOrThrow()
             switchToLocked(context, duplicate.id, forceReload = true)
             return ProfileStore.get(context, duplicate.id) ?: duplicate
         }
@@ -202,13 +202,13 @@ object ProfileManager {
     // --- Refresh -----------------------------------------------------------
 
     /** Re-downloads a single user profile's subscription into its own dir. */
-    private suspend fun refreshProfileLocked(context: Context, id: String): Result<Unit> = runCatching {
+    private suspend fun refreshProfileLocked(context: Context, id: String, validateHeaders: (HttpURLConnection) -> Unit = {}): Result<Unit> = runCatching {
         val profile = ProfileStore.get(context, id) ?: return@runCatching
         val url = profile.url ?: return@runCatching
         val dir = ProfileStore.dir(context, id)
         val deferred = currentCoroutineContext()[DeferProfileUpdates.Key] != null
         val targetDir = if (deferred) PendingConfig.directory(dir) else dir
-        val meta = ConfigManager.downloadBase(context, url, targetDir)
+        val meta = ConfigManager.downloadBase(context, url, targetDir, validateHeaders)
         if (!deferred) { ConfigOverrideManager.rebuild(context, dir); PendingConfig.discard(dir) }
 
         ProfileStore.upsert(
