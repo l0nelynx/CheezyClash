@@ -29,6 +29,7 @@ const api = {
   healthCheck: (group: string): Promise<Record<string, number>> =>
     ipcRenderer.invoke('proxies:health', group),
   listProfiles: (): Promise<ProfileMeta[]> => ipcRenderer.invoke('profiles:list'),
+  cancelSubscriptionDownloads: (): Promise<void> => ipcRenderer.invoke('profiles:cancelDownloads'),
   getActiveProfileId: (): Promise<string | null> => ipcRenderer.invoke('profiles:active'),
   importProfileUrl: (url: string, name?: string): Promise<ProfileMeta> =>
     ipcRenderer.invoke('profiles:importUrl', url, name),

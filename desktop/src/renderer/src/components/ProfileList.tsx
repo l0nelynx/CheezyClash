@@ -9,6 +9,7 @@ interface Props {
   profiles: ProfileMeta[]
   activeId: string | null
   busy: boolean
+  downloading: boolean
   onImportUrl: (url: string) => Promise<boolean>
   onImportFile: () => void
   onActivate: (id: string) => void
@@ -20,6 +21,7 @@ export function ProfileList({
   profiles,
   activeId,
   busy,
+  downloading,
   onImportUrl,
   onImportFile,
   onActivate,
@@ -31,6 +33,7 @@ export function ProfileList({
   return (
     <div className="space-y-4">
       <div className="page-card sticky top-0 z-10 bg-card/95 p-4 backdrop-blur">
+        {downloading && <Button variant="outline" size="sm" onClick={() => void window.cheezy.cancelSubscriptionDownloads()}>Cancel download</Button>}
         <p className="section-label mb-3">Import</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative min-w-0 flex-1">

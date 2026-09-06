@@ -25,6 +25,7 @@ export interface CheezyApi {
   selectProxy: (group: string, name: string) => Promise<boolean>
   healthCheck: (group: string) => Promise<Record<string, number>>
   listProfiles: () => Promise<ProfileMeta[]>
+  cancelSubscriptionDownloads: () => Promise<void>
   getActiveProfileId: () => Promise<string | null>
   importProfileUrl: (url: string, name?: string) => Promise<ProfileMeta>
   importProfileFile: () => Promise<ProfileMeta | null>

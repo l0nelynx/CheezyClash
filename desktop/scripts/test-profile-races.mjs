@@ -27,7 +27,7 @@ function harness() {
       reject,
       reply(name, body = 'proxies: []\n') {
         resolveRequest({
-          ok: true, url,
+          ok: true, url, status: 200, body: new Response(body).body,
           headers: new Headers({ 'profile-title': name, 'profile-update-interval': '1' }),
           text: async () => body,
         })

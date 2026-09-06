@@ -1,3 +1,4 @@
+import { downloadSubscription } from './subscription-download'
 import {
   existsSync,
   mkdirSync,
@@ -384,22 +385,15 @@ function subscriptionLogOrigin(url: string): string {
   }
 }
 
-export async function importFromUrl(url: string, name?: string): Promise<ProfileMeta> {
+export async function importFromUrl(url: string, name?: string, signal?: AbortSignal): Promise<ProfileMeta> {
   ensureProfilesRoot()
   if (!/^https:\/\//i.test(url)) {
     throw new Error('Only https:// subscription URLs are allowed')
   }
   const headers = subscriptionHeaders()
   log(`importing profile from ${subscriptionLogOrigin(url)} (UA=${headers['User-Agent']})`)
-  const res = await fetch(url, { headers, redirect: 'follow' })
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
-  }
-  if (!/^https:/i.test(res.url)) {
-    throw new Error(`Redirect left HTTPS (final URL scheme: ${res.url.split(':')[0]})`)
-  }
-  const raw = await res.text()
+  const res = await downloadSubscription(url, headers, signal)
+  const raw = res.text
   const text = normalizeSubscriptionBody(raw)
   const subscription = subscriptionFromHeaders(res.headers)
   const updateIntervalHours = parseUpdateIntervalHours(res.headers)
@@ -452,15 +446,8 @@ export async function upsertManagedProfile(
   }
   const headers = subscriptionHeaders()
   log(`upserting managed profile from ${subscriptionLogOrigin(url)}`)
-  const res = await fetch(url, { headers, redirect: 'follow' })
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
-  }
-  if (!/^https:/i.test(res.url)) {
-    throw new Error(`Redirect left HTTPS (final URL scheme: ${res.url.split(':')[0]})`)
-  }
-  const raw = await res.text()
+  const res = await downloadSubscription(url, headers, undefined)
+  const raw = res.text
   const text = normalizeSubscriptionBody(raw)
   parseClashMapping(text)
 
@@ -557,7 +544,7 @@ function createProfileFromYaml(
  */
 export async function refreshProfile(
   id: string,
-  opts: { reloadCore: boolean },
+  opts: { reloadCore: boolean; signal?: AbortSignal },
 ): Promise<ProfileMeta> {
   let queue = profileRefreshQueues.get(id)
   if (!queue) {
@@ -579,7 +566,7 @@ export async function refreshProfile(
 
 async function refreshProfileInQueue(
   id: string,
-  opts: { reloadCore: boolean },
+  opts: { reloadCore: boolean; signal?: AbortSignal },
   queue: ProfileRefreshQueue,
 ): Promise<ProfileMeta> {
   const assertCurrent = (): void => {
@@ -597,15 +584,8 @@ async function refreshProfileInQueue(
 
   const headers = subscriptionHeaders()
   log(`refreshing profile ${id} from ${subscriptionLogOrigin(url)} (reloadCore=${opts.reloadCore})`)
-  const res = await fetch(url, { headers, redirect: 'follow' })
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
-  }
-  if (!/^https:/i.test(res.url)) {
-    throw new Error(`Redirect left HTTPS (final URL scheme: ${res.url.split(':')[0]})`)
-  }
-  const raw = await res.text()
+  const res = await downloadSubscription(url, headers, opts.signal)
+  const raw = res.text
   const text = normalizeSubscriptionBody(raw)
   parseClashMapping(text)
 

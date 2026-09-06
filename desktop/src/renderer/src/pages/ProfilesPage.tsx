@@ -5,6 +5,7 @@ interface Props {
   profiles: ProfileMeta[]
   activeId: string | null
   busy: boolean
+  downloading: boolean
   onImportUrl: (url: string) => Promise<boolean>
   onImportFile: () => void
   onActivate: (id: string) => void

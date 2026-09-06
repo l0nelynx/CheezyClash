@@ -229,7 +229,26 @@ async function refreshTrayMenu(): Promise<void> {
   tray.setContextMenu(contextMenu)
 }
 
+const subscriptionDownloads = new Map<number, Set<AbortController>>()
+
+async function withSubscriptionDownload<T>(event: Electron.IpcMainInvokeEvent, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
+  const downloads = subscriptionDownloads.get(event.sender.id) ?? new Set<AbortController>()
+  subscriptionDownloads.set(event.sender.id, downloads)
+  downloads.add(controller)
+  const abort = (): void => controller.abort()
+  event.sender.once('destroyed', abort)
+  try { return await work(controller.signal) } finally {
+    event.sender.removeListener('destroyed', abort)
+    downloads.delete(controller)
+    if (!downloads.size) subscriptionDownloads.delete(event.sender.id)
+  }
+}
+
 function registerIpc(): void {
+  ipcMain.handle('profiles:cancelDownloads', (event) => {
+    for (const controller of subscriptionDownloads.get(event.sender.id) ?? []) controller.abort()
+  })
   ipcMain.handle('core:status', async () => {
     const st = await getStatus()
     void refreshTrayMenu()
@@ -265,7 +284,7 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', () => listProfiles())
   ipcMain.handle('profiles:active', () => getActiveProfileId())
   ipcMain.handle('profiles:importUrl', async (_e, url: string, name?: string) => {
-    const meta = await importFromUrl(url, name)
+    const meta = await withSubscriptionDownload(_e, signal => importFromUrl(url, name, signal))
     rescheduleSubscriptionUpdates()
     notifyProfilesChanged()
     return meta
@@ -293,7 +312,7 @@ function registerIpc(): void {
     await switchProfile(profileId)
   })
   ipcMain.handle('profiles:update', async (_e, id: string) => {
-    const meta = await refreshProfile(id, { reloadCore: true })
+    const meta = await withSubscriptionDownload(_e, signal => refreshProfile(id, { reloadCore: true, signal }))
     rescheduleSubscriptionUpdates()
     notifyProfilesChanged()
     return meta

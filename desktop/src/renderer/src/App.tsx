@@ -33,6 +33,12 @@ export default function App(): React.JSX.Element {
     refresh,
   } = state
   const [testingAll, setTestingAll] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const download = async (work: () => Promise<unknown>, success: string): Promise<boolean> => {
+    setDownloading(true)
+    try { return await run(work, { success, scope: 'profiles' }) }
+    finally { setDownloading(false) }
+  }
   const [testProgress, setTestProgress] = useState<{ done: number; total: number } | null>(null)
   const [caps, setCaps] = useState<PrivateCapabilities | null>(null)
   const [session, setSession] = useState<PrivateAccountSession | null>(null)
@@ -278,12 +284,10 @@ export default function App(): React.JSX.Element {
         <ProfilesPage
           profiles={state.profiles}
           activeId={state.activeId}
+          downloading={downloading}
           busy={busy}
           onImportUrl={async (url) => {
-            return run(() => window.cheezy.importProfileUrl(url), {
-              success: 'Profile imported',
-              scope: 'profiles',
-            })
+            return download(() => window.cheezy.importProfileUrl(url), 'Profile imported')
           }}
           onImportFile={() =>
             run(() => window.cheezy.importProfileFile(), {
@@ -298,10 +302,7 @@ export default function App(): React.JSX.Element {
             })
           }
           onUpdate={(id) =>
-            run(() => window.cheezy.updateProfile(id), {
-              success: 'Subscription updated',
-              scope: 'profiles',
-            })
+            download(() => window.cheezy.updateProfile(id), 'Subscription updated')
           }
           onDelete={(id) =>
             run(() => window.cheezy.deleteProfile(id), {
