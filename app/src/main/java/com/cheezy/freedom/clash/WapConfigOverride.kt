@@ -12,7 +12,7 @@ object WapConfigOverride : ConfigOverride {
     override val id: String = "wap-upstream"
 
     const val PROXY_NAME = "__CHEEZY_WAP_UPSTREAM__"
-    const val CORE_CONNECTION_LIMIT = 7
+    const val CORE_CONNECTION_LIMIT = 0
     val ALLOWED_PORTS = setOf(443, 8443, 13324)
 
     private val tcpTypes = setOf(

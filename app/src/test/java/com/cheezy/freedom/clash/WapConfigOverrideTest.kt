@@ -54,7 +54,7 @@ class WapConfigOverrideTest {
             assertEquals(WapConfigOverride.PROXY_NAME, proxies.first()["dialer-proxy"])
             assertEquals(false, proxies.first()["udp"])
             val upstream = proxies.last()
-            assertEquals(7, upstream["max-connections"])
+            assertEquals(0, upstream["max-connections"])
             assertEquals(listOf(443, 8443, 13324), upstream["allowed-connect-ports"])
 
             val groups = config["proxy-groups"] as List<Map<String, Any?>>
