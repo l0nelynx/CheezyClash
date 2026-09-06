@@ -45,25 +45,32 @@ object ProfileStore {
     }
 
     /** Managed profile(s) first, then by insertion order. Stable. */
+    @Synchronized
     fun list(context: Context): List<Profile> =
         rawList(context).sortedWith(
             compareByDescending<Profile> { it.managed }.thenBy { it.order }
         )
 
+    @Synchronized
     fun get(context: Context, id: String): Profile? = rawList(context).firstOrNull { it.id == id }
 
+    @Synchronized
     fun activeId(context: Context): String? = prefs(context).getString(KEY_ACTIVE, null)
 
+    @Synchronized
     fun active(context: Context): Profile? = activeId(context)?.let { get(context, it) }
 
+    @Synchronized
     fun setActive(context: Context, id: String?) {
         prefs(context).edit().apply {
             if (id == null) remove(KEY_ACTIVE) else putString(KEY_ACTIVE, id)
         }.apply()
     }
 
+    @Synchronized
     fun isEmpty(context: Context): Boolean = rawList(context).isEmpty()
 
+    @Synchronized
     fun nextOrder(context: Context): Long =
         (rawList(context).maxOfOrNull { it.order } ?: 0L) + 1L
 
@@ -87,11 +94,21 @@ object ProfileStore {
 
     // --- Mutations ---------------------------------------------------------
 
+    @Synchronized
     fun upsert(context: Context, profile: Profile) {
         val items = rawList(context).toMutableList()
         val idx = items.indexOfFirst { it.id == profile.id }
         if (idx >= 0) items[idx] = profile else items.add(profile)
         save(context, items)
+    }
+
+    @Synchronized
+    fun clear(context: Context) { prefs(context).edit().clear().apply() }
+
+    @Synchronized
+    fun updateExisting(context: Context, id: String, update: (Profile) -> Profile): Profile? {
+        val current = get(context, id) ?: return null
+        return update(current).also { upsert(context, it) }
     }
 
     /**
@@ -101,6 +118,7 @@ object ProfileStore {
      * touched. When the removed profile was active, the first remaining profile
      * becomes active.
      */
+    @Synchronized
     fun remove(context: Context, id: String): String? {
         val items = rawList(context)
         val target = items.firstOrNull { it.id == id } ?: return null

@@ -229,12 +229,12 @@ object ConfigManager {
 
     /** Full reset (logout): wipes profile catalog, all profile dirs, the core
      *  home, selections, proxy cache and overrides. */
-    fun clearAll(context: Context) {
+    suspend fun clearAll(context: Context) = ProfileOperations.run {
         clearSavedSelections(context)
         clearAllProfileSelections(context)
         clearProxyGroupsCache(context)
         ConfigOverrideManager.clearPrefs(context)
-        context.getSharedPreferences("cheezy.profiles", Context.MODE_PRIVATE).edit().clear().apply()
+        ProfileStore.clear(context)
         runCatching { ProfileStore.profilesRoot(context).deleteRecursively() }
         runCatching { context.filesDir.resolve("clash").deleteRecursively() }
         ClashState.setSubscription(null)

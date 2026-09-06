@@ -340,7 +340,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ClashState.setSubscription(merged)
             // Persist merged state onto the active profile to avoid data loss on restart.
             if (active != null) {
-                ProfileStore.upsert(context, active.copy(subscription = merged))
+                ProfileStore.updateExisting(context, active.id) { it.copy(subscription = merged) }
                 _profiles.value = ProfileStore.list(context)
             }
         }

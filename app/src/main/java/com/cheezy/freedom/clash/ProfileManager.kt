@@ -29,6 +29,20 @@ object ProfileManager {
     private const val WORK_NAME = "config_update"
     private val json = Json { ignoreUnknownKeys = true }
 
+    suspend fun importNew(context: Context, url: String, validateHeaders: (HttpURLConnection) -> Unit = {}): Profile =
+        ProfileOperations.run { importNewLocked(context, url, validateHeaders) }
+
+    suspend fun upsertManaged(context: Context, url: String, managedKey: String = "primary", validateHeaders: (HttpURLConnection) -> Unit = {}): Profile =
+        ProfileOperations.run { upsertManagedLocked(context, url, managedKey, validateHeaders) }
+
+    suspend fun switchTo(context: Context, id: String, forceReload: Boolean = false) =
+        ProfileOperations.run { switchToLocked(context, id, forceReload) }
+
+    suspend fun refreshProfile(context: Context, id: String): Result<Unit> =
+        ProfileOperations.run { refreshProfileLocked(context, id) }
+
+    suspend fun remove(context: Context, id: String) = ProfileOperations.run { removeLocked(context, id) }
+
     // --- Import ------------------------------------------------------------
 
     /**
@@ -36,15 +50,15 @@ object ProfileManager {
      * same URL already exists it is refreshed and activated instead of creating a
      * duplicate.
      */
-    suspend fun importNew(
+    private suspend fun importNewLocked(
         context: Context,
         url: String,
         validateHeaders: (HttpURLConnection) -> Unit = {},
     ): Profile {
         val duplicate = ProfileStore.list(context).firstOrNull { it.url == url }
         if (duplicate != null) {
-            refreshProfile(context, duplicate.id)
-            switchTo(context, duplicate.id, forceReload = true)
+            refreshProfileLocked(context, duplicate.id)
+            switchToLocked(context, duplicate.id, forceReload = true)
             return ProfileStore.get(context, duplicate.id) ?: duplicate
         }
 
@@ -65,7 +79,7 @@ object ProfileManager {
         )
         ProfileStore.upsert(context, profile)
         ensureUpdateScheduled(context)
-        switchTo(context, id, forceReload = true)
+        switchToLocked(context, id, forceReload = true)
         return profile
     }
 
@@ -74,7 +88,7 @@ object ProfileManager {
      * stable managed key. Does NOT steal focus from a user-chosen
      * profile — it only becomes active if nothing is active yet.
      */
-    suspend fun upsertManaged(
+    private suspend fun upsertManagedLocked(
         context: Context,
         url: String,
         managedKey: String = "primary",
@@ -108,7 +122,7 @@ object ProfileManager {
         ensureUpdateScheduled(context)
 
         when (ProfileStore.activeId(context)) {
-            null -> switchTo(context, id, forceReload = true)
+            null -> switchToLocked(context, id, forceReload = true)
             id -> {
                 ClashState.setSubscription(meta.subscription)
                 ClashState.setLastUpdateTime(profile.lastUpdateTime)
@@ -126,7 +140,8 @@ object ProfileManager {
      * Makes [id] the active profile. Swaps the per-profile selection buckets and
      * reloads/restarts the core so it runs the new profile's config.
      */
-    suspend fun switchTo(context: Context, id: String, forceReload: Boolean = false) {
+    private suspend fun switchToLocked(context: Context, id: String, forceReload: Boolean = false) {
+        requireNotNull(ProfileStore.get(context, id)) { "Profile no longer exists" }
         val current = ProfileStore.activeId(context)
         if (current == id && !forceReload) return
 
@@ -164,7 +179,7 @@ object ProfileManager {
     // --- Refresh -----------------------------------------------------------
 
     /** Re-downloads a single user profile's subscription into its own dir. */
-    suspend fun refreshProfile(context: Context, id: String): Result<Unit> = runCatching {
+    private suspend fun refreshProfileLocked(context: Context, id: String): Result<Unit> = runCatching {
         val profile = ProfileStore.get(context, id) ?: return@runCatching
         val url = profile.url ?: return@runCatching
         val dir = ProfileStore.dir(context, id)
@@ -199,12 +214,12 @@ object ProfileManager {
 
     // --- Remove ------------------------------------------------------------
 
-    suspend fun remove(context: Context, id: String) {
+    private suspend fun removeLocked(context: Context, id: String) {
         val wasActive = ProfileStore.activeId(context) == id
         val newActive = ProfileStore.remove(context, id)
         if (wasActive) {
             if (newActive != null) {
-                switchTo(context, newActive, forceReload = true)
+                switchToLocked(context, newActive, forceReload = true)
             } else {
                 ClashState.setSubscription(null)
                 ClashState.setLastUpdateTime(0L)
