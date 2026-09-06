@@ -192,4 +192,11 @@
     <string name="servers_unavailable">Could not load servers. Check the VPN service connection and try again.</string>
     <string name="servers_empty">No servers in this profile yet</string>
     <string name="retry_action">Retry</string>
+    <string name="server_search">Search servers</string>
+    <string name="server_sort_profile">Profile order</string>
+    <string name="server_sort_name">Name</string>
+    <string name="server_sort_latency">Latency</string>
+    <string name="logs_search">Search logs</string>
+    <string name="logs_export">Export logs</string>
+    <string name="logs_export_failed">Could not export logs</string>
 </resources>

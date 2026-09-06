@@ -27,9 +27,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
 import com.cheezy.freedom.R
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -61,18 +64,21 @@ fun ProxiesTab(
     viewModel: com.cheezy.freedom.ui.main.MainViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val scope = rememberCoroutineScope()
-    val rawGroups by viewModel.proxyGroups.collectAsState()
-    val groupIcons by viewModel.groupIcons.collectAsState()
+    val rawGroups by viewModel.proxyGroups.collectAsStateWithLifecycle()
+    val groupIcons by viewModel.groupIcons.collectAsStateWithLifecycle()
     // SnapshotStateMap instead of Set<String>: tapping a header mutates a single cell,
     // recompose affects only that header and its child rows —
     // instead of recreating the entire collection (as `expandedGroups +/- groupName` did).
-    val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val profileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
+    val browser = viewModel.serverBrowser(profileId)
+    val expandedGroups = browser.expanded
+    var sortMenu by remember { mutableStateOf(false) }
     val pingingGroups = remember { mutableStateMapOf<String, Boolean>() }
     val pingingProxies = remember { mutableStateMapOf<String, Boolean>() }
-    val delays by viewModel.proxyDelays.collectAsState()
-    val loading by viewModel.isPinging.collectAsState()
-    val error by viewModel.groupsError.collectAsState()
-    val groupsLoading by viewModel.groupsLoading.collectAsState()
+    val delays by viewModel.proxyDelays.collectAsStateWithLifecycle()
+    val loading by viewModel.isPinging.collectAsStateWithLifecycle()
+    val error by viewModel.groupsError.collectAsStateWithLifecycle()
+    val groupsLoading by viewModel.groupsLoading.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (rawGroups == null) viewModel.reloadProxyGroups() }
 
     // Don't trigger reloadProxyGroups every time the tab is opened: data comes
@@ -80,7 +86,30 @@ fun ProxiesTab(
     // is updated by explicit triggers — ping, proxy selection (patchSelector),
     // subscription update, or ClashState.lastUpdateTime tick.
 
+    val visibleGroups = remember(rawGroups, browser.query, browser.sort, delays) {
+        rawGroups?.map { (name, proxies) -> name to browseServers(proxies, browser.query, browser.sort, delays[name].orEmpty()) }
+            ?.filter { (_, proxies) -> browser.query.isBlank() || proxies.isNotEmpty() }
+    }
     Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(value = browser.query, onValueChange = { browser.query = it },
+            label = { Text(stringResource(R.string.server_search)) }, singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+        Box {
+            TextButton(onClick = { sortMenu = true }) { Text(stringResource(when (browser.sort) {
+                ServerSort.PROFILE -> R.string.server_sort_profile
+                ServerSort.NAME -> R.string.server_sort_name
+                ServerSort.LATENCY -> R.string.server_sort_latency
+            })) }
+            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                ServerSort.entries.forEach { sort ->
+                    DropdownMenuItem(text = { Text(stringResource(when (sort) {
+                        ServerSort.PROFILE -> R.string.server_sort_profile
+                        ServerSort.NAME -> R.string.server_sort_name
+                        ServerSort.LATENCY -> R.string.server_sort_latency
+                    })) }, onClick = { browser.sort = sort; sortMenu = false })
+                }
+            }
+        }
         if (error != null) {
             Text(error!!, modifier = Modifier.padding(12.dp))
             TextButton(onClick = { viewModel.reloadProxyGroups() }, enabled = !groupsLoading) {
@@ -91,12 +120,12 @@ fun ProxiesTab(
             rawGroups == null && groupsLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularWavyProgressIndicator()
             }
-            rawGroups.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            visibleGroups.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (error == null) Text(stringResource(R.string.servers_empty))
             }
             else -> {
-                val groups = rawGroups ?: emptyList()
-                val listState = rememberLazyListState()
+                val groups = visibleGroups
+                val listState = browser.scroll
                 val cardColor = MaterialTheme.colorScheme.surfaceContainerLow
                 LazyColumn(
                     state = listState,
@@ -106,7 +135,7 @@ fun ProxiesTab(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
                 ) {
                     groups.forEach { (groupName, proxies) ->
-                        val isExpanded = expandedGroups[groupName] == true
+                        val isExpanded = browser.query.isNotBlank() || expandedGroups[groupName] == true
                         val currentProxy = proxies.firstOrNull()?.groupNow ?: ""
 
                         // Sticky group header: stays pinned to the top while its

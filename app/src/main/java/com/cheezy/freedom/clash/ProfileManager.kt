@@ -48,8 +48,8 @@ object ProfileManager {
         if (expectedId == null || ProfileStore.activeId(context) != expectedId) return@run false
         val dir = ProfileStore.dir(context, expectedId)
         if (PendingConfig.promote(dir)) {
-            ConfigOverrideManager.rebuild(context, dir)
             try {
+                ConfigOverrideManager.rebuild(context, dir)
                 ClashRemoteManager.loadConfigChecked(dir.absolutePath)
                 ConfigManager.getSavedSelections(context).forEach { (name, selection) ->
                     ClashRemoteManager.patchSelector(name, selection)

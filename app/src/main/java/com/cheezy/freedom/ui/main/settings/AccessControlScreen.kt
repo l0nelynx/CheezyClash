@@ -43,7 +43,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,13 +70,13 @@ fun AccessControlScreen(
     viewModel: AccessControlViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val overrideEnabled by viewModel.overrideEnabled.collectAsState()
-    val vpnRunning by ClashState.running.collectAsState()
-    val includeApps by viewModel.includeApps.collectAsState()
-    val excludeApps by viewModel.excludeApps.collectAsState()
-    val forceIncluded by viewModel.forceIncluded.collectAsState()
-    val forceExcluded by viewModel.forceExcluded.collectAsState()
-    val loading by viewModel.loading.collectAsState()
+    val overrideEnabled by viewModel.overrideEnabled.collectAsStateWithLifecycle()
+    val vpnRunning by ClashState.running.collectAsStateWithLifecycle()
+    val includeApps by viewModel.includeApps.collectAsStateWithLifecycle()
+    val excludeApps by viewModel.excludeApps.collectAsStateWithLifecycle()
+    val forceIncluded by viewModel.forceIncluded.collectAsStateWithLifecycle()
+    val forceExcluded by viewModel.forceExcluded.collectAsStateWithLifecycle()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }

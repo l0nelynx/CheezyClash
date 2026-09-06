@@ -31,7 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,13 +54,13 @@ import com.cheezy.freedom.util.formatLastUpdate
 
 @Composable
 fun ProfilesTab(viewModel: MainViewModel = viewModel()) {
-    val profiles by viewModel.profiles.collectAsState()
-    val activeId by viewModel.activeProfileId.collectAsState()
-    val refreshing by viewModel.refreshingProfiles.collectAsState()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val activeId by viewModel.activeProfileId.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshingProfiles.collectAsStateWithLifecycle()
     // The active profile's live subscription (merged with backend snapshot in
     // proprietary) is richer than the copy stored on disk — use it for the active
     // row so its stats match the Home tab.
-    val liveSub by ClashState.subscription.collectAsState()
+    val liveSub by ClashState.subscription.collectAsStateWithLifecycle()
     val canManage = AppDeps.accountProvider.supportsMultipleProfiles
 
     var pendingDelete by remember { mutableStateOf<Profile?>(null) }

@@ -1,6 +1,10 @@
 package com.cheezy.freedom
 
 import android.os.Bundle
+import android.content.Intent
+import androidx.core.content.FileProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Share
 import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -81,6 +85,10 @@ data class LogEntry(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LogsScreen() {
+    val context = LocalContext.current
+    val exportTitle = stringResource(R.string.logs_export)
+    var search by remember { mutableStateOf("") }
+    var exporting by remember { mutableStateOf(false) }
     var selectedSource by remember { mutableStateOf(LogSource.CORE) }
     var minLevel by remember { mutableStateOf(LogMessage.Level.Debug) }
     
@@ -133,7 +141,7 @@ private fun LogsScreen() {
             if (it is DragInteraction.Start) autoScroll = false
         }
     }
-    val filteredLogs = pausedLogs ?: liveLogs
+    val filteredLogs = (pausedLogs ?: liveLogs).filter { it.message.contains(search, true) || it.tag.contains(search, true) }
     LaunchedEffect(filteredLogs.lastOrNull()?.id, autoScroll) {
         if (autoScroll && filteredLogs.isNotEmpty()) listState.scrollToItem(filteredLogs.lastIndex)
     }
@@ -143,6 +151,31 @@ private fun LogsScreen() {
             TopAppBar(
                 title = { Text(stringResource(R.string.title_logs)) },
                 actions = {
+                    IconButton(enabled = !exporting && filteredLogs.isNotEmpty(), onClick = {
+                        val snapshot = filteredLogs.toList()
+                        exporting = true
+                        scope.launch {
+                            try {
+                                val uri = withContext(Dispatchers.IO) {
+                                    val dir = context.cacheDir.resolve("log-exports").apply { mkdirs() }
+                                    dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
+                                    val file = java.io.File.createTempFile("logs-", ".txt", dir)
+                                    file.writeText(snapshot.joinToString("\n") { "${it.time} ${it.level} ${it.tag}: ${it.message}" }.stripPrivacyInfo())
+                                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                }
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    clipData = android.content.ClipData.newRawUri("Logs", uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, exportTitle))
+                            } catch (error: Exception) {
+                                if (error is kotlinx.coroutines.CancellationException) throw error
+                                android.widget.Toast.makeText(context, R.string.logs_export_failed, android.widget.Toast.LENGTH_LONG).show()
+                            } finally { exporting = false }
+                        }
+                    }) { Icon(Icons.Default.Share, stringResource(R.string.logs_export)) }
                     IconButton(onClick = { autoScroll = !autoScroll }) {
                         Icon(
                             imageVector = Icons.Default.VerticalAlignBottom,
@@ -163,6 +196,8 @@ private fun LogsScreen() {
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            OutlinedTextField(value = search, onValueChange = { search = it }, singleLine = true,
+                label = { Text(stringResource(R.string.logs_search)) }, modifier = Modifier.fillMaxWidth().padding(8.dp))
             // Source Selector
             Row(
                 modifier = Modifier
@@ -304,10 +339,7 @@ private fun LogItemRow(entry: LogEntry) {
     }
 }
 
-private fun String.stripPrivacyInfo(): String {
-    return this.replace(Regex("""https?://[^\s'"]+"""), "<url>")
-        .replace(Regex("""\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"""), "<ip>")
-}
+private fun String.stripPrivacyInfo(): String = LogPrivacy.redact(this)
 
 private fun parseLogcatLine(line: String): LogEntry? {
     // Basic logcat parser for "-v time" format: 

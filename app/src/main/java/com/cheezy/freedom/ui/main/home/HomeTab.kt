@@ -67,7 +67,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -800,7 +800,7 @@ private fun rotationAngle(active: Boolean): Float {
 
 @Composable
 private fun TrafficText(trafficNowFlow: StateFlow<Long>, color: Color) {
-    val trafficNow by trafficNowFlow.collectAsState()
+    val trafficNow by trafficNowFlow.collectAsStateWithLifecycle()
     Text(
         formatKbps(trafficNow),
         style = MaterialTheme.typography.labelSmall,

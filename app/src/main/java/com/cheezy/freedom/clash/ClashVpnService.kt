@@ -167,6 +167,7 @@ class ClashVpnService : VpnService() {
         }
     }
 
+    private val trafficWakeup = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val callbacks = newCallbackList<IClashCallback>()
     private val logCallbacks = newCallbackList<ILogcatCallback>()
 
@@ -174,6 +175,7 @@ class ClashVpnService : VpnService() {
         override fun refreshCrashReportingPolicy() = com.cheezy.freedom.diagnostics.CrashReporting.refreshVpnPolicy()
         override fun registerCallback(callback: IClashCallback) {
             callbacks.register(callback)
+            trafficWakeup.trySend(Unit)
             // Immediately send current state to the new subscriber
             try {
                 callback.onStateChanged(ClashState.running.value, ClashState.lastError.value)
@@ -187,6 +189,7 @@ class ClashVpnService : VpnService() {
 
         override fun unregisterCallback(callback: IClashCallback) {
             callbacks.unregister(callback)
+            trafficWakeup.trySend(Unit)
         }
 
         override fun isRunning(): Boolean = ClashState.running.value
@@ -628,13 +631,17 @@ class ClashVpnService : VpnService() {
         trafficJob?.cancel()
         trafficJob = scope.launch {
             val nm = getSystemService(NotificationManager::class.java)
-            var tick = 0
+            var lastProxyRead = 0L
             var lastProxy: String? = null
             while (isActive) {
-                val now = runCatching { Clash.queryTrafficNowBytes() }.getOrDefault(0L)
-                ClashState.setTraffic(now)
-
-                if (tick % 2 == 0) {
+                val hasUi = callbacks.registeredCallbackCount > 0
+                if (hasUi) {
+                    val now = runCatching { Clash.queryTrafficNowBytes() }.getOrDefault(0L)
+                    ClashState.setTraffic(now)
+                }
+                val elapsed = android.os.SystemClock.elapsedRealtime()
+                if (elapsed - lastProxyRead >= TrafficPollingPolicy.proxyIntervalMillis(hasUi)) {
+                    lastProxyRead = elapsed
                     val proxy = runCatching {
                         val first = Clash.queryGroupNames(true).firstOrNull()
                         first?.let { Clash.queryGroup(it)?.now }
@@ -645,8 +652,7 @@ class ClashVpnService : VpnService() {
                         nm.notify(NOTIFICATION_ID, buildNotification(proxy))
                     }
                 }
-                tick++
-                delay(1_000)
+                kotlinx.coroutines.withTimeoutOrNull(TrafficPollingPolicy.delayMillis(hasUi)) { trafficWakeup.receive() }
             }
         }
     }

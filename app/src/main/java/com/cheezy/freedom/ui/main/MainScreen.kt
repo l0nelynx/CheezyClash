@@ -60,7 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -123,36 +123,36 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
 
-    val proxyname by ClashState.activeProxy.collectAsState()
-    val running by ClashState.running.collectAsState()
-    val phase by ClashState.phase.collectAsState()
-    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
-    val tunAddress by ClashState.tunAddress.collectAsState()
-    val localIp by ClashState.localIp.collectAsState()
+    val proxyname by ClashState.activeProxy.collectAsStateWithLifecycle()
+    val running by ClashState.running.collectAsStateWithLifecycle()
+    val phase by ClashState.phase.collectAsStateWithLifecycle()
+    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsStateWithLifecycle()
+    val tunAddress by ClashState.tunAddress.collectAsStateWithLifecycle()
+    val localIp by ClashState.localIp.collectAsStateWithLifecycle()
     // trafficNow ticks ~once per second. We don't collect it at the MainScreen
     // level via collectAsState — otherwise, every tick would recompose the
     // entire Scaffold/Pager. We pass the StateFlow down and read it at the
     // actual consumer (Text inside ConnectButton), thus limiting
     // recomposition to a single Text node.
     val trafficNowFlow = ClashState.trafficNow
-    val subscription by ClashState.subscription.collectAsState()
-    val lastUpdateTime by ClashState.lastUpdateTime.collectAsState()
-    val lastError by ClashState.lastError.collectAsState()
+    val subscription by ClashState.subscription.collectAsStateWithLifecycle()
+    val lastUpdateTime by ClashState.lastUpdateTime.collectAsStateWithLifecycle()
+    val lastError by ClashState.lastError.collectAsStateWithLifecycle()
 
-    val configName by viewModel.configName.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
-    val tgId by viewModel.tgId.collectAsState()
-    val loading by viewModel.loading.collectAsState()
-    val proxiesPinging by viewModel.isPinging.collectAsState()
-    val primaryProxyGroup by viewModel.primaryProxyGroup.collectAsState()
-    val proxyDelays by viewModel.proxyDelays.collectAsState()
-    val selectingProxy by viewModel.selectingProxy.collectAsState()
-    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
-    val wapSettings by viewModel.wapSettings.collectAsState()
-    val xrayMuxSettings by viewModel.xrayMuxSettings.collectAsState()
-    val updateInfo by viewModel.updateInfo.collectAsState()
-    val showUrlDialog by viewModel.showUrlDialog.collectAsState()
-    val needsAuth by viewModel.needsAuth.collectAsState()
+    val configName by viewModel.configName.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+    val tgId by viewModel.tgId.collectAsStateWithLifecycle()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val proxiesPinging by viewModel.isPinging.collectAsStateWithLifecycle()
+    val primaryProxyGroup by viewModel.primaryProxyGroup.collectAsStateWithLifecycle()
+    val proxyDelays by viewModel.proxyDelays.collectAsStateWithLifecycle()
+    val selectingProxy by viewModel.selectingProxy.collectAsStateWithLifecycle()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
+    val wapSettings by viewModel.wapSettings.collectAsStateWithLifecycle()
+    val xrayMuxSettings by viewModel.xrayMuxSettings.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val showUrlDialog by viewModel.showUrlDialog.collectAsStateWithLifecycle()
+    val needsAuth by viewModel.needsAuth.collectAsStateWithLifecycle()
     // Hoisted here so the (non-composable) onVpnToggle lambda can use it.
     val noConfigMsg = stringResource(R.string.home_error_no_config)
 
@@ -335,9 +335,9 @@ fun MainScreen(
     }
 
     if (showUrlDialog) {
-        val prefill by viewModel.urlDialogPrefill.collectAsState()
-        val importing by viewModel.importing.collectAsState()
-        val importError by viewModel.importError.collectAsState()
+        val prefill by viewModel.urlDialogPrefill.collectAsStateWithLifecycle()
+        val importing by viewModel.importing.collectAsStateWithLifecycle()
+        val importError by viewModel.importError.collectAsStateWithLifecycle()
         UrlDialog(
             initial = prefill,
             onValueChange = viewModel::updateUrlDraft,
@@ -356,7 +356,7 @@ fun MainScreen(
 
     if (showShareDialog) {
         LaunchedEffect(showShareDialog) { viewModel.refreshShareInfo() }
-        val shareInfo by viewModel.shareInfo.collectAsState()
+        val shareInfo by viewModel.shareInfo.collectAsStateWithLifecycle()
         ShareVpnDialog(
             tunAddress = tunAddress ?: "",
             localIp = localIp ?: "",

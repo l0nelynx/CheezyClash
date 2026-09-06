@@ -195,4 +195,11 @@
     <string name="servers_unavailable">Не удалось получить серверы. Проверьте подключение к VPN-службе и повторите попытку.</string>
     <string name="servers_empty">В профиле пока нет серверов</string>
     <string name="retry_action">Повторить</string>
+    <string name="server_search">Поиск серверов</string>
+    <string name="server_sort_profile">Порядок профиля</string>
+    <string name="server_sort_name">По названию</string>
+    <string name="server_sort_latency">По задержке</string>
+    <string name="logs_search">Поиск в логах</string>
+    <string name="logs_export">Экспорт логов</string>
+    <string name="logs_export_failed">Не удалось экспортировать логи</string>
 </resources>

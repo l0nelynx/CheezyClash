@@ -30,11 +30,11 @@ object ConfigOverrideManager {
      */
     suspend fun setEnabled(context: Context, id: String, value: Boolean) {
         if (registry.none { it.id == id }) return
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(id, value)
-            .apply()
-        rebuild(context)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val previous = isEnabled(context, id)
+        prefs.edit().putBoolean(id, value).apply()
+        try { rebuild(context) }
+        catch (error: Exception) { prefs.edit().putBoolean(id, previous).apply(); throw error }
         ConfigManager.reloadAndReapplySelections(context)
     }
 

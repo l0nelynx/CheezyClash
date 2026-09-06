@@ -165,6 +165,9 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     val groupsLoading = _groupsLoading.asStateFlow()
     private var groupsRequest = 0L
 
+    private val serverBrowsers = mutableMapOf<String?, com.cheezy.freedom.ui.main.proxies.ServerBrowserState>()
+    fun serverBrowser(profileId: String?) = serverBrowsers.getOrPut(profileId) { com.cheezy.freedom.ui.main.proxies.ServerBrowserState() }
+
     private val _groupIcons = MutableStateFlow<Map<String, Int>>(emptyMap())
     val groupIcons: StateFlow<Map<String, Int>> = _groupIcons.asStateFlow()
 
@@ -422,12 +425,25 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
         ClashVpnService.stop(context)
     }
 
+    private fun launchConfigAction(block: suspend () -> Unit) = viewModelScope.launch {
+        try {
+            com.cheezy.freedom.clash.ProfileOperations.run { block() }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (error: Exception) { ClashState.setError(error.message ?: context.getString(R.string.error_generic, "")) }
+    }
+
     fun saveWapSettings(settings: WapSettings) {
-        viewModelScope.launch {
+        launchConfigAction {
             val wasRunning = ClashState.running.value
             withContext(Dispatchers.IO) {
-                WapSettingsStore.save(context, settings)
-                ConfigOverrideManager.rebuild(context)
+                val previous = WapSettingsStore.load(context)
+                try {
+                    WapSettingsStore.save(context, settings)
+                    ConfigOverrideManager.rebuild(context)
+                } catch (error: Exception) {
+                    WapSettingsStore.save(context, previous)
+                    throw error
+                }
             }
             _wapSettings.value = settings
             if (wasRunning) {
@@ -438,11 +454,17 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     }
 
     fun saveXrayMuxSettings(settings: XrayMuxSettings) {
-        viewModelScope.launch {
+        launchConfigAction {
             val wasRunning = ClashState.running.value
             withContext(Dispatchers.IO) {
-                XrayMuxSettingsStore.save(context, settings)
-                ConfigOverrideManager.rebuild(context)
+                val previous = XrayMuxSettingsStore.load(context)
+                try {
+                    XrayMuxSettingsStore.save(context, settings)
+                    ConfigOverrideManager.rebuild(context)
+                } catch (error: Exception) {
+                    XrayMuxSettingsStore.save(context, previous)
+                    throw error
+                }
             }
             _xrayMuxSettings.value = settings
             if (wasRunning) {
@@ -965,7 +987,7 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     }
 
     fun toggleLocalProxy(enabled: Boolean) {
-        viewModelScope.launch {
+        launchConfigAction {
             withContext(Dispatchers.IO) {
                 ConfigOverrideManager.setEnabled(context, LocalProxyOverride.id, enabled)
             }
