@@ -33,6 +33,7 @@ export default function App(): React.JSX.Element {
     refresh,
   } = state
   const [testingAll, setTestingAll] = useState(false)
+  const [connectionAction, setConnectionAction] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const download = async (work: () => Promise<unknown>, success: string): Promise<boolean> => {
     setDownloading(true)
@@ -243,6 +244,7 @@ export default function App(): React.JSX.Element {
       {tab === 'home' && (
         <HomePage
           status={status}
+          connectionAction={connectionAction}
           tun={state.tun}
           traffic={state.traffic}
           downRateHistory={state.downRateHistory}
@@ -250,12 +252,8 @@ export default function App(): React.JSX.Element {
           groups={groups}
           latencies={state.latencies}
           busy={busy}
-          onConnect={() =>
-            run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' })
-          }
-          onDisconnect={() =>
-            run(() => window.cheezy.disconnect(), { success: 'Disconnected', scope: 'home' })
-          }
+          onConnect={async () => { setConnectionAction('Connecting…'); try { await run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' }) } finally { setConnectionAction(null) } }}
+          onDisconnect={async () => { setConnectionAction('Disconnecting…'); try { await run(() => window.cheezy.disconnect(), { success: 'Disconnected', scope: 'home' }) } finally { setConnectionAction(null) } }}
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper(), { scope: 'home' })}
           onGoProfiles={() => setTab('profiles')}
           onSelectServer={(group, name) =>
@@ -267,6 +265,9 @@ export default function App(): React.JSX.Element {
       {tab === 'proxies' && (
         <ProxiesPage
           profileId={state.activeId}
+          loading={state.groupsLoading}
+          error={state.groupsError}
+          onRetry={() => void state.loadGroups()}
           groups={groups}
           latencies={state.latencies}
           busy={busy}

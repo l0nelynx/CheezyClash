@@ -9,6 +9,9 @@ import { Button } from './ui/button'
 const views = new Map<string, { expanded: string[]; query: string; sort: string }>()
 
 interface Props {
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   profileId: string | null
   groups: ProxyGroupInfo[]
   latencies: Record<string, Record<string, number>>
@@ -24,6 +27,9 @@ interface Props {
 export function ProxyGroupList({
   groups,
   profileId,
+  loading,
+  error,
+  onRetry,
   latencies,
   busy,
   running,
@@ -58,6 +64,8 @@ export function ProxyGroupList({
     )
   }
 
+  if (error) return <div role="alert" className="space-y-3 p-6 text-center"><p>{error}</p><Button onClick={onRetry}>Try again</Button></div>
+  if (loading && groups.length === 0) return <p role="status" className="p-6 text-center text-muted-foreground">Loading servers…</p>
   if (groups.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">

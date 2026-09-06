@@ -8,7 +8,7 @@ export function ServerRows({ names, selected, delays, disabled, onSelect }: {
   const height = 40
   const start = Math.max(0, Math.min(names.length - 1, Math.floor(scrollTop / height)) - 6)
   const end = Math.min(names.length, start + 20)
-  return <ul aria-label="Servers" className="overflow-y-auto px-2" style={{ height: Math.min(256, names.length * height) }}
+  return <ul tabIndex={0} aria-label="Servers" className="overflow-y-auto px-2" style={{ height: Math.min(256, names.length * height) }}
     onScroll={event => setScrollTop(event.currentTarget.scrollTop)}>
     <li aria-hidden="true" style={{ height: start * height }} />
     {names.slice(start, end).map(name => {

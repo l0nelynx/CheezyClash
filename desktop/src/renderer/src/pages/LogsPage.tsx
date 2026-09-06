@@ -1,5 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Switch } from '../components/ui/switch'
+import { Input } from '../components/ui/input'
+import { Button } from '../components/ui/button'
+import { redactLog } from '../lib/privacy'
 
 interface Props {
   logs: string[]
@@ -15,12 +18,16 @@ function lineClass(line: string): string {
 export function LogsPage({ logs }: Props): React.JSX.Element {
   const [autoScroll, setAutoScroll] = useState(true)
   const [pausedLogs, setPausedLogs] = useState(logs)
+  const [query, setQuery] = useState('')
+  const [level, setLevel] = useState('all')
   const scrollRef = useRef<HTMLDivElement>(null)
-  const visible = (autoScroll ? logs : pausedLogs).slice(-300)
+  const visible = (autoScroll ? logs : pausedLogs).slice(-300).map(redactLog).filter(line =>
+    line.toLowerCase().includes(query.toLowerCase()) && (level === 'all' || line.toLowerCase().includes(`[${level}]`)),
+  )
 
   useLayoutEffect(() => {
     if (autoScroll && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [logs, autoScroll])
+  }, [logs, autoScroll, query, level])
 
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-3">
@@ -36,6 +43,18 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
           />
           Auto-scroll
         </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input className="min-w-40 flex-1" aria-label="Search logs" placeholder="Search logs" value={query} onChange={event => setQuery(event.target.value)} />
+        <select aria-label="Log level" className="rounded-md border border-border bg-card px-3 py-2 text-sm" value={level} onChange={event => setLevel(event.target.value)}>
+          <option value="all">All levels</option><option value="error">Errors</option><option value="warn">Warnings</option><option value="info">Info</option>
+        </select>
+        <Button variant="outline" disabled={!visible.length} onClick={() => {
+          const url = URL.createObjectURL(new Blob([visible.join('\n')], { type: 'text/plain;charset=utf-8' }))
+          const link = document.createElement('a')
+          link.href = url; link.download = 'cheezy-logs.txt'; link.click()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }}>Export visible logs</Button>
       </div>
       <div ref={scrollRef} onScroll={(event) => {
         const element = event.currentTarget

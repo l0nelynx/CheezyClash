@@ -14,6 +14,7 @@ import { SubscriptionCard } from '../components/SubscriptionCard'
 import { TrafficStrip } from '../components/TrafficStrip'
 
 interface Props {
+  connectionAction: string | null
   status: CoreStatus | null
   tun: TunStatus | null
   traffic: TrafficSnapshot | null
@@ -42,6 +43,7 @@ export function HomePage(props: Props): React.JSX.Element {
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <ConnectHero
         status={props.status}
+        connectionAction={props.connectionAction}
         tun={props.tun}
         busy={props.busy}
         hasProfile={hasProfile}

@@ -19,7 +19,7 @@ function friendlyError(e: unknown): string {
     return 'Import or activate a profile first (Profiles tab).'
   }
   if (msg.includes('helper service')) {
-    return 'TUN on Windows needs the helper service — use Settings → Install helper, or switch to Proxy mode.'
+    return 'TUN on Windows needs the helper service — use Home → Install helper, or switch to Proxy mode.'
   }
   return msg
 }
@@ -28,6 +28,9 @@ export function useCheezyState() {
   const [status, setStatus] = useState<CoreStatus | null>(null)
   const [traffic, setTraffic] = useState<TrafficSnapshot | null>(null)
   const [downRateHistory, setDownRateHistory] = useState<number[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [groupsError, setGroupsError] = useState<string | null>(null)
+  const groupGeneration = useRef(0)
   const [groups, setGroups] = useState<ProxyGroupInfo[]>([])
   const [latencies, setLatencies] = useState<Record<string, Record<string, number>>>({})
   const [profiles, setProfiles] = useState<ProfileMeta[]>([])
@@ -36,7 +39,7 @@ export function useCheezyState() {
   const [tun, setTun] = useState<TunStatus | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [busyScope, setBusyScope] = useState<Tab | 'global' | null>(null)
+  const operationPending = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
@@ -69,6 +72,19 @@ export function useCheezyState() {
       return next
     })
   }, [])
+  const loadGroups = useCallback(async () => {
+    const generation = ++groupGeneration.current
+    setGroupsLoading(true)
+    setGroupsError(null)
+    try {
+      const next = await window.cheezy.getGroups()
+      if (generation === groupGeneration.current && runningRef.current) applyGroups(next)
+    } catch {
+      if (generation === groupGeneration.current) setGroupsError('Could not load servers. Please try again.')
+    } finally {
+      if (generation === groupGeneration.current) setGroupsLoading(false)
+    }
+  }, [applyGroups])
   const showNotice = useCallback((msg: string) => {
     setNotice(msg)
     if (noticeTimer.current) clearTimeout(noticeTimer.current)
@@ -94,11 +110,7 @@ export function useCheezyState() {
         setTun(tunSt)
         if (logLines) setLogs(logLines)
         if (st.running) {
-          try {
-            applyGroups(await window.cheezy.getGroups())
-          } catch {
-            setGroups([])
-          }
+          await loadGroups()
           try {
             const t = await window.cheezy.getTraffic()
             setTraffic(t)
@@ -118,7 +130,7 @@ export function useCheezyState() {
         setReady(true)
       }
     },
-    [applyGroups, pushDownRate],
+    [loadGroups, pushDownRate],
   )
   useEffect(() => {
     void refresh({ includeLogs: false })
@@ -126,11 +138,11 @@ export function useCheezyState() {
       setStatus(s)
       runningRef.current = !!s.running
       if (s.running) {
-        void window.cheezy
-          .getGroups()
-          .then(applyGroups)
-          .catch(() => undefined)
+        void loadGroups()
       } else {
+        groupGeneration.current++
+        setGroupsLoading(false)
+        setGroupsError(null)
         setGroups([])
         setLatencies({})
         setTraffic(null)
@@ -138,6 +150,10 @@ export function useCheezyState() {
       }
     })
     const offProfiles = window.cheezy.onProfilesChanged(() => {
+      groupGeneration.current++
+      setGroups([])
+      setLatencies({})
+      if (runningRef.current) void loadGroups()
       void window.cheezy.listProfiles().then(setProfiles).catch(() => undefined)
       void window.cheezy.getActiveProfileId().then(setActiveId).catch(() => undefined)
     })
@@ -160,7 +176,7 @@ export function useCheezyState() {
       void window.cheezy.getTunStatus().then(setTun).catch(() => undefined)
     }, TUN_POLL_MS)
     let trafficPending = false
-  const trafficTick = setInterval(() => {
+    const trafficTick = setInterval(() => {
       if (document.visibilityState === 'hidden' || !runningRef.current || tabRef.current !== 'home' || trafficPending) return
       trafficPending = true
       void window.cheezy
@@ -181,7 +197,7 @@ export function useCheezyState() {
       clearInterval(trafficTick)
       if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
-  }, [refresh, pushDownRate, applyGroups])
+  }, [refresh, pushDownRate, loadGroups])
   useEffect(() => {
     if (tab !== 'logs') return
     void window.cheezy.getLogs().then(setLogs).catch(() => undefined)
@@ -190,26 +206,22 @@ export function useCheezyState() {
   }, [tab])
   useEffect(() => {
     if ((tab !== 'proxies' && tab !== 'home') || !status?.running) return
-    const load = (): void => {
-      void window.cheezy
-        .getGroups()
-        .then(applyGroups)
-        .catch(() => undefined)
-    }
+    const load = (): void => { void loadGroups() }
     load()
     const tick = setInterval(() => {
       if (document.visibilityState === 'hidden') return
       load()
     }, GROUPS_POLL_MS)
     return () => clearInterval(tick)
-  }, [tab, status?.running, applyGroups])
+  }, [tab, status?.running, loadGroups])
   const run = useCallback(
     async (
       fn: () => Promise<unknown>,
       opts?: { success?: string; scope?: Tab | 'global' },
     ): Promise<boolean> => {
+      if (operationPending.current) return false
+      operationPending.current = true
       setBusy(true)
-      setBusyScope(opts?.scope ?? tab)
       setError(null)
       try {
         const result = await fn()
@@ -221,7 +233,7 @@ export function useCheezyState() {
         return false
       } finally {
         setBusy(false)
-        setBusyScope(null)
+        operationPending.current = false
       }
     },
     [refresh, showNotice, tab],
@@ -231,8 +243,7 @@ export function useCheezyState() {
   const setGroupLatencies = useCallback((group: string, map: Record<string, number>) => {
     setLatencies((prev) => ({ ...prev, [group]: map }))
   }, [])
-  /** Busy only locks the current tab (or global when scope is global). */
-  const tabBusy = busy && (busyScope === 'global' || busyScope === tab)
+
   return {
     tab,
     setTab,
@@ -240,6 +251,9 @@ export function useCheezyState() {
     traffic,
     downRateHistory,
     groups,
+    groupsLoading,
+    groupsError,
+    loadGroups,
     latencies,
     setGroupLatencies,
     profiles,
@@ -247,7 +261,7 @@ export function useCheezyState() {
     settings,
     tun,
     logs,
-    busy: tabBusy,
+    busy,
     error,
     notice,
     ready,

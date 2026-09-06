@@ -6,6 +6,7 @@ import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 
 interface Props {
+  connectionAction: string | null
   status: CoreStatus | null
   tun: TunStatus | null
   busy: boolean
@@ -22,6 +23,7 @@ interface Props {
 
 export function ConnectHero({
   status,
+  connectionAction,
   tun,
   busy,
   hasProfile,
@@ -59,7 +61,7 @@ export function ConnectHero({
             <div className="mb-3 flex flex-wrap items-center gap-2.5">
               <p className="section-label">Connection</p>
               <Badge variant={running ? 'success' : 'secondary'} className="px-2 py-0 text-[10px]">
-                {running ? 'Connected' : 'Disconnected'}
+                {connectionAction ?? (running ? 'Core running' : 'Disconnected')}
               </Badge>
             </div>
             <h2
@@ -70,7 +72,7 @@ export function ConnectHero({
             </h2>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
               {running
-                ? 'Your secure connection is active.'
+                ? modeLabel === 'TUN' ? 'TUN is running. Routing follows the profile rules.' : 'Proxy is running. Use the system proxy or configure your apps to route traffic through it.'
                 : hasProfile
                   ? 'Choose Proxy or TUN in Settings, then connect.'
                   : 'Add a subscription or profile file on Profiles, then connect.'}
@@ -126,12 +128,12 @@ export function ConnectHero({
           ) : !running ? (
             <Button type="button" className="min-w-[140px]" disabled={busy} onClick={onConnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-              Connect
+              {connectionAction ?? 'Connect'}
             </Button>
           ) : (
             <Button type="button" variant="destructive" className="min-w-[140px]" disabled={busy} onClick={onDisconnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
-              Disconnect
+              {connectionAction ?? 'Disconnect'}
             </Button>
           )}
         </div>
@@ -142,7 +144,7 @@ export function ConnectHero({
           <span>
             Mode: <span className="font-medium text-foreground">{modeLabel}</span>
           </span>
-          <span>
+          {tun?.enabled && <><span>
             VPN helper:{' '}
             <span className="text-foreground">
               {tun?.helperRunning ? 'running' : tun?.helperInstalled ? 'installed' : 'not installed'}
@@ -158,7 +160,7 @@ export function ConnectHero({
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={onEnsureHelper}>
               Install helper
             </Button>
-          )}
+          )}</>}
         </div>
       </div>
     </section>

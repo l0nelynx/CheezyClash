@@ -2,6 +2,9 @@ import type { ProxyGroupInfo } from '../../../shared/types'
 import { ProxyGroupList } from '../components/ProxyGroupList'
 
 interface Props {
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   profileId: string | null
   groups: ProxyGroupInfo[]
   latencies: Record<string, Record<string, number>>

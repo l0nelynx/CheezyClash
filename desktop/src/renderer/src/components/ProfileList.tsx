@@ -4,6 +4,7 @@ import type { ProfileMeta } from '../../../shared/types'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { subscriptionLabel } from '../lib/privacy'
 
 interface Props {
   profiles: ProfileMeta[]
@@ -100,8 +101,8 @@ export function ProfileList({
                         </Badge>
                       )}
                     </div>
-                    <p className="truncate text-xs text-ink-dim" title={managed ? undefined : p.url || 'Local file'}>
-                      {managed ? 'Account subscription' : p.url || 'Local file'}
+                    <p className="truncate text-xs text-ink-dim" title={managed ? undefined : p.url ? subscriptionLabel(p.url) : 'Local file'}>
+                      {managed ? 'Account subscription' : p.url ? subscriptionLabel(p.url) : 'Local file'}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
