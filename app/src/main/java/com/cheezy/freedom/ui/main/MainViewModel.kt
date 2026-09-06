@@ -477,7 +477,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun switchProfile(id: String) {
         if (ProfileStore.activeId(context) == id) return
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { ProfileManager.switchTo(context, id) }
+            val result = runCatching { withContext(Dispatchers.IO) { ProfileManager.switchTo(context, id) } }
+            if (result.isFailure) {
+                ClashState.setError(result.exceptionOrNull()?.message)
+                return@launch
+            }
             refreshProfilesState()
             syncSubscriptionState()
             reloadProxyGroups(forceLoad = true)
@@ -487,7 +491,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Profiles tab: delete a user profile. */
     fun removeProfile(id: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { ProfileManager.remove(context, id) }
+            val result = runCatching { withContext(Dispatchers.IO) { ProfileManager.remove(context, id) } }
+            if (result.isFailure) {
+                ClashState.setError(result.exceptionOrNull()?.message)
+                return@launch
+            }
             refreshProfilesState()
             syncSubscriptionState()
             reloadProxyGroups(forceLoad = true)

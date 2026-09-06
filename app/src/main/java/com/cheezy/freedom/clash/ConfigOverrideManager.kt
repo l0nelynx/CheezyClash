@@ -40,9 +40,8 @@ object ConfigOverrideManager {
 
     /**
      * Reads base.yaml, applies every enabled override, writes the result to
-     * config.yaml. No-op when base.yaml does not exist. Errors are caught and
-     * logged so a malformed config never crashes the caller; in that case
-     * config.yaml is left untouched.
+     * config.yaml. No-op when base.yaml does not exist. Malformed YAML and write failures are propagated to the caller;
+     * the previous config.yaml remains intact until atomic replacement succeeds.
      */
     fun rebuild(context: Context) = rebuild(context, clashDir(context))
 
@@ -93,7 +92,7 @@ object ConfigOverrideManager {
     ) {
         val base = File(clash, BASE_FILE_NAME)
         if (!base.exists()) return
-        val map = runCatching { readMap(base) }.getOrNull()?.toMutableMap() ?: return
+        val map = ConfigFiles.readValidated(base).toMutableMap()
 
         synchronized(this) {
             WapConfigOverride.runtime = wapRuntime
@@ -112,11 +111,7 @@ object ConfigOverrideManager {
             isPrettyFlow = true
         }
         val text = Yaml(dumperOptions).dump(map)
-        runCatching {
-            File(clash, CONFIG_FILE_NAME).writeText(text)
-        }.onFailure {
-            android.util.Log.e("ConfigOverrideManager", "Failed to write config.yaml", it)
-        }
+        ConfigFiles.writeAtomically(File(clash, CONFIG_FILE_NAME), text)
     }
 
     internal fun ensureBaseExists(context: Context) = ensureBaseExists(clashDir(context))

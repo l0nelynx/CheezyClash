@@ -133,6 +133,7 @@ object ConfigManager {
                         }
                     }
                 }
+                ConfigFiles.readValidated(temporary)
                 runCatching {
                     Files.move(
                         temporary.toPath(),
