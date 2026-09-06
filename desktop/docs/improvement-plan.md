@@ -19,17 +19,23 @@
 - `npm run test:system-proxy`: 16 scenarios using mock registry/persistence and production adapter code. No live registry writes or VPN tests.
 - macOS/Linux snapshot restoration remains pending; their existing paths were not changed.
 
-## Remaining sequence
+## 3–11. Implementation results
 
-3. Replace indefinite startup loading on capability/session failure with an error and retry action.
-4. Clear subscription input only after successful import.
-5. Repair log autoscroll at the buffer limit; pause when reading older entries.
-6. Bound subscription response time and size; provide cancellation and retry feedback.
-7. Reduce traffic-statistics overhead and suppress overlapping/stale requests. Validate the current core's streaming contract before replacing polling.
-8. Add accurate, cancellable health-check progress with careful sequential testing (see below).
-9. Add server search, latency sorting, and bounded rendering for long lists.
-10. Clarify connection/loading/error states, contextualize TUN helper setup, preserve server-list navigation state, add log search/filter/export and redact subscription tokens in displayed URLs.
-11. Add Russian localization and system/light theme support, with visual checks of affected pages.
+3. Implemented startup capability/session timeout, error feedback and retry (`2e8c20e`).
+4. Failed subscription imports retain the entered URL (`3a3abae`).
+5. Logs continue scrolling at the buffer limit and freeze while reading older entries (`2e62bd1`).
+6. Subscription downloads enforce a 30-second deadline, 16 MB limit and HTTPS redirects; manual profile downloads can be cancelled (`9c971f2`).
+7. Traffic statistics use a single demand-driven `/traffic` stream, with reconnection backoff and stale-request protection. Hidden/non-Home pages stop requesting samples (`746e74c`).
+8. Health-check changes are deferred by user request, including progress. Existing execution logic is preserved.
+9. Server search, name/latency sorting and bounded row rendering are implemented. Group expansion, search and sort survive page navigation (`edb8283`).
+10. Connection actions and group loading/failure states are explicit; helper setup is contextual to TUN. Logs have search, level filtering and redacted export; displayed subscription URLs hide path/query credentials (`96fe9b3`).
+11. Russian/English UI and system/light/dark themes are implemented with persisted preferences. An isolated Electron UI suite verifies startup retry, failed import, 1,000-server rendering, navigation state, logs, URL privacy, language persistence and system theme changes. Home and Settings screenshots were visually reviewed.
+
+## Validation
+
+Type checking, production build and `npm run test:ui` passed. Regression suites passed: auth-gate, deeplink, controller, lifecycle, network-config, custom-rules, subscription-metadata, startup, sparkline, xray-mux-config, profile-races, system-proxy, subscription-download and traffic-stream.
+
+The UI suite uses a temporary Electron profile, mocked IPC and blocked HTTP(S); it does not connect a VPN or modify host proxy settings. Screenshot paths are printed by the runner. Windows proxy restoration remains covered by isolated registry mocks; macOS/Linux restoration remains pending. The bundled-core parity mismatch below remains unresolved, so these checks do not certify the bundled core or a release installer.
 
 ## Health-check constraint and core findings
 

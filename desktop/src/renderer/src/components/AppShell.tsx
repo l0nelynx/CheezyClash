@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { X } from 'lucide-react'
 import type { CoreStatus } from '../../../shared/types'
 import type { Tab } from '../hooks/useCheezyState'
@@ -27,6 +28,7 @@ export function AppShell({
   productName,
   children,
 }: Props): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TitleBar status={status} productName={productName} />
@@ -38,11 +40,11 @@ export function AppShell({
               role="alert"
               className="notice-enter mx-5 mt-3 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
             >
-              <p className="min-w-0 flex-1 break-words">{error}</p>
+              <p className="min-w-0 flex-1 break-words">{t(error)}</p>
               <button
                 type="button"
                 className="shrink-0 rounded p-0.5 hover:bg-danger/20"
-                aria-label="Dismiss"
+                aria-label={t("Dismiss")}
                 onClick={onClearError}
               >
                 <X className="h-4 w-4" />
@@ -54,11 +56,11 @@ export function AppShell({
               role="status"
               className="notice-enter mx-5 mt-3 flex items-start gap-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok"
             >
-              <p className="min-w-0 flex-1 break-words">{notice}</p>
+              <p className="min-w-0 flex-1 break-words">{t(notice)}</p>
               <button
                 type="button"
                 className="shrink-0 rounded p-0.5 hover:bg-ok/20"
-                aria-label="Dismiss"
+                aria-label={t("Dismiss")}
                 onClick={onClearNotice}
               >
                 <X className="h-4 w-4" />

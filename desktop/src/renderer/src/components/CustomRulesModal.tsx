@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
@@ -53,6 +54,7 @@ export function CustomRulesModal({
   onClose,
   onSave,
 }: Props): React.JSX.Element | null {
+  const { t } = useI18n()
   const [localRules, setLocalRules] = useState<CustomRule[]>(rules)
   const [context, setContext] = useState<CustomRuleContext>(EMPTY_CONTEXT)
   const [type, setType] = useState<CustomRuleType>('PROCESS-NAME')
@@ -284,11 +286,10 @@ export function CustomRulesModal({
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 id="custom-rules-title" className="text-lg font-semibold text-foreground">
-              Custom Rules
-            </h2>
+              {t("Custom Rules")}</h2>
             <p className="text-xs text-muted-foreground">
               {localRules.length === 0
-                ? 'Enabled rules are added before profile rules.'
+                ? t("Enabled rules are added before profile rules.")
                 : `${enabledCount} of ${localRules.length} enabled · highest priority first`}
             </p>
           </div>
@@ -299,7 +300,7 @@ export function CustomRulesModal({
             size="icon"
             onClick={onClose}
             disabled={disabled}
-            aria-label="Close"
+            aria-label={t("Close")}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -310,7 +311,7 @@ export function CustomRulesModal({
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-foreground">
-                  Rule type{editingId ? ' (editing)' : ''}
+                  {t("Rule type")}{editingId ? t(" (editing)") : ''}
                 </span>
                 <select
                   className="field w-full"
@@ -318,9 +319,9 @@ export function CustomRulesModal({
                   disabled={disabled}
                   onChange={(event) => changeType(event.target.value as CustomRuleType)}
                 >
-                  {(['Domain', 'IP', 'Ports & inbound', 'Process', 'Other'] as const).map(
+                  {([t("Domain"), 'IP', t("Ports & inbound"), t("Process"), t("Other")] as const).map(
                     (category) => (
-                      <optgroup key={category} label={category}>
+                      <optgroup key={category} label={t(category)}>
                         {CUSTOM_RULE_TYPES.filter(
                           (candidate) => customRuleDefinition(candidate).category === category,
                         ).map((candidate) => (
@@ -336,7 +337,7 @@ export function CustomRulesModal({
 
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-foreground">
-                  {type === 'SUB-RULE' ? 'Sub-rule' : 'Policy'}
+                  {type === 'SUB-RULE' ? t("Sub-rule") : t("Policy")}
                 </span>
                 <select
                   className="field w-full"
@@ -345,7 +346,7 @@ export function CustomRulesModal({
                   onChange={(event) => changeAction(event.target.value)}
                 >
                   {(type === 'SUB-RULE' ? subRuleOptions : policyOptions).length === 0 && (
-                    <option value="">No sub-rules in this profile</option>
+                    <option value="">{t("No sub-rules in this profile")}</option>
                   )}
                   {(type === 'SUB-RULE' ? subRuleOptions : policyOptions).map((option) => (
                     <option key={option} value={option}>
@@ -359,10 +360,9 @@ export function CustomRulesModal({
             <div className="rounded-lg border border-border bg-card/45 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Profiles</p>
+                  <p className="text-sm font-medium text-foreground">{t("Profiles")}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Apply universally or only while selected profiles are active.
-                  </p>
+                    {t("Apply universally or only while selected profiles are active.")}</p>
                 </div>
                 <div className="flex rounded-lg border border-border bg-background p-0.5">
                   <button
@@ -375,8 +375,7 @@ export function CustomRulesModal({
                     disabled={disabled}
                     onClick={() => setProfileIds(null)}
                   >
-                    All profiles
-                  </button>
+                    {t("All profiles")}</button>
                   <button
                     type="button"
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -391,14 +390,13 @@ export function CustomRulesModal({
                       )
                     }
                   >
-                    Selected
-                  </button>
+                    {t("Selected")}</button>
                 </div>
               </div>
               {profileIds !== null && (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {context.profiles.length === 0 ? (
-                    <p className="text-xs text-amber-300">No profiles are available.</p>
+                    <p className="text-xs text-amber-300">{t("No profiles are available.")}</p>
                   ) : (
                     context.profiles.map((profile) => (
                       <label
@@ -421,7 +419,7 @@ export function CustomRulesModal({
                         />
                         <span className="truncate" title={profile.name}>
                           {profile.name}
-                          {profile.id === context.activeProfileId ? ' · active' : ''}
+                          {profile.id === context.activeProfileId ? t(" · active") : ''}
                         </span>
                       </label>
                     ))
@@ -445,7 +443,7 @@ export function CustomRulesModal({
                           }
                         />
                         <span className="truncate" title={id}>
-                          Unavailable profile · {id}
+                          {t("Unavailable profile ·")}{id}
                         </span>
                       </label>
                     ))}
@@ -459,7 +457,7 @@ export function CustomRulesModal({
                   htmlFor="custom-rule-payload"
                   className="mb-1.5 block text-sm font-medium text-foreground"
                 >
-                  {definition.targetLabel}
+                  {t(definition.targetLabel)}
                 </label>
                 {type === 'RULE-SET' ? (
                   <select
@@ -470,7 +468,7 @@ export function CustomRulesModal({
                     onChange={(event) => setPayload(event.target.value)}
                   >
                     {ruleSetOptions.length === 0 && (
-                      <option value="">No rule-providers in this profile</option>
+                      <option value="">{t("No rule-providers in this profile")}</option>
                     )}
                     {ruleSetOptions.map((name) => (
                       <option key={name} value={name}>
@@ -511,8 +509,7 @@ export function CustomRulesModal({
                           onClick={() => void pickPath('file')}
                         >
                           <FileSearch className="h-4 w-4" />
-                          Choose file
-                        </Button>
+                          {t("Choose file")}</Button>
                         <Button
                           type="button"
                           variant="outline"
@@ -520,21 +517,19 @@ export function CustomRulesModal({
                           onClick={() => void pickPath('directory')}
                         >
                           <FolderOpen className="h-4 w-4" />
-                          Choose folder
-                        </Button>
+                          {t("Choose folder")}</Button>
                       </>
                     )}
                   </div>
                 )}
                 <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  {definition.hint}
+                  {t(definition.hint)}
                 </p>
 
                 {type === 'PROCESS-NAME' && (
                   <label className="mt-3 block">
                     <span className="mb-1.5 block text-xs text-muted-foreground">
-                      Running processes
-                    </span>
+                      {t("Running processes")}</span>
                     <select
                       className="field w-full"
                       value=""
@@ -545,10 +540,10 @@ export function CustomRulesModal({
                     >
                       <option value="">
                         {loadingContext
-                          ? 'Loading…'
+                          ? t("Loading…")
                           : processes.length
-                            ? 'Pick a running process…'
-                            : 'No processes found'}
+                            ? t("Pick a running process…")
+                            : t("No processes found")}
                       </option>
                       {processes.map((process) => (
                         <option key={`${process.name}-${process.pid}`} value={process.name}>
@@ -571,8 +566,7 @@ export function CustomRulesModal({
                     no-resolve
                   </label>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Do not resolve a domain to test its target IP.
-                  </p>
+                    {t("Do not resolve a domain to test its target IP.")}</p>
                 </div>
                 <Switch
                   id="custom-rule-no-resolve"
@@ -586,13 +580,13 @@ export function CustomRulesModal({
             {definition.noPayload && (
               <div className="flex gap-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{definition.hint}</span>
+                <span>{t(definition.hint)}</span>
               </div>
             )}
 
             {error && (
               <p role="alert" className="text-sm text-destructive">
-                {error}
+                {t(error)}
               </p>
             )}
 
@@ -608,12 +602,11 @@ export function CustomRulesModal({
                 ) : (
                   <Plus className="h-4 w-4" />
                 )}
-                {editingId ? 'Update rule' : 'Add rule'}
+                {editingId ? t("Update rule") : t("Add rule")}
               </Button>
               {editingId && (
                 <Button type="button" variant="outline" disabled={disabled} onClick={resetForm}>
-                  Cancel
-                </Button>
+                  {t("Cancel")}</Button>
               )}
             </div>
           </div>
@@ -621,16 +614,14 @@ export function CustomRulesModal({
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Saved rules
-              </p>
+                {t("Saved rules")}</p>
               {localRules.length > 1 && (
-                <p className="text-xs text-muted-foreground">Drag to change priority</p>
+                <p className="text-xs text-muted-foreground">{t("Drag to change priority")}</p>
               )}
             </div>
             {localRules.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border px-4 py-7 text-center text-sm text-muted-foreground">
-                No custom rules yet. Choose a type above to add one.
-              </div>
+                {t("No custom rules yet. Choose a type above to add one.")}</div>
             ) : (
               <ul className="space-y-2">
                 {localRules.map((rule, index) => {
@@ -667,7 +658,7 @@ export function CustomRulesModal({
                         draggable={!disabled}
                         className="btn-ghost shrink-0 cursor-grab p-1.5 active:cursor-grabbing"
                         disabled={disabled}
-                        aria-label={`Move ${rule.type} rule. Alt plus arrow keys changes priority.`}
+                        aria-label={t("Move {0} rule. Alt plus arrow keys changes priority.", {0:rule.type})}
                         onDragStart={(event) => {
                           setDraggingId(rule.id)
                           event.dataTransfer.effectAllowed = 'move'
@@ -686,7 +677,7 @@ export function CustomRulesModal({
                         checked={rule.enabled}
                         disabled={disabled}
                         onCheckedChange={(enabled) => void toggleRule(rule.id, enabled)}
-                        aria-label={`${rule.enabled ? 'Disable' : 'Enable'} ${rule.type} rule`}
+                        aria-label={`${rule.enabled ? t("Disable") : t("Enable")} ${rule.type} rule`}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -696,8 +687,8 @@ export function CustomRulesModal({
                           {!available && (
                             <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
                               {availability.kind === 'out-of-scope'
-                                ? 'Out of scope'
-                                : 'Unavailable'}
+                                ? t("Out of scope")
+                                : t("Unavailable")}
                             </span>
                           )}
                           {rule.noResolve && (
@@ -706,9 +697,9 @@ export function CustomRulesModal({
                         </div>
                         <p
                           className="truncate text-sm text-foreground"
-                          title={`${rule.payload || 'All traffic'} → ${displayAction}`}
+                          title={`${rule.payload || t("All traffic")} → ${displayAction}`}
                         >
-                          <span className="font-medium">{rule.payload || 'All traffic'}</span>
+                          <span className="font-medium">{rule.payload || t("All traffic")}</span>
                           <span className="text-muted-foreground"> → {displayAction}</span>
                           {rule.action === 'PROXY' && availability.kind === 'available' && (
                             <span className="text-muted-foreground">
@@ -719,14 +710,14 @@ export function CustomRulesModal({
                         </p>
                         <p className="truncate text-[11px] text-muted-foreground">
                           {rule.profileIds === null
-                            ? 'All profiles'
+                            ? t("All profiles")
                             : scopedProfileNames.length === 1
                               ? scopedProfileNames[0]
                               : `${scopedProfileNames.length} selected profiles`}
                         </p>
                         {!available && (
                           <p className="truncate text-[11px] text-amber-300/90">
-                            {availability.reason}
+                            {t(availability.reason)}
                           </p>
                         )}
                       </div>
@@ -737,7 +728,7 @@ export function CustomRulesModal({
                           size="icon"
                           disabled={disabled}
                           onClick={() => startEdit(rule)}
-                          aria-label={`Edit ${rule.type} rule`}
+                          aria-label={t("Edit {0} rule", {0:rule.type})}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -748,7 +739,7 @@ export function CustomRulesModal({
                           className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={disabled}
                           onClick={() => void removeRule(rule.id)}
-                          aria-label={`Delete ${rule.type} rule`}
+                          aria-label={t("Delete {0} rule", {0:rule.type})}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

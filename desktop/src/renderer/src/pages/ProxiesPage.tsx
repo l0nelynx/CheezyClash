@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import type { ProxyGroupInfo } from '../../../shared/types'
 import { ProxyGroupList } from '../components/ProxyGroupList'
 
@@ -18,11 +19,12 @@ interface Props {
 }
 
 export function ProxiesPage(props: Props): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-ink">Proxies</h2>
-        <p className="text-sm text-muted-foreground">Choose a server in a group.</p>
+        <h2 className="text-lg font-semibold text-ink">{t("Proxies")}</h2>
+        <p className="text-sm text-muted-foreground">{t("Choose a server in a group.")}</p>
       </div>
       <ProxyGroupList key={props.profileId} {...props} />
     </div>

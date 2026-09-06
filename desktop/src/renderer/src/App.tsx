@@ -1,3 +1,4 @@
+import { useI18n } from './lib/i18n'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { TitleBar } from './components/TitleBar'
@@ -16,6 +17,7 @@ import type { PrivateAccountSession, PrivateCapabilities } from '../../shared/pr
 import type { DeepLinkResult } from '../../shared/deep-link'
 
 export default function App(): React.JSX.Element {
+  const { t } = useI18n()
   const state = useCheezyState()
   const {
     tab,
@@ -66,7 +68,7 @@ export default function App(): React.JSX.Element {
       setAuthReady(true)
     } catch (error) {
       if (generation === authGeneration.current) {
-        setBootError('Could not load the app. Check your connection and try again.')
+        setBootError(t("Could not load the app. Check your connection and try again."))
       }
       throw error
     }
@@ -93,14 +95,14 @@ export default function App(): React.JSX.Element {
           }
           void refreshAuth()
             .then(() => refresh())
-            .then(() => showNotice('Signed in successfully'))
+            .then(() => showNotice(t("Signed in successfully")))
             .catch(() => undefined)
           return
         }
         const messages = {
-          expired: 'The browser sign-in link expired. Return to the browser and try again.',
-          network: 'Could not reach the sign-in service. Check your connection and try again.',
-          server: 'Could not complete browser sign-in. Please try again.',
+          expired: t("The browser sign-in link expired. Return to the browser and try again."),
+          network: t("Could not reach the sign-in service. Check your connection and try again."),
+          server: t("Could not complete browser sign-in. Please try again."),
         }
         setAuthHandoffError(messages[result.error])
         setLoginRequested(true)
@@ -108,9 +110,9 @@ export default function App(): React.JSX.Element {
       }
 
       if (result.status === 'success') {
-        void refresh().then(() => showNotice('Subscription imported'))
+        void refresh().then(() => showNotice(t("Subscription imported")))
       } else {
-        showNotice('Could not import the subscription')
+        showNotice(t("Could not import the subscription"))
       }
     },
     [refresh, refreshAuth, setTab, showNotice],
@@ -172,9 +174,9 @@ export default function App(): React.JSX.Element {
         setTestProgress({ done: i + 1, total: groups.length })
       }
       if (failed > 0) {
-        showNotice(`Latency test finished with ${failed} group${failed === 1 ? '' : 's'} failed`)
+        showNotice(t("Latency test finished with {0} group{1} failed",{0:failed,1:failed === 1 ? '' : 's'}))
       } else {
-        showNotice('Latency test finished')
+        showNotice(t("Latency test finished"))
       }
     } finally {
       setTestingAll(false)
@@ -187,10 +189,10 @@ export default function App(): React.JSX.Element {
       <div className="flex h-full flex-col">
         <TitleBar status={status} productName={caps?.productName ?? 'CheezyClash'} />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-sm text-muted-foreground">
-          <p role={bootError ? 'alert' : 'status'}>{bootError ?? 'Loading…'}</p>
+          <p role={bootError ? 'alert' : 'status'}>{bootError ?? t("Loading…")}</p>
           {bootError && <Button onClick={() => {
             void refreshAuth().then(() => refresh()).catch(() => undefined)
-          }}>Try again</Button>}
+          }}>{t("Try again")}</Button>}
         </div>
       </div>
     )
@@ -216,7 +218,7 @@ export default function App(): React.JSX.Element {
               await state.refresh()
               setAuthHandoffError(null)
               setLoginRequested(false)
-              showNotice('Subscription imported')
+              showNotice(t("Subscription imported"))
             }}
             onCancel={state.profiles.length > 0 ? () => setLoginRequested(false) : undefined}
             onLoggedIn={() => {
@@ -235,8 +237,8 @@ export default function App(): React.JSX.Element {
       tab={tab}
       onTab={setTab}
       status={status}
-      error={error}
-      notice={notice}
+      error={t(error)}
+      notice={t(notice)}
       onClearError={clearError}
       onClearNotice={clearNotice}
       productName={caps.productName}
@@ -244,7 +246,7 @@ export default function App(): React.JSX.Element {
       {tab === 'home' && (
         <HomePage
           status={status}
-          connectionAction={connectionAction}
+          connectionAction={connectionAction ? t(connectionAction) : null}
           tun={state.tun}
           traffic={state.traffic}
           downRateHistory={state.downRateHistory}
@@ -252,8 +254,8 @@ export default function App(): React.JSX.Element {
           groups={groups}
           latencies={state.latencies}
           busy={busy}
-          onConnect={async () => { setConnectionAction('Connecting…'); try { await run(() => window.cheezy.connect(), { success: 'Connected', scope: 'home' }) } finally { setConnectionAction(null) } }}
-          onDisconnect={async () => { setConnectionAction('Disconnecting…'); try { await run(() => window.cheezy.disconnect(), { success: 'Disconnected', scope: 'home' }) } finally { setConnectionAction(null) } }}
+          onConnect={async () => { setConnectionAction(t("Connecting…")); try { await run(() => window.cheezy.connect(), { success: t("Connected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
+          onDisconnect={async () => { setConnectionAction(t("Disconnecting…")); try { await run(() => window.cheezy.disconnect(), { success: t("Disconnected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper(), { scope: 'home' })}
           onGoProfiles={() => setTab('profiles')}
           onSelectServer={(group, name) =>
@@ -289,26 +291,26 @@ export default function App(): React.JSX.Element {
           downloading={downloading}
           busy={busy}
           onImportUrl={async (url) => {
-            return download(() => window.cheezy.importProfileUrl(url), 'Profile imported')
+            return download(() => window.cheezy.importProfileUrl(url), t("Profile imported"))
           }}
           onImportFile={() =>
             run(() => window.cheezy.importProfileFile(), {
-              success: 'Profile imported',
+              success: t("Profile imported"),
               scope: 'profiles',
             })
           }
           onActivate={(id) =>
             run(() => window.cheezy.setActiveProfile(id), {
-              success: 'Profile activated',
+              success: t("Profile activated"),
               scope: 'profiles',
             })
           }
           onUpdate={(id) =>
-            download(() => window.cheezy.updateProfile(id), 'Subscription updated')
+            download(() => window.cheezy.updateProfile(id), t("Subscription updated"))
           }
           onDelete={(id) =>
             run(() => window.cheezy.deleteProfile(id), {
-              success: 'Profile deleted',
+              success: t("Profile deleted"),
               scope: 'profiles',
             })
           }
@@ -331,7 +333,7 @@ export default function App(): React.JSX.Element {
               await window.cheezy.setCustomRules(rules)
               await state.refresh()
               if (Date.now() - lastCustomRuleDiagnosticAt.current > 1_000) {
-                showNotice('Custom rules saved')
+                showNotice(t("Custom rules saved"))
               }
             }}
             onLogin={() => {
@@ -353,14 +355,13 @@ export default function App(): React.JSX.Element {
                   await window.cheezy.privateSyncSubscription()
                   await state.refresh()
                 },
-                { success: 'Subscription synced', scope: 'settings' },
+                { success: t("Subscription synced"), scope: 'settings' },
               )
             }
           />
         ) : (
           <div className="mx-auto max-w-3xl py-12 text-center text-sm text-muted-foreground">
-            Loading settings…
-          </div>
+            {t("Loading settings…")}</div>
         ))}
 
       {tab === 'logs' && <LogsPage logs={state.logs} />}

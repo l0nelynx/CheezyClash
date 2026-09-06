@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { ServerRows } from './ServerRows'
 import { Input } from './ui/input'
 import { useEffect, useState } from 'react'
@@ -39,6 +40,7 @@ export function ProxyGroupList({
   onHealth,
   onHealthAll,
 }: Props): React.JSX.Element {
+  const { t } = useI18n()
   // All groups collapsed by default; each toggles independently.
   const key = profileId ?? ''
   const saved = views.get(key)
@@ -59,17 +61,17 @@ export function ProxyGroupList({
   if (!running) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-muted-foreground">Connect first to see your servers.</p>
+        <p className="text-sm text-muted-foreground">{t("Connect first to see your servers.")}</p>
       </div>
     )
   }
 
-  if (error) return <div role="alert" className="space-y-3 p-6 text-center"><p>{error}</p><Button onClick={onRetry}>Try again</Button></div>
-  if (loading && groups.length === 0) return <p role="status" className="p-6 text-center text-muted-foreground">Loading servers…</p>
+  if (error) return <div role="alert" className="space-y-3 p-6 text-center"><p>{t(error)}</p><Button onClick={onRetry}>{t("Try again")}</Button></div>
+  if (loading && groups.length === 0) return <p role="status" className="p-6 text-center text-muted-foreground">{t("Loading servers…")}</p>
   if (groups.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 px-6 py-12 text-center">
-        <p className="text-sm text-muted-foreground">No server groups in this profile.</p>
+        <p className="text-sm text-muted-foreground">{t("No server groups in this profile.")}</p>
       </div>
     )
   }
@@ -77,9 +79,9 @@ export function ProxyGroupList({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Input aria-label="Search servers" placeholder="Search servers" className="min-w-40 flex-1" value={query} onChange={event => setQuery(event.target.value)} />
-        <select aria-label="Sort servers" className="rounded-md border border-border bg-card px-3 py-2 text-sm" value={sort} onChange={event => setSort(event.target.value)}>
-          <option value="profile">Profile order</option><option value="latency">Lowest latency</option><option value="name">Name</option>
+        <Input aria-label={t("Search servers")} placeholder={t("Search servers")} className="min-w-40 flex-1" value={query} onChange={event => setQuery(event.target.value)} />
+        <select aria-label={t("Sort servers")} className="rounded-md border border-border bg-card px-3 py-2 text-sm" value={sort} onChange={event => setSort(event.target.value)}>
+          <option value="profile">{t("Profile order")}</option><option value="latency">{t("Lowest latency")}</option><option value="name">{t("Name")}</option>
         </select>
         <Button
           type="button"
@@ -90,12 +92,12 @@ export function ProxyGroupList({
         >
           <Activity className="h-3.5 w-3.5" />
           {testingAll && testProgress
-            ? `Testing ${testProgress.done}/${testProgress.total}`
-            : 'Test all'}
+            ? t("Testing {0}/{1}", {0:testProgress.done,1:testProgress.total})
+            : t("Test all")}
         </Button>
       </div>
 
-      {query.trim() && !groups.some(g => g.all.some(name => name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))) && <p role="status" className="py-8 text-center text-sm text-muted-foreground">No matching servers.</p>}
+      {query.trim() && !groups.some(g => g.all.some(name => name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))) && <p role="status" className="py-8 text-center text-sm text-muted-foreground">{t("No matching servers.")}</p>}
       {groups.map((g) => {
         const open = expanded.has(g.name) || !!query.trim()
         const selectable = isSelectorGroup(g.type)
@@ -143,8 +145,7 @@ export function ProxyGroupList({
                 onClick={() => onHealth(g.name)}
               >
                 <Activity className="h-3.5 w-3.5" />
-                Test
-              </Button>
+                {t("Test")}</Button>
             </div>
             {open && <ServerRows key={`${query}:${sort}`} names={names} selected={g.now} delays={delays}
               disabled={busy || !!testingAll || !selectable} onSelect={name => onSelect(g.name, name)} />}
@@ -156,6 +157,7 @@ export function ProxyGroupList({
 }
 
 function GroupIcon({ url }: { url?: string }): React.JSX.Element | null {
+  const { t } = useI18n()
   const [failed, setFailed] = useState(false)
   if (!url || failed) return null
   return (

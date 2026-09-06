@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { useEffect, useId, useState } from 'react'
 import {
   ArrowLeft,
@@ -54,6 +55,7 @@ export function SettingsPage({
   onLogout,
   onSyncSubscription,
 }: Props): React.JSX.Element {
+  const { t, language, setLanguage, theme, setTheme } = useI18n()
   const [section, setSection] = useState<SettingsSection | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
@@ -72,7 +74,7 @@ export function SettingsPage({
   const openDashboard = (): void => {
     setDashboardError(null)
     void window.cheezy.openDashboard().catch(() => {
-      setDashboardError('Could not open Zashboard. Check that the VPN is running and try again.')
+      setDashboardError(t("Could not open Zashboard. Check that the VPN is running and try again."))
     })
   }
   const commitPort = (): void => {
@@ -128,44 +130,42 @@ export function SettingsPage({
 
   const subpage =
     section === 'application' ? (
-      <SettingsSubpage title="Application" onBack={() => setSection(null)}>
+      <SettingsSubpage title={t("Application")} onBack={() => setSection(null)}>
         <Toggle
-          label="Launch at system startup"
-          hint="Start quietly in the tray when you sign in to your computer"
+          label={t("Launch at system startup")}
+          hint={t("Start quietly in the tray when you sign in to your computer")}
           checked={settings.autoStart}
           disabled={busy}
           onChange={(value) => onPatch({ autoStart: value })}
         />
         <Toggle
-          label="Connect when the app starts"
-          hint="Connect the active profile after every manual or system launch"
+          label={t("Connect when the app starts")}
+          hint={t("Connect the active profile after every manual or system launch")}
           checked={settings.autoConnect}
           disabled={busy}
           onChange={(value) => onPatch({ autoConnect: value })}
         />
       </SettingsSubpage>
     ) : section === 'connection' ? (
-      <SettingsSubpage title="Connection" onBack={() => setSection(null)}>
+      <SettingsSubpage title={t("Connection")} onBack={() => setSection(null)}>
         <Toggle
-          label="Override YAML network settings"
-          hint="Use the Desktop mode, proxy, TUN, and network values instead of the profile YAML"
+          label={t("Override YAML network settings")}
+          hint={t("Use the Desktop mode, proxy, TUN, and network values instead of the profile YAML")}
           checked={settings.networkOverrideEnabled}
           disabled={busy}
           onChange={(value) => onPatch({ networkOverrideEnabled: value })}
         />
         {!settings.networkOverrideEnabled && (
           <p className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-ink-dim">
-            Network settings are controlled by the Provider. The saved Desktop values below are not
-            applied.
-          </p>
+            {t("Network settings are controlled by the Provider. The saved Desktop values below are not applied.")}</p>
         )}
         <div>
-          <p className="mb-2 text-sm font-medium text-ink">Mode</p>
-          <p className="mb-3 text-xs text-ink-dim">Applies when you connect.</p>
+          <p className="mb-2 text-sm font-medium text-ink">{t("Mode")}</p>
+          <p className="mb-3 text-xs text-ink-dim">{t("Applies when you connect.")}</p>
           <div
             className="inline-flex rounded-lg border border-surface-border p-0.5"
             role="radiogroup"
-            aria-label="Connection mode"
+            aria-label={t("Connection mode")}
           >
             <ModeButton
               label="Proxy"
@@ -182,14 +182,14 @@ export function SettingsPage({
           </div>
         </div>
         <Toggle
-          label="System proxy"
-          hint="Route system traffic through the app while connected (Proxy mode)"
+          label={t("System proxy")}
+          hint={t("Route system traffic through the app while connected (Proxy mode)")}
           checked={settings.systemProxy}
           disabled={networkLocked}
           onChange={(value) => onPatch({ systemProxy: value })}
         />
         <label className="block">
-          <span className="mb-1.5 block text-sm text-ink">TUN stack</span>
+          <span className="mb-1.5 block text-sm text-ink">{t("TUN stack")}</span>
           <Select
             value={settings.tunStack}
             disabled={networkLocked || mode !== 'tun'}
@@ -206,8 +206,8 @@ export function SettingsPage({
           </Select>
         </label>
         <NumberSetting
-          label="TUN MTU"
-          hint="576–9000; default 1500"
+          label={t("TUN MTU")}
+          hint={t("576–9000; default 1500")}
           value={mtuDraft}
           min={576}
           max={9000}
@@ -217,16 +217,16 @@ export function SettingsPage({
         />
       </SettingsSubpage>
     ) : section === 'network' ? (
-      <SettingsSubpage title="Network" onBack={() => setSection(null)}>
+      <SettingsSubpage title={t("Network")} onBack={() => setSection(null)}>
         <Toggle
-          label="Allow LAN"
-          hint="Let other devices on your network use this connection"
+          label={t("Allow LAN")}
+          hint={t("Let other devices on your network use this connection")}
           checked={settings.allowLan}
           disabled={networkLocked}
           onChange={(value) => onPatch({ allowLan: value })}
         />
         <NumberSetting
-          label="Port"
+          label={t("Port")}
           value={portDraft}
           min={1024}
           max={65535}
@@ -238,15 +238,15 @@ export function SettingsPage({
     ) : section === 'xrayMux' ? (
       <SettingsSubpage title="Xray Mux" onBack={() => setSection(null)}>
         <Toggle
-          label="Enable Mux.Cool"
-          hint="Apply Xray-compatible multiplexing to every VLESS proxy without flow"
+          label={t("Enable Mux.Cool")}
+          hint={t("Apply Xray-compatible multiplexing to every VLESS proxy without flow")}
           checked={settings.xrayMuxEnabled}
           disabled={busy}
           onChange={(value) => onPatch({ xrayMuxEnabled: value })}
         />
         <NumberSetting
-          label="Concurrency"
-          hint="Active TCP streams per carrier after soft-grow; default 32"
+          label={t("Concurrency")}
+          hint={t("Active TCP streams per carrier after soft-grow; default 32")}
           value={muxConcurrencyDraft}
           min={1}
           disabled={busy || !settings.xrayMuxEnabled}
@@ -254,8 +254,8 @@ export function SettingsPage({
           onCommit={commitMuxConcurrency}
         />
         <NumberSetting
-          label="Max connections"
-          hint="Soft-grow target + hard cap; 0 — pack-first / unlimited"
+          label={t("Max connections")}
+          hint={t("Soft-grow target + hard cap; 0 — pack-first / unlimited")}
           value={muxMaxConnectionsDraft}
           min={0}
           disabled={busy || !settings.xrayMuxEnabled}
@@ -263,8 +263,8 @@ export function SettingsPage({
           onCommit={commitMuxMaxConnections}
         />
         <NumberSetting
-          label="Max dials per minute"
-          hint="New physical dial budget; 0 — unlimited"
+          label={t("Max dials per minute")}
+          hint={t("New physical dial budget; 0 — unlimited")}
           value={muxMaxDialsDraft}
           min={0}
           disabled={busy || !settings.xrayMuxEnabled}
@@ -279,22 +279,36 @@ export function SettingsPage({
       {subpage ?? (
         <>
           <div>
-            <h2 className="text-lg font-semibold text-ink">Settings</h2>
-            <p className="text-sm text-muted-foreground">Application, connection, and routing.</p>
+            <h2 className="text-lg font-semibold text-ink">{t("Settings")}</h2>
+            <p className="text-sm text-muted-foreground">{t("Application, connection, and routing.")}</p>
           </div>
+          <Section title={t('Appearance')}>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="space-y-2 text-sm"><span className="block">{t('Language')}</span>
+                <select data-testid="language" aria-label={t("Language")} value={language} onChange={event => setLanguage(event.target.value as 'ru' | 'en')} className="w-full rounded-md border border-border bg-card px-3 py-2">
+                  <option value="en">English</option><option value="ru">Русский</option>
+                </select>
+              </label>
+              <label className="space-y-2 text-sm"><span className="block">{t('Theme')}</span>
+                <select data-testid="theme" aria-label={t("Theme")} value={theme} onChange={event => setTheme(event.target.value as 'system' | 'light' | 'dark')} className="w-full rounded-md border border-border bg-card px-3 py-2">
+                  <option value="system">{t('System')}</option><option value="light">{t('Light')}</option><option value="dark">{t('Dark')}</option>
+                </select>
+              </label>
+            </div>
+          </Section>
           {supportsAuth && (
-            <Section title="Account">
+            <Section title={t("Account")}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-ink">
-                    {session?.email || 'Not signed in'}
+                    {session?.email || t("Not signed in")}
                   </p>
                   <p className="text-xs text-ink-dim">
                     {signedIn
                       ? session?.emailVerified === false
-                        ? 'Email not verified'
-                        : 'Account'
-                      : 'Using a subscription imported from a link'}
+                        ? t("Email not verified")
+                        : t("Account")
+                      : t("Using a subscription imported from a link")}
                   </p>
                 </div>
                 {signedIn ? (
@@ -306,8 +320,7 @@ export function SettingsPage({
                       disabled={busy}
                       onClick={onSyncSubscription}
                     >
-                      Sync
-                    </Button>
+                      {t("Sync")}</Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -316,8 +329,7 @@ export function SettingsPage({
                       disabled={busy}
                       onClick={onLogout}
                     >
-                      Log out
-                    </Button>
+                      {t("Log out")}</Button>
                   </div>
                 ) : (
                   <Button
@@ -327,58 +339,57 @@ export function SettingsPage({
                     disabled={busy}
                     onClick={onLogin}
                   >
-                    Sign in
-                  </Button>
+                    {t("Sign in")}</Button>
                 )}
               </div>
             </Section>
           )}
           <nav
             className="page-card divide-y divide-surface-border overflow-hidden"
-            aria-label="Settings sections"
+            aria-label={t("Settings sections")}
           >
             <MenuRow
               icon={<AppWindow className="h-4 w-4" />}
-              title="Application"
-              detail="Startup and automatic connection"
+              title={t("Application")}
+              detail={t("Startup and automatic connection")}
               onClick={() => setSection('application')}
             />
             <MenuRow
               icon={<PlugZap className="h-4 w-4" />}
-              title="Connection"
-              detail="Desktop override, mode, system proxy, and TUN"
+              title={t("Connection")}
+              detail={t("Desktop override, mode, system proxy, and TUN")}
               onClick={() => setSection('connection')}
             />
             <MenuRow
               icon={<Network className="h-4 w-4" />}
-              title="Network"
-              detail="LAN access and mixed proxy port"
+              title={t("Network")}
+              detail={t("LAN access and mixed proxy port")}
               onClick={() => setSection('network')}
             />
             <MenuRow
               icon={<Shuffle className="h-4 w-4" />}
               title="Xray Mux"
-              detail="Multiplexing limits for VLESS proxies"
+              detail={t("Multiplexing limits for VLESS proxies")}
               onClick={() => setSection('xrayMux')}
             />
             <MenuRow
               icon={<ListFilter className="h-4 w-4" />}
-              title="Custom Rules"
+              title={t("Custom Rules")}
               detail={
-                ruleCount === 0 ? 'No rules' : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`
+                ruleCount === 0 ? t("No rules") : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`
               }
               onClick={() => setRulesOpen(true)}
             />
             <MenuRow
               icon={<LayoutDashboard className="h-4 w-4" />}
               title="Zashboard"
-              detail="Open with the active controller credentials"
+              detail={t("Open with the active controller credentials")}
               disabled={busy || !status?.running}
               trailing={<ExternalLink className="h-4 w-4" />}
               onClick={openDashboard}
             />
             {dashboardError && (
-              <p role="alert" className="px-4 text-sm text-destructive">{dashboardError}</p>
+              <p role="alert" className="px-4 text-sm text-destructive">{t(dashboardError)}</p>
             )}
           </nav>
         </>
@@ -403,6 +414,7 @@ function SettingsSubpage({
   onBack: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <>
       <div className="flex items-center gap-2">
@@ -410,14 +422,14 @@ function SettingsSubpage({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Back to Settings"
+          aria-label={t("Back to Settings")}
           onClick={onBack}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <p className="text-xs text-muted-foreground">Settings</p>
-          <h2 className="text-lg font-semibold text-ink">{title}</h2>
+          <p className="text-xs text-muted-foreground">{t("Settings")}</p>
+          <h2 className="text-lg font-semibold text-ink">{t(title)}</h2>
         </div>
       </div>
       <section className="page-card space-y-5 p-4">{children}</section>
@@ -440,6 +452,7 @@ function MenuRow({
   trailing?: React.ReactNode
   onClick: () => void
 }): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <button
       type="button"
@@ -451,8 +464,8 @@ function MenuRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-ink">{title}</span>
-        <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+        <span className="block text-sm font-medium text-ink">{t(title)}</span>
+        <span className="block truncate text-xs text-muted-foreground">{t(detail)}</span>
       </span>
       <span className="text-muted-foreground transition-transform group-hover:translate-x-0.5">
         {trailing ?? <ChevronRight className="h-4 w-4" />}
@@ -472,6 +485,7 @@ function ModeButton({
   disabled: boolean
   onClick: () => void
 }): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <Button
       type="button"
@@ -483,7 +497,7 @@ function ModeButton({
       size="sm"
       className={active ? 'font-semibold' : 'text-muted-foreground'}
     >
-      {label}
+      {t(label)}
     </Button>
   )
 }
@@ -507,9 +521,10 @@ function NumberSetting({
   onChange: (value: string) => void
   onCommit: () => void
 }): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm text-ink">{label}</span>
+      <span className="mb-1.5 block text-sm text-ink">{t(label)}</span>
       <Input
         type="number"
         min={min}
@@ -524,7 +539,7 @@ function NumberSetting({
           if (event.key === 'Enter') onCommit()
         }}
       />
-      {hint && <span className="mt-1 block text-xs text-ink-dim">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ink-dim">{t(hint)}</span>}
     </label>
   )
 }
@@ -536,9 +551,10 @@ function Section({
   title: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useI18n()
   return (
     <section className="page-card space-y-4 p-4">
-      <h3 className="section-label">{title}</h3>
+      <h3 className="section-label">{t(title)}</h3>
       {children}
     </section>
   )
@@ -557,14 +573,15 @@ function Toggle({
   disabled: boolean
   onChange: (value: boolean) => void
 }): React.JSX.Element {
+  const { t } = useI18n()
   const id = useId()
   return (
     <div className="flex items-start justify-between gap-4">
       <span>
         <label htmlFor={id} className="block cursor-pointer text-sm font-medium text-foreground">
-          {label}
+          {t(label)}
         </label>
-        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t(hint)}</span>
       </span>
       <Switch
         id={id}

@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { Link2, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../components/ui/button'
@@ -18,6 +19,7 @@ export function LoginPage({
   onCancel,
   handoffError,
 }: Props): React.JSX.Element {
+  const { t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
@@ -62,8 +64,7 @@ export function LoginPage({
           <div>
             <h1 className="text-xl font-semibold text-ink">{productName}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sign in to sync your account subscriptions.
-            </p>
+              {t("Sign in to sync your account subscriptions.")}</p>
           </div>
 
           {(error || handoffError) && (
@@ -81,7 +82,7 @@ export function LoginPage({
             aria-busy={busyAction === 'login'}
           >
             <label className="block">
-              <span className="mb-1.5 block text-xs text-ink-dim">Email</span>
+              <span className="mb-1.5 block text-xs text-ink-dim">{t("Email")}</span>
               <Input
                 type="email"
                 autoComplete="username"
@@ -92,7 +93,7 @@ export function LoginPage({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-ink-dim">Password</span>
+              <span className="mb-1.5 block text-xs text-ink-dim">{t("Password")}</span>
               <Input
                 type="password"
                 autoComplete="current-password"
@@ -104,13 +105,12 @@ export function LoginPage({
             </label>
             <Button type="submit" className="w-full" disabled={busy || !email || !password}>
               {busyAction === 'login' ? <Loader2 className="animate-spin" /> : null}
-              Sign in
-            </Button>
+              {t("Sign in")}</Button>
           </form>
 
           <div className="flex items-center gap-3" aria-hidden="true">
             <span className="h-px flex-1 bg-surface-border" />
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">or</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-dim">{t("or")}</span>
             <span className="h-px flex-1 bg-surface-border" />
           </div>
 
@@ -120,13 +120,12 @@ export function LoginPage({
             aria-busy={busyAction === 'import'}
           >
             <div>
-              <p className="text-sm font-medium text-ink">Use a subscription link</p>
+              <p className="text-sm font-medium text-ink">{t("Use a subscription link")}</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-dim">
-                Use {productName} without signing in. You can sign in later from Settings.
-              </p>
+                {t("Use {0} without signing in. You can sign in later from Settings.", {0:productName})}</p>
             </div>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-ink-dim">Subscription URL</span>
+              <span className="mb-1.5 block text-xs text-ink-dim">{t("Subscription URL")}</span>
               <div className="relative">
                 <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-dim" />
                 <Input
@@ -148,14 +147,12 @@ export function LoginPage({
               disabled={busy || !subscriptionUrl.trim()}
             >
               {busyAction === 'import' ? <Loader2 className="animate-spin" /> : <Link2 />}
-              Import subscription
-            </Button>
+              {t("Import subscription")}</Button>
           </form>
 
           {onCancel && (
             <Button type="button" variant="ghost" className="w-full" disabled={busy} onClick={onCancel}>
-              Back to app
-            </Button>
+              {t("Back to app")}</Button>
           )}
         </div>
       </div>

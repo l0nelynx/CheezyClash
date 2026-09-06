@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { Home, Info, Layers, ScrollText, Settings, Shield } from 'lucide-react'
 import type { CoreStatus } from '../../../shared/types'
 import type { Tab } from '../hooks/useCheezyState'
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.Element {
+  const { t } = useI18n()
   const running = !!status?.running
 
   return (
@@ -35,8 +37,8 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
             <button
               key={id}
               type="button"
-              title={label}
-              aria-label={label}
+              title={t(label)}
+              aria-label={t(label)}
               aria-current={active ? 'page' : undefined}
               onClick={() => onTab(id)}
               className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring ${
@@ -47,7 +49,7 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
             >
               <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
               <span className="pointer-events-none absolute left-full z-20 ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-lg transition-all duration-150 translate-x-[-2px] group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
-                {label}
+                {t(label)}
               </span>
             </button>
           )
@@ -59,7 +61,7 @@ export function Sidebar({ tab, onTab, status, productName }: Props): React.JSX.E
           className={`h-2.5 w-2.5 rounded-full ${
             running ? 'bg-ok shadow-[0_0_8px_oklch(0.72_0.15_155_/_0.55)]' : 'bg-muted-foreground'
           }`}
-          title={running ? `Connected · ${status?.mode}` : 'Disconnected'}
+          title={running ? t("Connected · {0}",{0:status?.mode}) : t("Disconnected")}
           aria-hidden
         />
       </div>

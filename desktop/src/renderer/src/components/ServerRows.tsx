@@ -1,14 +1,16 @@
+import { useI18n } from '../lib/i18n'
 import { useState } from 'react'
 import { Check } from 'lucide-react'
 
 export function ServerRows({ names, selected, delays, disabled, onSelect }: {
   names: string[]; selected: string; delays: Record<string, number>; disabled: boolean; onSelect: (name: string) => void
 }): React.JSX.Element {
+  const { t } = useI18n()
   const [scrollTop, setScrollTop] = useState(0)
   const height = 40
   const start = Math.max(0, Math.min(names.length - 1, Math.floor(scrollTop / height)) - 6)
   const end = Math.min(names.length, start + 20)
-  return <ul tabIndex={0} aria-label="Servers" className="overflow-y-auto px-2" style={{ height: Math.min(256, names.length * height) }}
+  return <ul tabIndex={0} aria-label={t("Servers")} className="overflow-y-auto px-2" style={{ height: Math.min(256, names.length * height) }}
     onScroll={event => setScrollTop(event.currentTarget.scrollTop)}>
     <li aria-hidden="true" style={{ height: start * height }} />
     {names.slice(start, end).map(name => {
@@ -22,7 +24,7 @@ export function ServerRows({ names, selected, delays, disabled, onSelect }: {
           </span>
           <span className="min-w-0 flex-1 truncate font-emoji" title={name}>{name}</span>
           {ms !== undefined && <span className={`shrink-0 text-xs tabular-nums ${ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-muted-foreground'}`}>
-            {ms < 0 ? 'fail' : `${ms} ms`}
+            {ms < 0 ? t("fail") : t("{0} ms", {0:ms})}
           </span>}
         </button>
       </li>

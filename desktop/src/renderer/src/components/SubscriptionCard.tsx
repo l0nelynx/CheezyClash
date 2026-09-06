@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { formatBytes } from '../lib/format'
 import type { SubscriptionInfo } from '../../../shared/types'
 
@@ -21,6 +22,7 @@ function formatLastUpdate(millis: number): string {
 }
 
 export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Element {
+  const { t } = useI18n()
   const used = info.upload + info.download
   const isUnlimited = info.total <= 0
   const remaining = isUnlimited ? 0 : Math.max(0, info.total - used)
@@ -55,13 +57,13 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
 
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] text-ink-dim">Used</p>
+          <p className="text-[11px] text-ink-dim">{t("Used")}</p>
           <p className={`text-base font-semibold tabular-nums ${progressText}`}>{formatBytes(used)}</p>
         </div>
         <div className="text-right">
-          <p className="text-[11px] text-ink-dim">{isUnlimited ? 'Limit' : 'Remaining'}</p>
+          <p className="text-[11px] text-ink-dim">{isUnlimited ? t("Limit") : t("Remaining")}</p>
           <p className="text-base font-semibold tabular-nums text-ink">
-            {isUnlimited ? 'Unlimited' : formatBytes(remaining)}
+            {isUnlimited ? t("Unlimited") : formatBytes(remaining)}
           </p>
         </div>
       </div>
@@ -69,7 +71,7 @@ export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Ele
       {(info.expire > 0 || lastUpdateTime > 0) && (
         <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-surface-border/60 pt-2.5">
           {info.expire > 0 ? (
-            <p className={`text-[11px] ${expireColor}`}>Expires {formatExpire(info.expire)}</p>
+            <p className={`text-[11px] ${expireColor}`}>{t("Expires")} {formatExpire(info.expire)}</p>
           ) : (
             <span />
           )}

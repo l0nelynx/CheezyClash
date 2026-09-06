@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): React.JSX.Element {
+  const { t } = useI18n()
   const selectable = isSelectorGroup(group.type)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -81,7 +83,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
               className={`h-3.5 w-3.5 shrink-0 text-ink-dim transition ${open ? 'translate-x-0.5' : ''}`}
             />
           ) : (
-            <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-dim">Auto</span>
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-dim">{t("Auto")}</span>
           )}
         </div>
         <p className="truncate text-sm font-semibold text-ink font-emoji" title={group.now || undefined}>
@@ -93,7 +95,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
               nowDelay < 0 ? 'text-danger' : nowDelay < 200 ? 'text-ok' : 'text-muted-foreground'
             }`}
           >
-            {nowDelay < 0 ? 'fail' : `${nowDelay} ms`}
+            {nowDelay < 0 ? t("fail") : t("{0} ms", {0:nowDelay})}
           </p>
         )}
       </button>
@@ -112,14 +114,14 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search servers…"
+                placeholder={t("Search servers…")}
                 className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-dim"
               />
             </div>
           )}
           <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-xs text-muted-foreground">No matches</li>
+              <li className="px-3 py-2 text-xs text-muted-foreground">{t("No matches")}</li>
             ) : (
               filtered.map((name) => {
                 const active = name === group.now
@@ -150,7 +152,7 @@ export function ActiveServerCard({ group, latencies, busy, onSelect }: Props): R
                             ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-muted-foreground'
                           }`}
                         >
-                          {ms < 0 ? 'fail' : `${ms} ms`}
+                          {ms < 0 ? t("fail") : t("{0} ms", {0:ms})}
                         </span>
                       )}
                     </button>

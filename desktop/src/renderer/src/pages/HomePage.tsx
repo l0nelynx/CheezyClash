@@ -1,3 +1,4 @@
+import { useI18n } from '../lib/i18n'
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import type {
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function HomePage(props: Props): React.JSX.Element {
+  const { t } = useI18n()
   const sub = props.activeProfile?.subscription
   const announce = sub?.announce
   const [dismissedAnnounce, setDismissedAnnounce] = useState<string | null>(null)
@@ -63,7 +65,7 @@ export function HomePage(props: Props): React.JSX.Element {
           <button
             type="button"
             className="shrink-0 rounded p-0.5 hover:bg-muted"
-            aria-label="Dismiss announcement"
+            aria-label={t("Dismiss announcement")}
             onClick={() => setDismissedAnnounce(announce)}
           >
             <X className="h-4 w-4" />

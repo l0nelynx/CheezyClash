@@ -123,6 +123,14 @@ the next start/reload uses the source YAML password. The legacy global
 | `npm run test:controller` | YAML credentials, HTTP auth, reload/profile races and Zashboard setup URL (no real VPN/browser) |
 | `npm run test:profile-races` | Subscription refresh versus import, deletion, account replacement, and concurrent refreshes (mock HTTP, isolated temporary profiles) |
 | `npm run test:system-proxy` | Windows proxy snapshot, conditional restoration, partial failure/restart recovery, and legacy ownership checks (mock registry; no network changes) |
+| `npm run test:subscription-download` | Download deadline, size limits, HTTPS redirects, errors and cancellation |
+| `npm run test:traffic-stream` | Stream chunking, deduplication, reset and invalid frames |
+| `npm run test:ui` | After `npm run build`: isolated Electron UI checks with mocked IPC, blocked HTTP(S), temporary preferences and screenshots |
+
+Appearance settings offer English/Russian and system/light/dark themes. Preferences
+persist locally; system mode follows OS theme changes. Server lists support search
+and sorting, and logs support search, filtering and redacted export. Implementation
+status and validation limitations are recorded in [the improvement plan](docs/improvement-plan.md).
 
 On Windows, enabling the system proxy saves its previous address, bypass list,
 and enabled state. Disconnect restores these values only while the current

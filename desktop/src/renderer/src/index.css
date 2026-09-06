@@ -58,6 +58,40 @@
   --danger: var(--destructive);
 }
 
+:root.light {
+  --background: oklch(0.975 0.003 260);
+  --foreground: oklch(0.22 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.27 0.02 260);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0.005 260);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.94 0.005 260);
+  --muted-foreground: oklch(0.46 0.01 260);
+  --accent: oklch(0.93 0.008 260);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.52 0.2 25);
+  --border: oklch(0.86 0.005 260);
+  --input: var(--border);
+  --ring: oklch(0.5 0.02 260);
+  --sidebar: oklch(0.95 0.005 260);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.89 0.008 260);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --surface-sunken: oklch(0.95 0.005 260);
+  --ink-dim: oklch(0.46 0.01 260);
+  --brand-dim: oklch(0.35 0.01 260);
+  --brand-soft: oklch(0 0 0 / 6%);
+  --ok: oklch(0.47 0.13 155);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -132,7 +166,7 @@
   #root {
     @apply m-0 h-full bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    color-scheme: dark;
+    color-scheme: inherit;
   }
 
   ::-webkit-scrollbar {
@@ -266,3 +300,6 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.light aside img, .light header img { filter: brightness(0.2); }
+.light .page-card > svg { opacity: 0.2; }
