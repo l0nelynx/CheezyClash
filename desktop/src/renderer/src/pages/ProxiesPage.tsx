@@ -2,6 +2,7 @@ import type { ProxyGroupInfo } from '../../../shared/types'
 import { ProxyGroupList } from '../components/ProxyGroupList'
 
 interface Props {
+  profileId: string | null
   groups: ProxyGroupInfo[]
   latencies: Record<string, Record<string, number>>
   busy: boolean
@@ -20,7 +21,7 @@ export function ProxiesPage(props: Props): React.JSX.Element {
         <h2 className="text-lg font-semibold text-ink">Proxies</h2>
         <p className="text-sm text-muted-foreground">Choose a server in a group.</p>
       </div>
-      <ProxyGroupList {...props} />
+      <ProxyGroupList key={props.profileId} {...props} />
     </div>
   )
 }

@@ -266,6 +266,7 @@ export default function App(): React.JSX.Element {
 
       {tab === 'proxies' && (
         <ProxiesPage
+          profileId={state.activeId}
           groups={groups}
           latencies={state.latencies}
           busy={busy}

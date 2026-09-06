@@ -1,10 +1,15 @@
-import { useState } from 'react'
-import { Activity, Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { ServerRows } from './ServerRows'
+import { Input } from './ui/input'
+import { useEffect, useState } from 'react'
+import { Activity, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ProxyGroupInfo } from '../../../shared/types'
 import { isSelectorGroup } from '../lib/proxy-groups'
 import { Button } from './ui/button'
 
+const views = new Map<string, { expanded: string[]; query: string; sort: string }>()
+
 interface Props {
+  profileId: string | null
   groups: ProxyGroupInfo[]
   latencies: Record<string, Record<string, number>>
   busy: boolean
@@ -18,6 +23,7 @@ interface Props {
 
 export function ProxyGroupList({
   groups,
+  profileId,
   latencies,
   busy,
   running,
@@ -28,7 +34,12 @@ export function ProxyGroupList({
   onHealthAll,
 }: Props): React.JSX.Element {
   // All groups collapsed by default; each toggles independently.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const key = profileId ?? ''
+  const saved = views.get(key)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(saved?.expanded ?? []))
+  const [query, setQuery] = useState(saved?.query ?? '')
+  const [sort, setSort] = useState(saved?.sort ?? 'profile')
+  useEffect(() => { views.set(key, { expanded: [...expanded], query, sort }) }, [key, expanded, query, sort])
 
   function toggle(name: string): void {
     setExpanded((prev) => {
@@ -57,7 +68,11 @@ export function ProxyGroupList({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input aria-label="Search servers" placeholder="Search servers" className="min-w-40 flex-1" value={query} onChange={event => setQuery(event.target.value)} />
+        <select aria-label="Sort servers" className="rounded-md border border-border bg-card px-3 py-2 text-sm" value={sort} onChange={event => setSort(event.target.value)}>
+          <option value="profile">Profile order</option><option value="latency">Lowest latency</option><option value="name">Name</option>
+        </select>
         <Button
           type="button"
           variant="outline"
@@ -72,10 +87,18 @@ export function ProxyGroupList({
         </Button>
       </div>
 
+      {query.trim() && !groups.some(g => g.all.some(name => name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))) && <p role="status" className="py-8 text-center text-sm text-muted-foreground">No matching servers.</p>}
       {groups.map((g) => {
-        const open = expanded.has(g.name)
+        const open = expanded.has(g.name) || !!query.trim()
         const selectable = isSelectorGroup(g.type)
         const delays = latencies[g.name] || {}
+        const names = g.all.filter(name => name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+        if (sort === 'name') names.sort((a, b) => a.localeCompare(b))
+        if (sort === 'latency') {
+          const rank = (name: string): number => delays[name] > 0 ? delays[name] : Number.MAX_SAFE_INTEGER
+          names.sort((a, b) => rank(a) - rank(b))
+        }
+        if (query.trim() && !names.length) return null
         return (
           <section
             key={g.name}
@@ -115,50 +138,8 @@ export function ProxyGroupList({
                 Test
               </Button>
             </div>
-            {open && (
-              <ul className="max-h-64 overflow-y-auto p-2">
-                {g.all.map((name) => {
-                  const active = name === g.now
-                  const ms = delays[name]
-                  return (
-                    <li key={name}>
-                      <button
-                        type="button"
-                        disabled={busy || testingAll || !selectable}
-                        onClick={() => onSelect(g.name, name)}
-                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-                          active
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-ink hover:bg-surface-overlay'
-                        }`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                            active
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-surface-border'
-                          }`}
-                        >
-                          {active && <Check className="h-3 w-3" strokeWidth={3} />}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate font-medium font-emoji" title={name}>
-                          {name}
-                        </span>
-                        {ms !== undefined && (
-                          <span
-                            className={`shrink-0 text-xs tabular-nums ${
-                              ms < 0 ? 'text-danger' : ms < 200 ? 'text-ok' : 'text-muted-foreground'
-                            }`}
-                          >
-                            {ms < 0 ? 'fail' : `${ms} ms`}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            {open && <ServerRows key={`${query}:${sort}`} names={names} selected={g.now} delays={delays}
+              disabled={busy || !!testingAll || !selectable} onSelect={name => onSelect(g.name, name)} />}
           </section>
         )
       })}
