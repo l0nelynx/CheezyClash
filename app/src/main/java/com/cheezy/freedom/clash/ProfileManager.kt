@@ -229,7 +229,7 @@ object ProfileManager {
                 ConfigManager.reloadAndReapplySelections(context, dir)
             }
         }
-    }
+    }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
 
     /** Refreshes the currently active profile (no-op if none). */
     suspend fun refreshActive(context: Context): Result<Unit> {

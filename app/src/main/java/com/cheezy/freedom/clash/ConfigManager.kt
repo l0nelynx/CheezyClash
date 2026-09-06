@@ -15,6 +15,8 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 object ConfigManager {
     private const val PREFS_SELECTIONS = "cheezy.selections"
@@ -51,7 +53,14 @@ object ConfigManager {
      */
     private const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024 // 20 MB
 
-    suspend fun downloadBase(
+    suspend fun downloadBase(context: Context, urlString: String, targetDir: File, validateHeaders: (HttpURLConnection) -> Unit = {}): DownloadMeta =
+        try {
+            withTimeout(60_000) { downloadBaseInternal(context, urlString, targetDir, validateHeaders) }
+        } catch (error: TimeoutCancellationException) {
+            throw IOException("Subscription download timed out", error)
+        }
+
+    private suspend fun downloadBaseInternal(
         context: Context,
         urlString: String,
         targetDir: File,
@@ -84,11 +93,12 @@ object ConfigManager {
             }
         }
         val conn = openSubscriptionConnection(initialUrl, context, appName, wapSession)
-        try {
+        return SubscriptionTransfer.read(conn) { checkActive ->
+            checkActive()
             val code = conn.responseCode
             if (code !in 200..299) {
-                val err = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
-                throw IOException("HTTP $code: ${err?.take(200) ?: conn.responseMessage}")
+                // Do not consume an unbounded error body or expose server-provided secrets.
+                throw IOException("Subscription request failed (HTTP $code)")
             }
             // Re-validate final URL after redirects (HttpURLConnection follows same-protocol by default).
             requireHttps(conn.url)
@@ -120,20 +130,12 @@ object ConfigManager {
             try {
                 conn.inputStream.use { input ->
                     temporary.outputStream().use { output ->
-                        var copied = 0L
-                        val buf = ByteArray(8 * 1024)
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            copied += n
-                            if (copied > MAX_DOWNLOAD_BYTES) {
-                                throw IOException("Subscription exceeded size limit ($MAX_DOWNLOAD_BYTES bytes)")
-                            }
-                            output.write(buf, 0, n)
-                        }
+                        SubscriptionTransfer.copyLimited(input, output, MAX_DOWNLOAD_BYTES, checkActive)
                     }
                 }
+                checkActive()
                 ConfigFiles.readValidated(temporary)
+                checkActive()
                 runCatching {
                     Files.move(
                         temporary.toPath(),
@@ -148,9 +150,7 @@ object ConfigManager {
                 temporary.delete()
             }
 
-            return DownloadMeta(name, sub, intervalHours)
-        } finally {
-            conn.disconnect()
+            DownloadMeta(name, sub, intervalHours)
         }
         } finally {
             if (authenticatorInstalled) Authenticator.setDefault(null)
