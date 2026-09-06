@@ -276,6 +276,7 @@ async function spawnCoreElevated(configPath: string): Promise<void> {
 }
 
 async function cleanupCore(clearProxy: boolean): Promise<void> {
+  mihomoApi.stopTraffic()
   try {
     await stopCoreByHelper()
   } catch {

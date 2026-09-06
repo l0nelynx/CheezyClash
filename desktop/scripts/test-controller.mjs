@@ -186,6 +186,7 @@ try {
         return [];
       };`,
     './mihomo-api': `${prelude} export const mihomoApi = {
+      stopTraffic: () => {},
       setAuth: (_host, _port, secret) => { f.clientSecret = secret; },
       getSecret: () => f.clientSecret,
       ping: async () => f.running && f.clientSecret === f.serverSecret,

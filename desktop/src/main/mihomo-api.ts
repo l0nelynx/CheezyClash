@@ -1,3 +1,4 @@
+import { TrafficStream } from './traffic-stream'
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../shared/types'
 import type { ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
 import { readFileSync } from 'fs'
@@ -44,7 +45,7 @@ export class MihomoApi {
     this.port = port
     this.secret = secret
     this.groupsInFlight = null
-    this.trafficPrev = null
+    this.stopTraffic()
   }
 
   getSecret(): string {
@@ -235,38 +236,11 @@ export class MihomoApi {
     return out
   }
 
-  /** Last /connections totals sample — used to derive B/s without SSE /traffic. */
-  private trafficPrev: { upTotal: number; downTotal: number; atMs: number } | null = null
+  private trafficStream = new TrafficStream(signal => fetch(this.url('/traffic'), { headers: this.headers(), signal }))
 
-  async getTraffic(): Promise<TrafficSnapshot> {
-    // Do NOT call GET /traffic — in mihomo it is an infinite SSE stream and
-    // fetch() never resolves (freezes UI busy-state / empty Proxies tab).
-    // Instantaneous rates = delta of uploadTotal/downloadTotal over wall time.
-    try {
-      const c = await this.request<{ downloadTotal?: number; uploadTotal?: number }>(
-        'GET',
-        '/connections',
-      )
-      const upTotal = c.uploadTotal || 0
-      const downTotal = c.downloadTotal || 0
-      const atMs = Date.now()
-      let up = 0
-      let down = 0
-      const prev = this.trafficPrev
-      if (prev) {
-        const dtSec = (atMs - prev.atMs) / 1000
-        if (dtSec > 0) {
-          up = Math.max(0, (upTotal - prev.upTotal) / dtSec)
-          down = Math.max(0, (downTotal - prev.downTotal) / dtSec)
-        }
-      }
-      this.trafficPrev = { upTotal, downTotal, atMs }
-      return { up, down, upTotal, downTotal }
-    } catch {
-      this.trafficPrev = null
-      return { up: 0, down: 0, upTotal: 0, downTotal: 0 }
-    }
-  }
+  stopTraffic(): void { this.trafficStream.stop() }
+
+  async getTraffic(): Promise<TrafficSnapshot> { return this.trafficStream.sample() }
 }
 
 export const mihomoApi = new MihomoApi()
