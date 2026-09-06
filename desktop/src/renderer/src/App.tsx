@@ -10,6 +10,8 @@ import { ProfilesPage } from './pages/ProfilesPage'
 import { ProxiesPage } from './pages/ProxiesPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { shouldShowLogin } from './lib/auth-gate'
+import { withDeadline } from './lib/deadline'
+import { Button } from './components/ui/button'
 import type { PrivateAccountSession, PrivateCapabilities } from '../../shared/private-api'
 import type { DeepLinkResult } from '../../shared/deep-link'
 
@@ -35,25 +37,37 @@ export default function App(): React.JSX.Element {
   const [caps, setCaps] = useState<PrivateCapabilities | null>(null)
   const [session, setSession] = useState<PrivateAccountSession | null>(null)
   const [authReady, setAuthReady] = useState(false)
+  const [bootError, setBootError] = useState<string | null>(null)
+  const authGeneration = useRef(0)
   const [authHandoffError, setAuthHandoffError] = useState<string | null>(null)
   const [loginRequested, setLoginRequested] = useState(false)
   const handledDeepLinkSequence = useRef(0)
   const lastCustomRuleDiagnosticAt = useRef(0)
 
   const refreshAuth = useCallback(async () => {
-    const c = await window.cheezy.privateCapabilities()
-    setCaps(c)
-    if (c.supportsAuth) {
-      const s = await window.cheezy.privateGetSession()
+    const generation = ++authGeneration.current
+    setBootError(null)
+    try {
+      const { c, s } = await withDeadline((async () => {
+        const c = await window.cheezy.privateCapabilities()
+        const s = c.supportsAuth ? await window.cheezy.privateGetSession() : null
+        return { c, s }
+      })(), 15_000)
+      if (generation !== authGeneration.current) return
+      setCaps(c)
       setSession(s)
-    } else {
-      setSession(null)
+      setAuthReady(true)
+    } catch (error) {
+      if (generation === authGeneration.current) {
+        setBootError('Could not load the app. Check your connection and try again.')
+      }
+      throw error
     }
-    setAuthReady(true)
   }, [])
 
   useEffect(() => {
-    void refreshAuth()
+    void refreshAuth().catch(() => undefined)
+    return () => { authGeneration.current++ }
   }, [refreshAuth])
 
   const handleDeepLinkResult = useCallback(
@@ -73,6 +87,7 @@ export default function App(): React.JSX.Element {
           void refreshAuth()
             .then(() => refresh())
             .then(() => showNotice('Signed in successfully'))
+            .catch(() => undefined)
           return
         }
         const messages = {
@@ -160,10 +175,16 @@ export default function App(): React.JSX.Element {
     }
   }, [groups, setGroupLatencies, showNotice])
 
-  if (!authReady || !caps || !state.ready) {
+  if (bootError || !authReady || !caps || !state.ready) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading…
+      <div className="flex h-full flex-col">
+        <TitleBar status={status} productName={caps?.productName ?? 'CheezyClash'} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-sm text-muted-foreground">
+          <p role={bootError ? 'alert' : 'status'}>{bootError ?? 'Loading…'}</p>
+          {bootError && <Button onClick={() => {
+            void refreshAuth().then(() => refresh()).catch(() => undefined)
+          }}>Try again</Button>}
+        </div>
       </div>
     )
   }
@@ -194,7 +215,7 @@ export default function App(): React.JSX.Element {
             onLoggedIn={() => {
               setAuthHandoffError(null)
               setLoginRequested(false)
-              void refreshAuth().then(() => state.refresh())
+              void refreshAuth().then(() => state.refresh()).catch(() => undefined)
             }}
           />
         </div>
