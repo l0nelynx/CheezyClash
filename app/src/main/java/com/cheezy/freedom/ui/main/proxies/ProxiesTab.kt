@@ -24,6 +24,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.res.stringResource
+import com.cheezy.freedom.R
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,7 +71,9 @@ fun ProxiesTab(
     val pingingProxies = remember { mutableStateMapOf<String, Boolean>() }
     val delays by viewModel.proxyDelays.collectAsState()
     val loading by viewModel.isPinging.collectAsState()
-    var error by remember { mutableStateOf<String?>(null) }
+    val error by viewModel.groupsError.collectAsState()
+    val groupsLoading by viewModel.groupsLoading.collectAsState()
+    LaunchedEffect(Unit) { if (rawGroups == null) viewModel.reloadProxyGroups() }
 
     // Don't trigger reloadProxyGroups every time the tab is opened: data comes
     // from the cache (ConfigManager.loadProxyGroupsCache in MainViewModel init) and
@@ -75,12 +81,18 @@ fun ProxiesTab(
     // subscription update, or ClashState.lastUpdateTime tick.
 
     Column(Modifier.fillMaxSize()) {
+        if (error != null) {
+            Text(error!!, modifier = Modifier.padding(12.dp))
+            TextButton(onClick = { viewModel.reloadProxyGroups() }, enabled = !groupsLoading) {
+                Text(stringResource(R.string.retry_action))
+            }
+        }
         when {
-            rawGroups == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            rawGroups == null && groupsLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularWavyProgressIndicator()
             }
-            error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(error!!)
+            rawGroups.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (error == null) Text(stringResource(R.string.servers_empty))
             }
             else -> {
                 val groups = rawGroups ?: emptyList()

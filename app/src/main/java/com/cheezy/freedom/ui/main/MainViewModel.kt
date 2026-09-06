@@ -159,6 +159,12 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     private val _proxyGroups = MutableStateFlow<List<Pair<String, List<ProxyUiData>>>?>(null)
     val proxyGroups: StateFlow<List<Pair<String, List<ProxyUiData>>>?> = _proxyGroups.asStateFlow()
 
+    private val _groupsError = MutableStateFlow<String?>(null)
+    val groupsError = _groupsError.asStateFlow()
+    private val _groupsLoading = MutableStateFlow(false)
+    val groupsLoading = _groupsLoading.asStateFlow()
+    private var groupsRequest = 0L
+
     private val _groupIcons = MutableStateFlow<Map<String, Int>>(emptyMap())
     val groupIcons: StateFlow<Map<String, Int>> = _groupIcons.asStateFlow()
 
@@ -236,6 +242,11 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     }
 
     private fun refreshProfilesState() {
+        if (_activeProfileId.value != ProfileStore.activeId(context)) {
+            _proxyGroups.value = null
+            _groupsError.value = null
+            groupsRequest++
+        }
         _profiles.value = ProfileStore.list(context)
         _activeProfileId.value = ProfileStore.activeId(context)
         _configName.value = ProfileStore.active(context)?.name
@@ -706,9 +717,17 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
     }
 
     private suspend fun reloadProxyGroupsInternal(forceLoad: Boolean) {
-        if (!ClashRemoteManager.connected.value) return
+        val request = ++groupsRequest
+        if (!ClashRemoteManager.connected.value) {
+            _groupsLoading.value = false
+            _groupsError.value = context.getString(R.string.servers_unavailable)
+            return
+        }
+        _groupsLoading.value = true
+        _groupsError.value = null
         val requestedProfileId = ProfileStore.activeId(context)
 
+        try {
         val result = withContext(Dispatchers.IO) {
             runCatching {
                 proxySnapshotMutex.withLock {
@@ -720,7 +739,7 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
                         ((!isClashLoaded && !isAlreadyLoaded) || forceLoad)
 
                     if (didReload) {
-                        ClashRemoteManager.loadConfig(activeDir.absolutePath)
+                        ClashRemoteManager.loadConfigChecked(activeDir.absolutePath)
                         isClashLoaded = true
 
                         val validGroups = ClashRemoteManager.queryGroupNames(false).toSet()
@@ -740,7 +759,9 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
                     } else {
                         coreNames
                     }
+                    check(finalNames.isNotEmpty() || !ConfigManager.hasConfig(context)) { "No groups returned" }
                     val snapshot = queryRuntimeSnapshot(finalNames)
+                    check(snapshot.groups.size == finalNames.size) { "Incomplete server list" }
                     val icons = ConfigManager.readGroupIcons(context).mapValues { (_, resName) ->
                         context.resources.getIdentifier(resName, "drawable", context.packageName)
                     }
@@ -750,13 +771,20 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
         }
 
         result.onSuccess { (snapshot, icons) ->
-            if (!isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@onSuccess
+            if (request != groupsRequest || !isCurrentProfileSnapshot(requestedProfileId, ProfileStore.activeId(context))) return@onSuccess
             applyRuntimeSnapshot(snapshot, replaceGroups = forceLoad)
             _groupIcons.value = icons
             if (snapshot.groups.isNotEmpty()) {
                 runCatching { ConfigManager.saveProxyGroupsCache(context, _proxyGroups.value ?: snapshot.groups) }
             }
         }
+        result.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            if (request == groupsRequest && requestedProfileId == ProfileStore.activeId(context)) {
+                _groupsError.value = context.getString(R.string.servers_unavailable)
+            }
+        }
+        } finally { if (request == groupsRequest) _groupsLoading.value = false }
     }
 
     private suspend fun refreshRuntimeProxySnapshot() {

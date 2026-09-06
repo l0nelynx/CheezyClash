@@ -192,4 +192,7 @@
     <string name="info_privacy_policy">Политика конфиденциальности</string>
     <string name="info_terms">Пользовательское соглашение</string>
     <string name="info_close">Закрыть</string>
+    <string name="servers_unavailable">Не удалось получить серверы. Проверьте подключение к VPN-службе и повторите попытку.</string>
+    <string name="servers_empty">В профиле пока нет серверов</string>
+    <string name="retry_action">Повторить</string>
 </resources>
