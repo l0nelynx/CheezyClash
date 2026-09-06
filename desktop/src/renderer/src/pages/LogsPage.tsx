@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Switch } from '../components/ui/switch'
 
 interface Props {
@@ -14,13 +14,13 @@ function lineClass(line: string): string {
 
 export function LogsPage({ logs }: Props): React.JSX.Element {
   const [autoScroll, setAutoScroll] = useState(true)
-  const endRef = useRef<HTMLDivElement>(null)
-  const visible = logs.slice(-300)
+  const [pausedLogs, setPausedLogs] = useState(logs)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const visible = (autoScroll ? logs : pausedLogs).slice(-300)
 
-  useEffect(() => {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (autoScroll) endRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' })
-  }, [visible.length, autoScroll])
+  useLayoutEffect(() => {
+    if (autoScroll && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [logs, autoScroll])
 
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col gap-3">
@@ -32,12 +32,18 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Switch
             checked={autoScroll}
-            onCheckedChange={setAutoScroll}
+            onCheckedChange={(enabled) => { setPausedLogs(logs); setAutoScroll(enabled) }}
           />
           Auto-scroll
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-surface-sunken p-4 font-mono text-xs leading-relaxed shadow-inner">
+      <div ref={scrollRef} onScroll={(event) => {
+        const element = event.currentTarget
+        if (autoScroll && element.scrollHeight - element.scrollTop - element.clientHeight > 24) {
+          setPausedLogs(logs)
+          setAutoScroll(false)
+        }
+      }} className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-surface-sunken p-4 font-mono text-xs leading-relaxed shadow-inner">
         {visible.length === 0 ? (
           <p className="text-ink-dim">No log lines yet.</p>
         ) : (
@@ -50,7 +56,6 @@ export function LogsPage({ logs }: Props): React.JSX.Element {
             </div>
           ))
         )}
-        <div ref={endRef} />
       </div>
     </div>
   )
