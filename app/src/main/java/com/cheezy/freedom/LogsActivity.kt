@@ -41,6 +41,12 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.flowOn
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.foundation.interaction.DragInteraction
+import java.util.concurrent.atomic.AtomicLong
 
 class LogsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +61,7 @@ class LogsActivity : ComponentActivity() {
 }
 
 private const val MAX_LOG_LINES = 1000
+private val logSequence = AtomicLong()
 
 enum class LogSource(@androidx.annotation.StringRes val labelRes: Int) {
     CORE(R.string.logs_filter_core),
@@ -67,7 +74,8 @@ data class LogEntry(
     val message: String,
     val source: LogSource,
     val tag: String = "",
-    val time: String = ""
+    val time: String = "",
+    val id: Long = logSequence.incrementAndGet(),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,61 +90,52 @@ private fun LogsScreen() {
     
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     var autoScroll by remember { mutableStateOf(true) }
 
-    // Subscribe to Core Logs
-    LaunchedEffect(Unit) {
-        ClashRemoteManager.subscribeLogcat().collect { msg ->
-            val cleanMessage = msg.message.stripPrivacyInfo()
-            coreLogs.add(LogEntry(msg.level, cleanMessage, LogSource.CORE))
-            if (coreLogs.size > MAX_LOG_LINES) coreLogs.removeAt(0)
-        }
-    }
-
-    // Subscribe to System Logcat (includes ClashMetaForAndroid and App logs)
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val myPid = Process.myPid()
-            // Using -T 1 to get only new logs and keep pipe open
-            val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "-T", "1", "--pid=$myPid", "*:V"))
-            val reader = process.inputStream.bufferedReader()
-            try {
-                while (isActive) {
-                    val line = reader.readLine() ?: break
-                    val entry = parseLogcatLine(line) ?: continue
-                    
-                    val cleanEntry = entry.copy(message = entry.message.stripPrivacyInfo())
-                    
-                    withContext(Dispatchers.Main) {
-                        if (cleanEntry.tag.contains("ClashMetaForAndroid", ignoreCase = true)) {
-                            systemLogs.add(cleanEntry.copy(source = LogSource.SYSTEM))
-                            if (systemLogs.size > MAX_LOG_LINES) systemLogs.removeAt(0)
-                        }
-                        
-                        appLogs.add(cleanEntry.copy(source = LogSource.APP))
-                        if (appLogs.size > MAX_LOG_LINES) appLogs.removeAt(0)
-                    }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                ClashRemoteManager.subscribeLogcat().collect { msg ->
+                    coreLogs.add(LogEntry(msg.level, msg.message.stripPrivacyInfo(), LogSource.CORE))
+                    if (coreLogs.size > MAX_LOG_LINES) coreLogs.removeAt(0)
                 }
-            } finally {
-                process.destroy()
+            }
+            launch {
+                systemLogLines().collect { line ->
+                    val entry = parseLogcatLine(line) ?: return@collect
+                    val clean = entry.copy(message = entry.message.stripPrivacyInfo())
+                    if (clean.tag.contains("ClashMetaForAndroid", ignoreCase = true)) {
+                        systemLogs.add(clean.copy(source = LogSource.SYSTEM))
+                        if (systemLogs.size > MAX_LOG_LINES) systemLogs.removeAt(0)
+                    }
+                    appLogs.add(clean.copy(source = LogSource.APP))
+                    if (appLogs.size > MAX_LOG_LINES) appLogs.removeAt(0)
+                }
             }
         }
     }
 
-    val filteredLogs = remember(selectedSource, minLevel, coreLogs.size, systemLogs.size, appLogs.size) {
-        val sourceList = when (selectedSource) {
-            LogSource.CORE -> coreLogs
-            LogSource.SYSTEM -> systemLogs
-            LogSource.APP -> appLogs
+    val liveLogs by remember {
+        derivedStateOf {
+            when (selectedSource) {
+                LogSource.CORE -> coreLogs
+                LogSource.SYSTEM -> systemLogs
+                LogSource.APP -> appLogs
+            }.filter { it.level.ordinal >= minLevel.ordinal }
         }
-        sourceList.filter { it.level.ordinal >= minLevel.ordinal }
     }
-
-    // Scroll to bottom when new logs arrive if autoScroll is enabled
-    LaunchedEffect(filteredLogs.size) {
-        if (autoScroll && filteredLogs.isNotEmpty()) {
-            listState.scrollToItem(filteredLogs.size - 1)
+    var pausedLogs by remember { mutableStateOf<List<LogEntry>?>(null) }
+    LaunchedEffect(autoScroll) { pausedLogs = if (autoScroll) null else liveLogs.toList() }
+    LaunchedEffect(selectedSource, minLevel) { pausedLogs = null; autoScroll = true }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect {
+            if (it is DragInteraction.Start) autoScroll = false
         }
+    }
+    val filteredLogs = pausedLogs ?: liveLogs
+    LaunchedEffect(filteredLogs.lastOrNull()?.id, autoScroll) {
+        if (autoScroll && filteredLogs.isNotEmpty()) listState.scrollToItem(filteredLogs.lastIndex)
     }
 
     Scaffold(
@@ -152,6 +151,7 @@ private fun LogsScreen() {
                         )
                     }
                     IconButton(onClick = {
+                        pausedLogs = null
                         coreLogs.clear()
                         systemLogs.clear()
                         appLogs.clear()
@@ -215,7 +215,7 @@ private fun LogsScreen() {
                         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        items(filteredLogs) { entry ->
+                        items(filteredLogs, key = { it.id }) { entry ->
                             LogItemRow(entry)
                         }
                     }
@@ -249,6 +249,20 @@ private fun LogsScreen() {
         }
     }
 }
+
+/** Destroying the process unblocks readLine even when logcat is completely idle. */
+private fun systemLogLines(): Flow<String> = callbackFlow {
+    val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "-T", "1", "--pid=${Process.myPid()}", "*:V"))
+    val reader = launch(Dispatchers.IO) {
+        try {
+            process.inputStream.bufferedReader().use { input ->
+                while (isActive) { val line = input.readLine() ?: break; trySend(line) }
+            }
+        } catch (_: java.io.IOException) { /* Process closed on lifecycle stop. */ }
+        finally { close() }
+    }
+    awaitClose { process.destroy(); reader.cancel() }
+}.flowOn(Dispatchers.IO)
 
 @Composable
 private fun LogItemRow(entry: LogEntry) {
