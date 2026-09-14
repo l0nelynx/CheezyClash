@@ -18,6 +18,8 @@ on:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
       - 'scripts/native_symbols.py'
+      - 'scripts/validate_native_cache.py'
+      - 'scripts/publish_core.py'
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
@@ -31,6 +33,8 @@ on:
       - 'core/src/main/golang/**'
       - 'core/build.gradle.kts'
       - 'scripts/native_symbols.py'
+      - 'scripts/validate_native_cache.py'
+      - 'scripts/publish_core.py'
       - 'core/src/main/cpp/CMakeLists.txt'
       - '.github/workflows/build-core.yml'
       - '.github/actions/libclash/**'
@@ -53,6 +57,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Test CI recovery scripts
+        run: python3 scripts/test_ci_resilience.py
 
       - name: Compute Go sources hash
         id: hash
@@ -77,17 +84,16 @@ jobs:
           path: core/build/generatedJniLibs
           key: libclash-v2-${{ steps.hash.outputs.go_hash }}
 
-      - name: Skip build if already cached
+      - name: Validate cached native binaries
+        id: verified-cache
         if: steps.cache-libclash.outputs.cache-hit == 'true'
-        run: |
-          echo "libclash.so already cached under libclash-${{ steps.hash.outputs.go_hash }}"
-          ls -lhR core/build/generatedJniLibs/
+        run: python3 scripts/validate_native_cache.py core/build/generatedJniLibs scripts/native_symbols.py
 
-      - name: Set up JDK 17
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
+      - name: Set up JDK 21
+        if: steps.verified-cache.outputs.valid != 'true'
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
@@ -99,13 +105,13 @@ jobs:
           cache-dependency-path: core/src/main/golang/go.sum
 
       - name: Install Android SDK + NDK 28.2.13676358
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
+        if: steps.verified-cache.outputs.valid != 'true'
         uses: android-actions/setup-android@v4
         with:
           packages: "ndk;28.2.13676358 cmake;3.22.1"
 
       - name: Build libclash.so for all ABIs
-        if: steps.cache-libclash.outputs.cache-hit != 'true'
+        if: steps.verified-cache.outputs.valid != 'true'
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --parallel \
@@ -216,46 +222,11 @@ jobs:
             "mihomo-${HASH}-darwin-arm64.zip"
           )
 
-          upload_missing() {
-            local existing
-            existing="$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)"
-            for path in "$@"; do
-              local base
-              base="$(basename "$path")"
-              if echo "$existing" | grep -Fxq "$base"; then
-                echo "Asset $base already on $TAG — skip"
-              else
-                echo "Uploading $base…"
-                gh release upload "$TAG" "$path" --clobber
-              fi
-            done
-          }
-
-          # Mihomo sidecars: always clobber — build flags (e.g. with_gvisor) can
-          # change without a go_hash bump, and stale binaries break WireGuard/TUN.
-          upload_sidecars() {
-            for f in "${SIDECARS[@]}"; do
-              echo "Uploading (clobber) $f…"
-              gh release upload "$TAG" "${SIDE_DIR}/${f}" --clobber
-            done
-          }
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG exists — refresh sidecars, fill any missing libclash zip"
-            upload_missing "$LIBZIP"
-            upload_sidecars
-          else
-            echo "Creating release $TAG"
-            ASSETS=("$LIBZIP")
-            for f in "${SIDECARS[@]}"; do
-              ASSETS+=("${SIDE_DIR}/${f}")
-            done
-            gh release create "$TAG" \
-              "${ASSETS[@]}" \
-              --title "libclash ${HASH}" \
-              --notes "$NOTES" \
-              --prerelease
-          fi
+          ASSETS=("$LIBZIP")
+          for f in "${SIDECARS[@]}"; do
+            ASSETS+=("${SIDE_DIR}/${f}")
+          done
+          python3 scripts/publish_core.py "$TAG" "${ASSETS[@]}"
 
       - name: Upload libclash workflow artifact
         if: github.event_name == 'pull_request'

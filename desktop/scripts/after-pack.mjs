@@ -5,7 +5,7 @@
  * Uses pure-JS `resedit` (works on Linux CI when packaging win32) instead of
  * the deprecated native `rcedit` binary wrapper.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import * as ResEdit from 'resedit'
 
@@ -23,6 +23,10 @@ function parseVersionParts(version) {
 
 export default async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return
+  const wintun = join(context.appOutDir, 'resources', 'core', 'wintun.dll')
+  if (!existsSync(wintun) || statSync(wintun).size === 0) {
+    throw new Error('Windows package is missing required wintun.dll')
+  }
 
   const productName = context.packager.appInfo.productName || 'CheezyClash'
   const exeName = `${context.packager.appInfo.productFilename}.exe`

@@ -57,19 +57,17 @@ runs:
         path: ${{ inputs.jni-libs-path }}
         key: libclash-v2-${{ steps.hash.outputs.go_hash }}
 
-    - name: Mark cache hit
+    - name: Validate cached native binaries
       id: from-cache
       if: steps.cache-libclash.outputs.cache-hit == 'true'
       shell: bash
       run: |
-        echo "source=cache" >> "$GITHUB_OUTPUT"
-        for abi in arm64-v8a armeabi-v7a x86_64; do
-          test -f "${{ inputs.jni-libs-path }}/$abi/libclash.so" || exit 1
-        done
+        python3 "${{ inputs.go-sources-path }}/../../../../scripts/validate_native_cache.py" \
+          "${{ inputs.jni-libs-path }}" "${{ inputs.go-sources-path }}/../../../../scripts/native_symbols.py"
 
     - name: Download libclash from GitHub Release
       id: from-release
-      if: steps.cache-libclash.outputs.cache-hit != 'true'
+      if: steps.from-cache.outputs.valid != 'true'
       shell: bash
       env:
         GO_HASH: ${{ steps.hash.outputs.go_hash }}
@@ -80,23 +78,22 @@ runs:
         ZIP="libclash-v2-${GO_HASH}.zip"
         URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP}"
         echo "Trying release download: $URL"
-        if curl -fL --retry 3 --retry-delay 2 -o "/tmp/${ZIP}" "$URL"; then
-          mkdir -p "$JNI_PATH"
-          unzip -o "/tmp/${ZIP}" -d "$JNI_PATH"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            test -f "$JNI_PATH/$abi/libclash.so" || { echo "ERROR: missing $abi after unzip"; exit 1; }
-          done
-          echo "source=release" >> "$GITHUB_OUTPUT"
-        else
-          echo "Release asset not found (tag ${TAG})"
-          echo "source=none" >> "$GITHUB_OUTPUT"
-        fi
+        python3 "${{ inputs.go-sources-path }}/../../../../scripts/download_ci.py" "$URL" "/tmp/${ZIP}"
+
+    - name: Extract downloaded core
+      id: extracted
+      if: steps.from-release.outputs.found == 'true'
+      shell: bash
+      run: |
+        mkdir -p "${{ inputs.jni-libs-path }}"
+        unzip -o "/tmp/libclash-v2-${{ steps.hash.outputs.go_hash }}.zip" -d "${{ inputs.jni-libs-path }}"
+        echo "source=release" >> "$GITHUB_OUTPUT"
 
     - name: Build libclash and symbols for all ABIs
       id: from-build
       if: >-
-        steps.cache-libclash.outputs.cache-hit != 'true' &&
-        steps.from-release.outputs.source != 'release' &&
+        steps.from-cache.outputs.valid != 'true' &&
+        steps.extracted.outputs.source != 'release' &&
         inputs.allow-build-fallback == 'true'
       shell: bash
       run: |
@@ -107,8 +104,8 @@ runs:
 
     - name: Require libclash
       if: >-
-        steps.cache-libclash.outputs.cache-hit != 'true' &&
-        steps.from-release.outputs.source != 'release' &&
+        steps.from-cache.outputs.valid != 'true' &&
+        steps.extracted.outputs.source != 'release' &&
         (inputs.allow-build-fallback != 'true' || steps.from-build.outputs.source != 'build')
       shell: bash
       run: |
@@ -130,9 +127,9 @@ runs:
       id: result
       shell: bash
       run: |
-        if [ "${{ steps.from-cache.outputs.source }}" = "cache" ]; then
+        if [ "${{ steps.from-cache.outputs.valid }}" = "true" ]; then
           echo "source=cache" >> "$GITHUB_OUTPUT"
-        elif [ "${{ steps.from-release.outputs.source }}" = "release" ]; then
+        elif [ "${{ steps.extracted.outputs.source }}" = "release" ]; then
           echo "source=release" >> "$GITHUB_OUTPUT"
         elif [ "${{ steps.from-build.outputs.source }}" = "build" ]; then
           echo "source=build" >> "$GITHUB_OUTPUT"
@@ -145,4 +142,4 @@ runs:
       uses: actions/cache/save@v4
       with:
         path: ${{ inputs.jni-libs-path }}
-        key: libclash-${{ steps.hash.outputs.go_hash }}
+        key: libclash-v2-${{ steps.hash.outputs.go_hash }}

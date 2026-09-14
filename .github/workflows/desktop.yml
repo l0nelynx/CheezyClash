@@ -10,6 +10,12 @@ on:
     branches: [main]
     paths:
       - 'desktop/**'
+      - 'scripts/*ci*.py'
+      - 'scripts/publish_core.py'
+      - 'scripts/validate_native_cache.py'
+      - 'scripts/verify_release_assets.py'
+      - '.github/workflows/release.yml'
+      - '.github/actions/libclash/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
     inputs:
@@ -51,7 +57,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Deep-link matrix / privacy
-        run: npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer
+        run: npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer && npm run test:ci-resilience
       - name: Build
         run: npm run build
   package:
@@ -171,7 +177,7 @@ jobs:
         with:
           name: CheezyClash-linux
           path: desktop/release/*
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Upload macOS artifacts
         if: matrix.target == 'mac'
         uses: actions/upload-artifact@v4
@@ -180,4 +186,4 @@ jobs:
           path: |
             desktop/release/*.dmg
             desktop/release/*.zip
-          if-no-files-found: ignore
+          if-no-files-found: error

@@ -26,7 +26,7 @@ jobs:
   android:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,10 +37,10 @@ jobs:
         with:
           allow-build-fallback: 'false'
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
@@ -111,7 +111,7 @@ jobs:
           npm run sync-version
           test "$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME#v}"
       - name: Typecheck and Desktop tests
-        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer
+        run: npm run typecheck && npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer && npm run test:ci-resilience
 
   desktop:
     if: github.event_name == 'push'
@@ -122,21 +122,16 @@ jobs:
         include:
           - os: windows-latest
             target: win
-            optional: false
           - os: ubuntu-latest
             target: linux
-            optional: true
           # macos-latest is arm64; build x64 via cross-compile + TARGET_ARCH
           - os: macos-latest
             target: mac
             arch: arm64
-            optional: true
           - os: macos-latest
             target: mac
             arch: x64
-            optional: true
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.optional }}
     timeout-minutes: 45
     defaults:
       run:
@@ -249,7 +244,7 @@ jobs:
           path: |
             desktop/release/*.AppImage
             desktop/release/*.deb
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 3
       - name: Upload macOS desktop artifacts
         if: matrix.target == 'mac'
@@ -259,12 +254,12 @@ jobs:
           path: |
             desktop/release/*.dmg
             desktop/release/*.zip
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 3
 
   publish:
     if: github.event_name == 'push'
-    needs: [android, desktop]
+    needs: [android, desktop, desktop-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -291,6 +286,9 @@ jobs:
         with:
           path: release-assets
 
+      - name: Verify complete release assets
+        run: python3 scripts/verify_release_assets.py release-assets
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -311,10 +309,10 @@ jobs:
 
             ### Desktop
             - **Windows:** installer (`.exe`) + portable (`.zip`)
-            - **macOS:** `arm64` and `x64` (`.dmg` / `.zip`) when matrix jobs succeed
-            - **Linux:** attached when the matrix job succeeded
+            - **macOS:** `arm64` and `x64` (`.dmg` / `.zip`)
+            - **Linux:** AppImage and Debian package attached
           generate_release_notes: true
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
 
       - name: Trigger proprietary release
         env:

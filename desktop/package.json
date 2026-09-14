@@ -35,6 +35,7 @@
     "test:subscription-metadata": "node scripts/test-subscription-metadata.mjs",
     "test:profile-races": "node scripts/test-profile-races.mjs",
     "test:system-proxy": "node scripts/test-system-proxy.mjs",
+    "test:ci-resilience": "node scripts/test-download.mjs && node scripts/test-privileges.mjs && node scripts/test-wintun-package.mjs && npm run test:system-proxy && python3 ../scripts/test_ci_resilience.py",
     "test:subscription-download": "node scripts/test-subscription-download.mjs",
     "test:traffic-stream": "node scripts/test-traffic-stream.mjs",
     "test:ui": "node scripts/test-ui.mjs",

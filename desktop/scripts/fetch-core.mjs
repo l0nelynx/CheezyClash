@@ -66,7 +66,7 @@ function goarch() {
 async function fetchWintun() {
   if (goos() !== 'windows') return
   const dest = join(outDir, 'wintun.dll')
-  if (existsSync(dest)) {
+  if (existsSync(dest) && statSync(dest).size > 0) {
     console.log('wintun.dll already present')
     return
   }
@@ -88,7 +88,7 @@ async function fetchWintun() {
       renameSync(dll, dest)
       console.log('wintun.dll installed')
     } else {
-      console.warn('wintun.dll not found in archive — place manually in resources/core')
+      throw new Error('wintun.dll not found in archive')
     }
     try {
       unlinkSync(zipPath)
@@ -96,8 +96,7 @@ async function fetchWintun() {
       /* ignore */
     }
   } catch (e) {
-    console.warn('wintun download failed:', e.message || e)
-    console.warn('Place wintun.dll into resources/core manually for TUN.')
+    throw new Error(`Required Wintun download/install failed: ${e.message || e}`, { cause: e })
   }
 }
 
