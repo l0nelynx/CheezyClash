@@ -14,7 +14,6 @@
  * build-core.yml to publish the hash on main.
  */
 import {
-  createWriteStream,
   existsSync,
   mkdirSync,
   renameSync,
@@ -26,7 +25,7 @@ import {
   writeFileSync,
   readFileSync,
 } from 'fs'
-import { pipeline } from 'stream/promises'
+import { download } from './download.mjs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { platform, arch } from 'os'
@@ -62,19 +61,6 @@ function goarch() {
   if (a === 'arm64') return 'arm64'
   if (a === 'ia32') return '386'
   return 'amd64'
-}
-
-async function download(url, dest) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'CheezyClash-Desktop' },
-    redirect: 'follow',
-  })
-  if (!res.ok) {
-    const err = new Error(`download ${res.status}: ${url}`)
-    err.status = res.status
-    throw err
-  }
-  await pipeline(res.body, createWriteStream(dest))
 }
 
 async function fetchWintun() {
