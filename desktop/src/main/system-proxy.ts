@@ -100,7 +100,11 @@ async function setMacProxy(enable: boolean, port: number): Promise<void> {
   const services = stdout
     .split('\n')
     .map((s) => s.trim())
-    .filter((s) => s && !s.startsWith('*') && s !== 'An asterisk')
+    .filter(Boolean)
+    // networksetup always prints an explanatory header before service names.
+    // Drop it structurally, including on localized macOS installations.
+    .slice(1)
+    .filter((s) => !s.startsWith('*'))
   for (const svc of services) {
     if (enable) {
       await execFileAsync('networksetup', ['-setwebproxy', svc, '127.0.0.1', String(port)])

@@ -155,7 +155,7 @@ export function ConnectHero({
               {tun?.privilegesOk ? t("ready") : t("needs setup")}
             </span>
           </span>
-          {!tun?.privilegesOk && (
+          {!tun?.privilegesOk && tun?.helperSetupAvailable !== false && (
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={onEnsureHelper}>
               {t("Install helper")}</Button>
           )}</>}

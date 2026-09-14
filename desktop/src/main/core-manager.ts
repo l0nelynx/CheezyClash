@@ -211,6 +211,7 @@ export async function getTunStatus(): Promise<TunStatus> {
     helperInstalled: svc !== 'none' || helperRunning,
     helperRunning,
     privilegesOk: await privilegesOk(true),
+    helperSetupAvailable: platform() === 'win32',
     lastError,
   }
 }
@@ -346,7 +347,9 @@ async function reconcileLifecycle(
   if (effectiveMode === 'tun') {
     const auth = await authorizeForTun()
     if (!auth) {
-      lastError = 'privileges required for TUN'
+      lastError = platform() === 'darwin'
+        ? 'TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.'
+        : 'privileges required for TUN'
       log(lastError, 'error')
       if (!settings.networkOverrideEnabled) throw new Error(lastError)
       effectiveMode = 'proxy'

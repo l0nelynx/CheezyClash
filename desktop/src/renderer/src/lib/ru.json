@@ -1,4 +1,5 @@
 {
+  "TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.": "Для TUN на macOS нужен helper с правами администратора. Его автоматическая установка в этой версии ещё не реализована. В настройках включите переопределение сетевых параметров и выберите режим «Прокси».",
   "Home": "Главная",
   "Proxies": "Серверы",
   "Profiles": "Профили",

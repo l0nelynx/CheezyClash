@@ -94,6 +94,7 @@ export interface CoreStatus {
 }
 
 export interface TunStatus {
+  helperSetupAvailable?: boolean
   enabled: boolean
   helperInstalled: boolean
   helperRunning: boolean

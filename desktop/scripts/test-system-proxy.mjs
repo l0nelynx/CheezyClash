@@ -259,4 +259,32 @@ await test('production queue recovers after failure and read errors never cause 
   assert.deepEqual(h.current, original)
 })
 
-console.log(`${passed} Windows system proxy scenarios passed (no host registry writes)`)
+await test('macOS never passes the explanatory header or disabled services to networksetup', async () => {
+  for (const header of ['An asterisk (*) denotes that a network service is disabled.', 'Звёздочка (*) обозначает отключённую сетевую службу.']) {
+    const filename = new URL('../src/main/system-proxy.ts', import.meta.url)
+    const realRequire = createRequire(filename)
+    const commands = []
+    const mockedRequire = name => {
+      if (name === './windows-proxy-state') return { WindowsProxyState, WINDOWS_PROXY_BYPASS, parseWindowsProxyValues }
+      if (name === './store') return { store: {} }
+      if (name === './logger') return { log() {} }
+      if (name === 'os') return { platform: () => 'darwin' }
+      if (name === 'util') return { promisify: () => async (command, args) => {
+        assert.equal(command, 'networksetup')
+        commands.push(args)
+        return { stdout: args[0] === '-listallnetworkservices' ? `\r\n${header}\r\nWi-Fi\r\n*Disabled\r\nUSB LAN\r\n` : '' }
+      } }
+      return realRequire(name)
+    }
+    const js = ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+    const module = { exports: {} }
+    new Function('require', 'module', 'exports', js)(mockedRequire, module, module.exports)
+    await module.exports.setSystemProxy(true, 7890)
+    await module.exports.setSystemProxy(false, 7890)
+    const writes = commands.filter(args => args[0] !== '-listallnetworkservices')
+    assert.equal(writes.length, 18)
+    assert.deepEqual([...new Set(writes.map(args => args[1]))], ['Wi-Fi', 'USB LAN'])
+  }
+})
+
+console.log(`${passed} system proxy scenarios passed (no host settings changed)`)

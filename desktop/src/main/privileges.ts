@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { platform } from 'os'
-import { chmodSync, existsSync, statSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { coreBinaryPath } from './paths'
 import { pingHelper, ensureHelper, queryWindowsService } from './helper'
 import { log } from './logger'
@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile)
 export async function privilegesOk(forTun: boolean): Promise<boolean> {
   if (!forTun) return true
   const p = platform()
+  if (p !== 'win32' && process.getuid?.() === 0) return true
   if (p === 'win32') {
     return (await queryWindowsService()) === 'running' || (await pingHelper())
   }
@@ -30,7 +31,7 @@ function isSetuidRoot(path: string): boolean {
   try {
     const st = statSync(path)
     // mode & 0o4000 = setuid
-    return (st.mode & 0o4000) !== 0
+    return st.uid === 0 && (st.mode & 0o4000) !== 0
   } catch {
     return false
   }
@@ -61,10 +62,11 @@ export async function authorizeForTun(): Promise<boolean> {
     if (await privilegesOk(true)) return true
     return authorizeCoreLinux()
   }
-  // macOS: try helper first; setuid is restricted on modern macOS — document fallback.
+  if (await privilegesOk(true)) return true
+  // macOS has no helper installation flow yet; only an existing helper can work.
   if (await ensureHelper()) return true
   log(
-    'macOS TUN: helper not available; enable TUN may require running core with admin once',
+    'macOS TUN: privileged helper unavailable; automatic setup is not implemented',
     'warn',
   )
   return false

@@ -15,6 +15,9 @@ const TUN_POLL_MS = 30_000
 const GROUPS_POLL_MS = 15_000
 function friendlyError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
+  if (msg.includes('TUN on macOS requires')) {
+    return 'TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.'
+  }
   if (msg.includes('no active profile')) {
     return 'Import or activate a profile first (Profiles tab).'
   }
