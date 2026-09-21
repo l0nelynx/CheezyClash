@@ -75,17 +75,20 @@ class ResilienceTests(unittest.TestCase):
             uploads = 0
             views = 0
             published = False
+            creates = 0
             def command(*args):
-                nonlocal release, uploads, views, published
+                nonlocal release, uploads, views, published, creates
                 if args[0] == 'api' and '/tags/' in args[1]:
                     views += 1
                     if views == 1:
                         raise publish_core.GithubError('HTTP 504')
-                    if release is None:
-                        raise publish_core.GithubError('HTTP 404')
-                    return json.dumps(release)
+                    # GitHub's tag endpoint hides drafts, even after creation.
+                    raise publish_core.GithubError('HTTP 404')
+                if args[0] == 'api' and '/releases?' in args[1]:
+                    return json.dumps([[], [release] if release else []])
                 if args[:2] == ('release', 'create'):
-                    release = {'id': 1, 'draft': True}
+                    creates += 1
+                    release = {'id': 1, 'draft': True, 'tag_name': 'tag'}
                     raise publish_core.GithubError('connection reset after create')
                 if args[0] == 'api':
                     return json.dumps(assets)
@@ -102,6 +105,7 @@ class ResilienceTests(unittest.TestCase):
             with patch.object(publish_core, 'retry', lambda fn: original_retry(fn, wait=lambda _: None)):
                 publish_core.publish('owner/repo', 'tag', [path], command)
             self.assertEqual(uploads, 1)
+            self.assertEqual(creates, 1)
             self.assertTrue(published)
 
     def test_api_permission_errors_are_not_retried(self):

@@ -201,6 +201,16 @@ jobs:
             rm -rf "$STAGE"
           done
 
+      - name: Preserve core release assets before publication
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-release-assets-${{ steps.hash.outputs.go_hash }}
+          path: |
+            /tmp/libclash-v2-${{ steps.hash.outputs.go_hash }}.zip
+            core/build/mihomo-sidecars/*.zip
+          retention-days: 3
+          if-no-files-found: error
+
       - name: Publish core GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:

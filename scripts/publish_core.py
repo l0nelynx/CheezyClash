@@ -45,7 +45,11 @@ def publish(repo, tag, paths, command=gh):
             return json.loads(command('api', f'{endpoint}/tags/{tag}'))
         except GithubError as error:
             if error.status == 404:
-                return None
+                # The tag endpoint does not return draft releases. List them
+                # with authentication before creating or retrying a release.
+                pages = json.loads(command('api', f'{endpoint}?per_page=100', '--paginate', '--slurp'))
+                return next((release for page in pages for release in page
+                             if release['tag_name'] == tag), None)
             raise
 
     def ensure_release():
