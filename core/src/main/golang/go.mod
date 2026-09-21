@@ -145,6 +145,6 @@ require (
 
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
 
-replace github.com/metacubex/utls => github.com/metacubex/utls v0.0.0-20260726054410-2aa631698733
+replace github.com/metacubex/utls => github.com/legiz-ru/prizrak-utls v0.0.0-20260910220934-80ad70380fe8
 
-replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260921183441-216ec54d82e1
+replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20260921192621-2f2b7ce9a1c1
