@@ -17,7 +17,7 @@ export interface AppSettings {
   /** @deprecated migrated to connectionMode; kept for YAML tun.enable sync */
   tunEnabled: boolean
   connectionMode: ConnectionMode
-  tunStack: 'system' | 'gvisor' | 'mixed'
+  tunStack: 'system' | 'gvisor' | 'mixed' | 'mips'
   /** Override profile YAML network and TUN settings with Desktop values. */
   networkOverrideEnabled: boolean
   /** TUN interface MTU used when Desktop network override is enabled. */

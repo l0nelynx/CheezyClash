@@ -95,6 +95,17 @@ assert.throws(
 )
 assert.doesNotThrow(() => applyNetworkSettings({ tun: null }, settings()))
 
+// mips must survive both Desktop overrides and a profile-managed configuration.
+for (const networkOverrideEnabled of [true, false]) {
+  const saved = normalizeSettings({ networkOverrideEnabled, connectionMode: 'tun', tunStack: 'mips' })
+  assert.equal(saved.tunStack, 'mips')
+  const doc = networkOverrideEnabled ? {} : { tun: { enable: true, stack: 'mips' } }
+  const effective = applyNetworkSettings(doc, saved)
+  assert.equal(doc.tun.stack, 'mips')
+  assert.equal(effective.tunStack, 'mips')
+  assert.equal(effective.mode, 'tun')
+}
+
 {
   const migrated = normalizeSettings({ systemProxy: false })
   assert.equal(migrated.networkOverrideEnabled, false)

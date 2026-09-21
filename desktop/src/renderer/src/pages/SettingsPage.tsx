@@ -202,6 +202,7 @@ export function SettingsPage({
               <SelectItem value="mixed">mixed</SelectItem>
               <SelectItem value="system">system</SelectItem>
               <SelectItem value="gvisor">gvisor</SelectItem>
+              <SelectItem value="mips">mips</SelectItem>
             </SelectContent>
           </Select>
         </label>

@@ -82,7 +82,7 @@ export function effectiveNetworkFromDocument(
     bindAddress:
       typeof doc['bind-address'] === 'string' ? doc['bind-address'] : '127.0.0.1',
     tunStack:
-      stack === 'system' || stack === 'gvisor' || stack === 'mixed' ? stack : 'mixed',
+      stack === 'system' || stack === 'gvisor' || stack === 'mixed' || stack === 'mips' ? stack : 'mixed',
     tunMtu: typeof mtu === 'number' ? mtu : 1500,
     overrideEnabled,
   }
