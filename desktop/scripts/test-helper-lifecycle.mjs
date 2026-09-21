@@ -16,6 +16,7 @@ const exec = async (file, args, options) => {
 }
 const module = { exports: {} }
 const mocks = {
+  './linux-helper': {},
   electron: { app: { get isPackaged() { return packaged } } },
   util: { promisify: () => exec },
   os: { platform: () => platform },

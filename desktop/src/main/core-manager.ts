@@ -44,6 +44,7 @@ import {
   sha256File,
 } from './helper'
 import { authorizeForTun, privilegesOk } from './privileges'
+import { linuxHelperError } from './linux-helper'
 import { log } from './logger'
 import { LatestWinsCoordinator, type LifecycleTicket } from './lifecycle-coordinator'
 import {
@@ -211,7 +212,7 @@ export async function getTunStatus(): Promise<TunStatus> {
     helperInstalled: svc !== 'none' || helperRunning,
     helperRunning,
     privilegesOk: await privilegesOk(true),
-    helperSetupAvailable: platform() === 'win32',
+    helperSetupAvailable: platform() === 'win32' || platform() === 'linux',
     lastError,
   }
 }
@@ -271,8 +272,8 @@ async function spawnCoreElevated(configPath: string): Promise<void> {
   mkdirSync(profilesRoot(), { recursive: true })
   ensureWintun()
   const arg = `-d "${home}" -f "${configPath}"`
-  const ok = await startCoreByHelper(arg, home, mihomoSafePaths())
-  if (!ok) throw new Error('helper failed to start core')
+  const ok = await startCoreByHelper(arg, home, mihomoSafePaths(), configPath)
+  if (!ok) throw new Error(platform() === 'linux' ? linuxHelperError() || 'Linux helper failed to start core' : 'helper failed to start core')
   await mihomoApi.waitReady()
 }
 
@@ -349,7 +350,7 @@ async function reconcileLifecycle(
     if (!auth) {
       lastError = platform() === 'darwin'
         ? 'TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.'
-        : 'privileges required for TUN'
+        : platform() === 'linux' ? linuxHelperError() || 'Linux TUN requires the system helper' : 'privileges required for TUN'
       log(lastError, 'error')
       if (!settings.networkOverrideEnabled) throw new Error(lastError)
       effectiveMode = 'proxy'
@@ -411,6 +412,7 @@ async function reconcileLifecycle(
     if (helperReady) {
       await spawnCoreElevated(configPath)
     } else {
+      if (effectiveMode === 'tun' && platform() === 'linux') throw new Error('Linux TUN helper became unavailable; reconnect to repair it')
       await spawnCoreDirect(configPath)
     }
     if (!isCurrent()) return
@@ -511,7 +513,12 @@ export async function syncManagedSystemProxy(running: boolean): Promise<void> {
 }
 
 export async function ensureHelperAndStatus(): Promise<TunStatus> {
-  await ensureHelper()
+  const ok = await ensureHelper()
+  if (!ok && platform() === 'linux') {
+    lastError = linuxHelperError() || 'Linux TUN helper setup failed'
+    throw new Error(lastError)
+  }
+  if (ok && platform() === 'linux') lastError = undefined
   return getTunStatus()
 }
 

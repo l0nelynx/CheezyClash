@@ -203,6 +203,7 @@ try {
       export const replaceCoreViaHelper = async () => false;
       export const sha256File = () => 'unused';`,
     './privileges': 'export const authorizeForTun = async () => true; export const privilegesOk = authorizeForTun;',
+    './linux-helper': 'export const linuxHelperError = () => "";',
     './system-proxy': 'export const setSystemProxy = async () => {};',
     './logger': `${prelude} export const log = message => f.logs.push(message);`,
   })

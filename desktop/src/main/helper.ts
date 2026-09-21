@@ -8,6 +8,7 @@ import { platform } from 'os'
 import { HELPER_PORT, HELPER_IDENTITY } from '../shared/types'
 import { coreBinaryPath, helperBinaryPath } from './paths'
 import { log } from './logger'
+import { ensureLinuxHelper, linuxHelperInfo, startLinuxCore, stopLinuxCore } from './linux-helper'
 
 const execFileAsync = promisify(execFile)
 const SERVICE_NAME = 'CheezyHelperService'
@@ -18,6 +19,7 @@ function helperBase(): string {
 
 /** True only if OUR helper answers (not FlClashX on a colliding port). */
 export async function pingHelper(): Promise<boolean> {
+  if (platform() === 'linux') return (await linuxHelperInfo()) !== null
   try {
     const res = await fetch(`${helperBase()}/whoami`, {
       signal: AbortSignal.timeout(2000),
@@ -32,6 +34,7 @@ export async function pingHelper(): Promise<boolean> {
 
 /** Returns allowlist hash from helper /ping, or null if unreachable / wrong helper. */
 export async function helperAllowedHash(): Promise<string | null> {
+  if (platform() === 'linux') return (await linuxHelperInfo())?.core_hash ?? null
   try {
     const res = await fetch(`${helperBase()}/ping`, {
       signal: AbortSignal.timeout(2000),
@@ -52,6 +55,7 @@ export async function helperAllowedHash(): Promise<string | null> {
 }
 
 export async function syncHelperAllowlist(): Promise<boolean> {
+  if (platform() === 'linux') return (await helperAllowedHash()) === sha256File(coreBinaryPath())
   if (!existsSync(coreBinaryPath())) return false
   const hash = sha256File(coreBinaryPath())
   // Write beside bundled helper + beside the actual service ImagePath if different.
@@ -118,7 +122,12 @@ export async function startCoreByHelper(
   arg: string,
   homeDir: string,
   safePaths?: string,
+  configPath?: string,
 ): Promise<boolean> {
+  if (platform() === 'linux') {
+    if (!configPath) throw new Error('Linux helper requires a structured configuration path')
+    return startLinuxCore(configPath, homeDir, safePaths || homeDir)
+  }
   await syncHelperAllowlist()
   const tryStart = async (): Promise<{ ok: boolean; detail: string }> => {
     try {
@@ -156,6 +165,7 @@ export async function startCoreByHelper(
 }
 
 export async function stopCoreByHelper(): Promise<void> {
+  if (platform() === 'linux') return stopLinuxCore()
   try {
     await fetch(`${helperBase()}/stop`, {
       method: 'POST',
@@ -170,6 +180,7 @@ export async function replaceCoreViaHelper(
   pending: string,
   target: string,
 ): Promise<boolean> {
+  if (platform() === 'linux') return false // Installed executables change only through authorized setup.
   try {
     const res = await fetch(`${helperBase()}/replace_core`, {
       method: 'POST',
@@ -252,6 +263,7 @@ export async function installWindowsHelper(): Promise<boolean> {
 }
 
 export async function ensureHelper(): Promise<boolean> {
+  if (platform() === 'linux') return ensureLinuxHelper()
   if (platform() !== 'win32' && await pingHelper()) {
     await syncHelperAllowlist()
     return true

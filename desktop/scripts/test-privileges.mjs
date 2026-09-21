@@ -8,9 +8,9 @@ const realRequire = createRequire(filename)
 const js = ts.transpileModule(readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText
-function fixture({ uid = 501, owner = 501, mode = 0o755, helper = false } = {}) {
+function fixture({ uid = 501, owner = 501, mode = 0o755, helper = false, platform = 'darwin' } = {}) {
   const require = name => {
-    if (name === 'os') return { platform: () => 'darwin' }
+    if (name === 'os') return { platform: () => platform }
     if (name === 'fs') return { existsSync: () => true, statSync: () => ({ uid: owner, mode }) }
     if (name === './paths') return { coreBinaryPath: () => '/Applications/Test.app/core' }
     if (name === './helper') return { pingHelper: async () => helper, ensureHelper: async () => helper }
@@ -28,3 +28,7 @@ assert.equal(await fixture({ uid: 0 }).authorizeForTun(), true)
 assert.equal(await fixture({ helper: true }).authorizeForTun(), true)
 assert.equal(await fixture().privilegesOk(false), true)
 console.log('6 privilege scenarios passed (mocked macOS, no elevation)')
+assert.equal(await fixture({ platform: 'linux', uid: 0 }).privilegesOk(true), false, 'Root alone must not bypass the Linux service')
+assert.equal(await fixture({ platform: 'linux', owner: 0, mode: 0o4755 }).authorizeForTun(), false, 'Legacy setuid must not bypass Linux setup')
+assert.equal(await fixture({ platform: 'linux', helper: true }).authorizeForTun(), true)
+console.log('Linux requires the system helper even with root or legacy setuid')

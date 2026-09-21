@@ -1,6 +1,6 @@
 # CheezyClash Desktop
 
-Desktop client for Mihomo (Clash.Meta). Stages A (proxy MVP) and B (TUN + Windows helper).
+Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows and Linux system helpers.
 
 📚 **Full documentation:** [CheezyClash docs](https://l0nelynx.github.io/CheezyClash-docs/)
 
@@ -17,7 +17,7 @@ cd desktop
 npm install
 npm run fetch-core   # download sidecar for this OS (same go hash as Android)
 # or: npm run build-core  # local go build when the release asset is missing
-npm run build:helper # Windows helper (needed for TUN)
+npm run build:helper # Host-platform helper (Windows/Linux TUN)
 npm run dev
 ```
 
@@ -72,6 +72,69 @@ Linux / macOS: `npm run dist:linux` / `npm run dist:mac`. Linux publishes both
 AppImage and `.deb`; install the `.deb` when you need reliable
 `cheezyclash://` desktop integration. A standalone AppImage needs a desktop
 integration tool before the browser can discover its custom-scheme handler.
+
+## Linux TUN helper
+
+Linux TUN requires a systemd host, `/dev/net/tun`, and administrative authorization
+through polkit (`pkexec`) for first installation or an executable update. Run the
+desktop app as your normal user. Choose TUN or **Install helper** to install it.
+Proxy mode does not require installation. `npm run dist:linux` builds and bundles
+the helper automatically.
+
+The installer copies the helper and core out of the AppImage into
+`/usr/local/libexec/cheezyclash/<UID>/`, owned by root and not writable by the user.
+It installs `cheezyclash-helper-<UID>.socket` and `.service` in
+`/etc/systemd/system/`. The socket is enabled at boot; the helper is activated on
+access, and starts the core only on a connection request. The service runs as the
+desktop user's UID with only `CAP_NET_ADMIN`, `CAP_NET_RAW`, and
+`CAP_NET_BIND_SERVICE`, not as root. Configurations and downloaded resources remain
+owned by that user. Features requiring additional privileges (for example changing
+the system time or inspecting other users' processes) are intentionally unavailable.
+
+The Unix socket `/run/cheezyclash-helper-<UID>.sock` has mode `0600`; the server also
+checks kernel peer credentials. It exposes only ping/start/stop. The installed core
+path is fixed, arguments are constructed by the helper, and neither executable
+replacement nor allowlist changes are available over the socket. Both executable
+hashes are checked during setup; updates require another polkit authorization.
+Linux never uses the legacy localhost HTTP helper or setuid inside an AppImage.
+Stopping sends SIGTERM and waits for graceful core cleanup, then kills a stalled
+process after eight seconds. Logs are written to the system journal. A normal app
+exit stops the core; closing to the tray keeps the connection. The helper remains
+available for later requests and does not start a tunnel automatically after reboot.
+
+Fedora Atomic's writable `/etc` and `/usr/local` (backed by `/var/usrlocal`) are used
+without remounting `/usr`. The installer restores SELinux file contexts when
+`restorecon` is available; it never disables SELinux. A host that forbids local
+system services, or uses a different init system, must use Proxy mode in this version.
+
+For Distrobox, install the same app version's helper **on the host first** by opening
+CheezyClash on the host and enabling TUN once. Installation inside a container is
+rejected. A container client can reuse the host helper only if the socket is
+accessible (through `/run/host/run` or `/run`), the UID is preserved, networking is
+shared with the host, and profile/home paths refer to the same files on the host.
+The start request checks the network namespace and host file accessibility.
+Containers with private networks or private profile storage are not supported;
+run the desktop app on the host instead. No automatic container privilege escalation
+or container-to-host installation is performed.
+
+Diagnostics and removal, run on the host as the desktop user:
+
+```sh
+journalctl -u "cheezyclash-helper-$(id -u).service" -b
+pkexec "/usr/local/libexec/cheezyclash/$(id -u)/cheezy-helper" --uninstall "$(id -u)"
+```
+
+Removal stops the owned service/socket and removes only its unit files and installed
+binaries, leaving user profiles intact. Removing the AppImage alone leaves the
+independently installed helper in place.
+
+Validation: `npm run test:linux-helper` exercises client authorization and container
+boundaries with mocked OS calls. `cd helper && go test -race ./...` on Linux also
+checks Unix peer credentials, child lifecycle and systemd unit syntax. Before a
+release, smoke-test an actual AppImage install/connect/disconnect/update/uninstall
+on a systemd host, Fedora Atomic with SELinux enforcing, and a Distrobox using shared
+host networking and profiles. These tests require a real Linux environment and
+are not replaced by cross-compilation from Windows.
 
 ## Deep links
 
