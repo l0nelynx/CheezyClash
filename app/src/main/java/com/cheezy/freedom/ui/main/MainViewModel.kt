@@ -400,12 +400,15 @@ class MainViewModel(app: Application, private val savedStateHandle: androidx.lif
         _loading.value = true
         ClashState.setError(null)
         viewModelScope.launch {
-            AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
+            val backendResult = AppDeps.subscriptionGateway.syncFromBackend(context).onSuccess { handleSyncSuccess() }
             if (ProfileStore.activeId(context) == null) {
                 ClashState.setError(context.getString(R.string.error_no_active_profile))
                 _loading.value = false
             } else {
-                withContext(Dispatchers.IO) { ProfileManager.refreshActive(context) }
+                // The gateway already refreshed managed URLs, including its API fallback.
+                if (backendResult.isFailure || ProfileStore.active(context)?.managed != true) {
+                    withContext(Dispatchers.IO) { ProfileManager.refreshActive(context) }
+                }
                 _loading.value = false
                 refreshProfilesState()
                 syncSubscriptionState()

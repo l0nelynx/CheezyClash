@@ -16,6 +16,10 @@ const stock = await read('node_modules/app-builder-lib/templates/nsis/installSec
 const stockUtil = await read('node_modules/app-builder-lib/templates/nsis/include/installUtil.nsh')
 
 assert.match(hooks, /RequestExecutionLevel admin/)
+assert.match(hooks, /\$\{If\} \$\{RunningX64\}[\s\S]*\$WINDIR\\Sysnative\\WindowsPowerShell/)
+for (const action of ['Stop', 'InstallHelper', 'RemoveHelper']) {
+  assert.ok(hooks.includes(`!insertmacro cheezyRunProcessControl ${action}`))
+}
 assert.equal(config.nsis.oneClick, false)
 assert.equal(config.nsis.createDesktopShortcut, true)
 assert.equal(config.appId, 'com.cheezy.freedom.desktop')
@@ -33,6 +37,17 @@ assert.match(overrides, /!insertmacro cheezyStopProcesses[\s\S]*StrCpy \$cheezyP
 assert.doesNotMatch(hooks + overrides, /UninstShortcut|UninstAppUserModelId|Delete.*\.lnk|sc\.exe delete/)
 
 if (process.platform === 'win32') {
+  if (process.arch === 'x64') {
+    // Read-only regression against this test's own 64-bit Node process.
+    // Exercise the Sysnative path as seen by the 32-bit NSIS/PowerShell host.
+    const probe = spawnSync(join(process.env.WINDIR, 'SysWOW64/WindowsPowerShell/v1.0/powershell.exe'),
+      ['-NoProfile', '-NonInteractive', '-Command',
+        `& "$env:WINDIR\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -Command "(Get-Process -Id ${process.pid}).Path"`],
+      {encoding: 'utf8', windowsHide: true})
+    assert.equal(probe.status, 0, probe.stderr)
+    assert.equal(probe.stdout.trim().toLowerCase(), process.execPath.toLowerCase(),
+      'Installer native PowerShell must resolve a live 64-bit executable path')
+  }
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', join(projectDir, 'scripts/test-installer-processes.ps1')], { encoding: 'utf8' })
   assert.equal(result.status, 0, result.stdout + result.stderr)

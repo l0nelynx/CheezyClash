@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import com.cheezy.freedom.BuildConfig
 import com.cheezy.freedom.R
 import com.cheezy.freedom.PrivacyPolicyDialog
 import com.cheezy.freedom.TermsOfServiceDialog
@@ -22,6 +23,7 @@ import com.github.kr328.clash.core.bridge.Bridge
 
 @Composable
 fun AppInfoDialog(onDismiss: () -> Unit) {
+    val proprietary = BuildConfig.EDITION == "PROPRIETARY"
     var showPolicyDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
 
@@ -56,7 +58,7 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
             Column {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.info_developer)) },
-                    supportingContent = { Text("l0nelynx") },
+                    supportingContent = { Text(if (proprietary) "CheezyVPN" else "l0nelynx") },
                     colors = transparentList
                 )
                 ListItem(
@@ -64,16 +66,18 @@ fun AppInfoDialog(onDismiss: () -> Unit) {
                     supportingContent = { Text(stringResource(R.string.info_core_version_value, mihomoVersion)) },
                     colors = transparentList
                 )
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.info_privacy_policy)) },
-                    colors = transparentList,
-                    modifier = Modifier.clickable { showPolicyDialog = true }
-                )
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.info_terms)) },
-                    colors = transparentList,
-                    modifier = Modifier.clickable { showTermsDialog = true }
-                )
+                if (proprietary) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.info_privacy_policy)) },
+                        colors = transparentList,
+                        modifier = Modifier.clickable { showPolicyDialog = true }
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.info_terms)) },
+                        colors = transparentList,
+                        modifier = Modifier.clickable { showTermsDialog = true }
+                    )
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.info_close)) } }

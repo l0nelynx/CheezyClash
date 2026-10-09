@@ -47,6 +47,21 @@ export async function downloadSubscription(
   } catch (error) {
     if (signal?.aborted) throw new Error('Subscription download canceled.')
     if (controller.signal.aborted) throw new Error('Subscription download timed out. Please try again.')
+    if (error instanceof TypeError && /fetch/i.test(error.message)) {
+      // Node fetch hides DNS/socket/TLS failures in cause (sometimes an
+      // AggregateError). Never surface raw messages: they may contain URLs.
+      const codes = new Set<string>()
+      const inspect = (value: unknown, depth = 0): void => {
+        if (!value || typeof value !== 'object' || depth > 4) return
+        const cause = value as { code?: unknown; cause?: unknown; errors?: unknown[] }
+        if (typeof cause.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(cause.code)) codes.add(cause.code)
+        inspect(cause.cause, depth + 1)
+        if (Array.isArray(cause.errors)) for (const nested of cause.errors) inspect(nested, depth + 1)
+      }
+      inspect(error)
+      const detail = codes.size ? ` (${[...codes].join(', ')})` : ''
+      throw new Error(`Subscription download failed${detail}. Check network and DNS connectivity; the subscription server may require a working VPN.`)
+    }
     throw error
   } finally {
     clearTimeout(timer)

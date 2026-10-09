@@ -12,6 +12,12 @@ try {
   globalThis.fetch = async () => { calls++; return new Response(null, {status: 302, headers: {location: 'http://example.invalid'}}) }
   await assert.rejects(downloadSubscription('https://example.invalid', {}), /HTTPS/)
   assert.equal(calls, 1)
+  globalThis.fetch = async () => {
+    const error = Object.assign(new Error('https://private.invalid/secret-token'), {code: 'ENOTFOUND'})
+    throw new TypeError('fetch failed', {cause: new AggregateError([error])})
+  }
+  await assert.rejects(downloadSubscription('https://example.invalid', {}), error =>
+    /ENOTFOUND/.test(error.message) && !/private.invalid|secret-token/.test(error.message))
   globalThis.fetch = async (_url, {signal}) => new Promise((resolve, reject) => {
     signal.addEventListener('abort', () => reject(signal.reason), {once: true})
   })

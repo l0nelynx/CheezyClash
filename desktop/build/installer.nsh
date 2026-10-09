@@ -2,6 +2,17 @@
 ; same-location upgrades bypass the old-uninstaller step. APP_ID, executable
 ; and existing .lnk files retain their identity, including private overlays.
 !define CHEEZY_INSTALLER_DIR "${__FILEDIR__}"
+!include "x64.nsh"
+
+!macro cheezyRunProcessControl ACTION
+  ; NSIS is 32-bit. System32 is redirected to SysWOW64, whose PowerShell
+  ; cannot inspect Process.Path for a running 64-bit Electron/core process.
+  StrCpy $R8 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
+  ${If} ${RunningX64}
+    StrCpy $R8 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  ${EndIf}
+  nsExec::ExecToLog '"$R8" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cheezy-installer-processes.ps1" -InstallDir "$INSTDIR" -AppExecutable "${APP_EXECUTABLE_FILENAME}" -Action ${ACTION} -ProductName "${PRODUCT_NAME}"'
+!macroend
 
 !ifndef BUILD_UNINSTALLER
   Var cheezyUpdate
@@ -106,7 +117,7 @@
   !endif
   InitPluginsDir
   File /oname=$PLUGINSDIR\cheezy-installer-processes.ps1 "${CHEEZY_INSTALLER_DIR}\installer-processes.ps1"
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cheezy-installer-processes.ps1" -InstallDir "$INSTDIR" -AppExecutable "${APP_EXECUTABLE_FILENAME}" -Action Stop'
+  !insertmacro cheezyRunProcessControl Stop
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "$(cheezyStopFailed)" /SD IDOK
@@ -127,7 +138,7 @@
 !macroend
 
 !macro customInstall
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cheezy-installer-processes.ps1" -InstallDir "$INSTDIR" -AppExecutable "${APP_EXECUTABLE_FILENAME}" -Action InstallHelper -ProductName "${PRODUCT_NAME}"'
+  !insertmacro cheezyRunProcessControl InstallHelper
   Pop $0
   ${If} $0 != 0
     ; Per-user installs may lack service-control rights. First TUN connection
@@ -137,7 +148,7 @@
 !macroend
 
 !macro customUnInstall
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\cheezy-installer-processes.ps1" -InstallDir "$INSTDIR" -AppExecutable "${APP_EXECUTABLE_FILENAME}" -Action RemoveHelper'
+  !insertmacro cheezyRunProcessControl RemoveHelper
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "$(cheezyStopFailed)" /SD IDOK
