@@ -42,6 +42,8 @@ import {
   subscriptionHeaders,
 } from './subscription'
 import { mihomoApi } from './mihomo-api'
+import { proxyMetadataFromDocument } from './proxy-metadata'
+import type { ProxyNodeInfo } from '../shared/types'
 import {
   applyNetworkSettings,
   effectiveNetworkFromDocument,
@@ -337,6 +339,17 @@ export function getProxyGroupIcons(): Record<string, string> {
       out[name] = icon
     }
     return out
+  } catch {
+    return {}
+  }
+}
+
+/** Presentation metadata from the generated config used by the active core. */
+export function getProxyMetadata(): Record<string, ProxyNodeInfo> {
+  const configPath = activeConfigPath()
+  if (!configPath || !existsSync(configPath)) return {}
+  try {
+    return proxyMetadataFromDocument(parseClashMapping(readFileSync(configPath, 'utf8')))
   } catch {
     return {}
   }

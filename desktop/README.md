@@ -212,7 +212,16 @@ The running host service was left unchanged during validation.
 
 Appearance settings offer English/Russian and system/light/dark themes. Preferences
 persist locally; system mode follows OS theme changes. Server lists support search
-and sorting, and logs support search, filtering and redacted export. Implementation
+and sorting, with independent list/grid/carousel group layouts and list/large-grid/small-grid
+server layouts that persist locally. Carousel shows a scrolling row of group tabs
+and the selected group's servers without expansion controls. Large-grid cards show
+`serverDescription` and `type : network` from the active YAML. Search, sort, and
+Test all share the Proxies heading row. Layout buttons use icons with tooltips;
+list/grid layouts offer expand/collapse all. Carousel tabs support mouse-wheel
+and drag scrolling, and server lists leave space below their last item.
+Home opens Custom Rules from its rule counter;
+the editor includes a quick guide in English and Russian. Logs support search,
+filtering and redacted export. Implementation
 status and validation limitations are recorded in [the improvement plan](docs/improvement-plan.md).
 
 On Windows, enabling the system proxy saves its previous address, bypass list,

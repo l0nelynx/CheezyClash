@@ -117,6 +117,17 @@ try {
   await api.getVersion()
   assert.equal(Object.hasOwn(requests.at(-1).init.headers, 'Authorization'), false)
 
+  globalThis.fetch = async () => new Response(JSON.stringify({proxies:{
+    GLOBAL:{type:'Selector',all:['Main']},
+    Main:{type:'Selector',all:['Node','DIRECT'],now:'Node'},
+    Node:{type:'Vless',network:'grpc',serverDescription:'Core description',server:'PRIVATE_HOST',password:'PRIVATE_KEY'},
+    DIRECT:{type:'Direct'},
+  }}),{headers:{'Content-Type':'application/json'}})
+  const nodeGroups = await api.getGroups()
+  assert.deepEqual(nodeGroups[0].members.Node,{type:'Vless',network:'grpc',serverDescription:'Core description'})
+  assert.deepEqual(nodeGroups[0].members.DIRECT,{type:'Direct'})
+  assert.equal(JSON.stringify(nodeGroups).includes('PRIVATE'),false)
+
   // Real lifecycle coordinator and core-manager; OS start/stop are simulations.
   const fixture = {
     active: 'A', documents: { A: { secret: 'profile-A' }, B: { secret: '' } },

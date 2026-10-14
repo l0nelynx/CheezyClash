@@ -13,6 +13,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { shouldShowLogin } from './lib/auth-gate'
 import { withDeadline } from './lib/deadline'
 import { Button } from './components/ui/button'
+import { CustomRulesModal } from './components/CustomRulesModal'
 import type { PrivateAccountSession, PrivateCapabilities } from '../../shared/private-api'
 import type { DeepLinkResult } from '../../shared/deep-link'
 
@@ -35,6 +36,7 @@ export default function App(): React.JSX.Element {
     refresh,
   } = state
   const [testingAll, setTestingAll] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [connectionAction, setConnectionAction] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const download = async (work: () => Promise<unknown>, success: string): Promise<boolean> => {
@@ -254,6 +256,8 @@ export default function App(): React.JSX.Element {
           groups={groups}
           latencies={state.latencies}
           busy={busy}
+          customRuleCount={state.settings?.customRules?.length ?? 0}
+          onOpenCustomRules={() => setRulesOpen(true)}
           onConnect={async () => { setConnectionAction(t("Connecting…")); try { await run(() => window.cheezy.connect(), { success: t("Connected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onDisconnect={async () => { setConnectionAction(t("Disconnecting…")); try { await run(() => window.cheezy.disconnect(), { success: t("Disconnected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper(), { scope: 'home' })}
@@ -329,13 +333,7 @@ export default function App(): React.JSX.Element {
             onConnectionMode={(mode) =>
               run(() => window.cheezy.setConnectionMode(mode), { scope: 'settings' })
             }
-            onCustomRulesChange={async (rules) => {
-              await window.cheezy.setCustomRules(rules)
-              await state.refresh()
-              if (Date.now() - lastCustomRuleDiagnosticAt.current > 1_000) {
-                showNotice(t("Custom rules saved"))
-              }
-            }}
+            onOpenCustomRules={() => setRulesOpen(true)}
             onLogin={() => {
               setAuthHandoffError(null)
               setLoginRequested(true)
@@ -367,6 +365,19 @@ export default function App(): React.JSX.Element {
       {tab === 'logs' && <LogsPage logs={state.logs} />}
 
       {tab === 'about' && <AboutPage productName={caps.productName} />}
+      <CustomRulesModal
+        open={rulesOpen}
+        rules={state.settings?.customRules ?? []}
+        busy={busy}
+        onClose={() => setRulesOpen(false)}
+        onSave={async (rules) => {
+          await window.cheezy.setCustomRules(rules)
+          await state.refresh()
+          if (Date.now() - lastCustomRuleDiagnosticAt.current > 1_000) {
+            showNotice(t("Custom rules saved"))
+          }
+        }}
+      />
     </AppShell>
   )
 }

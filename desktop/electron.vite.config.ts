@@ -27,6 +27,8 @@ export default defineConfig({
     },
   },
   renderer: {
+    // Keep the dev server and Electron on the same loopback address on Windows.
+    server: { host: '127.0.0.1' },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

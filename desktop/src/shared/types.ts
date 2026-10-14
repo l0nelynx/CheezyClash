@@ -68,11 +68,19 @@ export interface TrafficSnapshot {
   downTotal: number
 }
 
+export interface ProxyNodeInfo {
+  type?: string
+  network?: string
+  serverDescription?: string
+}
+
 export interface ProxyGroupInfo {
   name: string
   type: string
   now: string
   all: string[]
+  /** Display metadata for group members, without connection credentials. */
+  members?: Record<string, ProxyNodeInfo>
   /** Optional group icon URL from YAML `icon:` (https only). */
   icon?: string
   /**

@@ -32,6 +32,7 @@ import {
   getActiveCustomRuleContext,
   getActiveProxyGroupNames,
   getProxyGroupIcons,
+  getProxyMetadata,
   validateProcessNameRule,
 } from './profiles'
 import { getSettings, setSettings, setSelection, isSystemProxyOwned } from './store'
@@ -270,9 +271,11 @@ function registerIpc(): void {
   ipcMain.handle('proxies:groups', async () => {
     const groups = await mihomoApi.getGroups()
     const icons = getProxyGroupIcons()
+    const metadata = getProxyMetadata()
     return groups.map((g) => {
       const icon = icons[g.name]
-      return icon ? { ...g, icon } : g
+      const members = Object.fromEntries(g.all.map((name) => [name, { ...g.members?.[name], ...metadata[name] }]))
+      return { ...g, members, ...(icon ? { icon } : {}) }
     })
   })
   ipcMain.handle('proxies:select', async (_e, group: string, name: string) => {

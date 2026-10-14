@@ -11,6 +11,8 @@ interface Props {
   status: CoreStatus | null
   tun: TunStatus | null
   busy: boolean
+  customRuleCount: number
+  onOpenCustomRules: () => void
   hasProfile: boolean
   activeProfile: ProfileMeta | null
   downRateHistory: number[]
@@ -27,6 +29,8 @@ export function ConnectHero({
   connectionAction,
   tun,
   busy,
+  customRuleCount,
+  onOpenCustomRules,
   hasProfile,
   activeProfile,
   downRateHistory,
@@ -143,6 +147,14 @@ export function ConnectHero({
           <span>
             {t("Mode:")}{' '}<span className="font-medium text-foreground">{modeLabel}</span>
           </span>
+          <button
+            type="button"
+            className="rounded-sm text-left underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={onOpenCustomRules}
+          >
+            {t("Custom Rules")}: <span className="font-medium text-foreground">{customRuleCount}</span>
+            {customRuleCount === 0 && <span className="ml-1.5 text-primary">{t("Add rules")}</span>}
+          </button>
           {tun?.enabled && <><span>
             {t("VPN helper:")}{' '}{' '}
             <span className="text-foreground">

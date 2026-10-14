@@ -11,10 +11,8 @@ import {
   PlugZap,
   Shuffle,
 } from 'lucide-react'
-import type { CustomRule } from '../../../shared/custom-rules'
 import type { AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
-import { CustomRulesModal } from '../components/CustomRulesModal'
 import { Switch } from '../components/ui/switch'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -36,7 +34,7 @@ interface Props {
   status: CoreStatus | null
   onPatch: (patch: Partial<AppSettings>) => void
   onConnectionMode: (mode: ConnectionMode) => void
-  onCustomRulesChange: (rules: CustomRule[]) => Promise<void> | void
+  onOpenCustomRules: () => void
   onLogin: () => void
   onLogout: () => void
   onSyncSubscription: () => void
@@ -50,14 +48,13 @@ export function SettingsPage({
   status,
   onPatch,
   onConnectionMode,
-  onCustomRulesChange,
+  onOpenCustomRules,
   onLogin,
   onLogout,
   onSyncSubscription,
 }: Props): React.JSX.Element {
   const { t, language, setLanguage, theme, setTheme } = useI18n()
   const [section, setSection] = useState<SettingsSection | null>(null)
-  const [rulesOpen, setRulesOpen] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [portDraft, setPortDraft] = useState(String(settings.mixedPort))
   const [mtuDraft, setMtuDraft] = useState(String(settings.tunMtu))
@@ -379,7 +376,7 @@ export function SettingsPage({
               detail={
                 ruleCount === 0 ? t("No rules") : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`
               }
-              onClick={() => setRulesOpen(true)}
+              onClick={onOpenCustomRules}
             />
             <MenuRow
               icon={<LayoutDashboard className="h-4 w-4" />}
@@ -395,13 +392,6 @@ export function SettingsPage({
           </nav>
         </>
       )}
-      <CustomRulesModal
-        open={rulesOpen}
-        rules={settings.customRules ?? []}
-        busy={busy}
-        onClose={() => setRulesOpen(false)}
-        onSave={onCustomRulesChange}
-      />
     </div>
   )
 }

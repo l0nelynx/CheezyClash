@@ -24,6 +24,8 @@ interface Props {
   groups: ProxyGroupInfo[]
   latencies: Record<string, Record<string, number>>
   busy: boolean
+  customRuleCount: number
+  onOpenCustomRules: () => void
   onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
@@ -48,6 +50,8 @@ export function HomePage(props: Props): React.JSX.Element {
         connectionAction={props.connectionAction}
         tun={props.tun}
         busy={props.busy}
+        customRuleCount={props.customRuleCount}
+        onOpenCustomRules={props.onOpenCustomRules}
         hasProfile={hasProfile}
         activeProfile={props.activeProfile}
         downRateHistory={props.downRateHistory}

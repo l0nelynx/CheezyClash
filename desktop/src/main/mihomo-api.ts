@@ -4,11 +4,14 @@ import type { ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
 import { readFileSync } from 'fs'
 import { log } from './logger'
 import { readControllerConfig } from './controller-config'
+import { proxyNodeInfo } from './proxy-metadata'
 
 type DelayHistory = { time?: string; delay?: number }
 
 type MihomoProxy = {
   type: string
+  network?: string
+  serverDescription?: string
   now?: string
   all?: string[]
   hidden?: boolean
@@ -176,6 +179,7 @@ export class MihomoApi {
         type: p.type,
         now: p.now || '',
         all,
+        members: Object.fromEntries(all.map((member) => [member, proxyNodeInfo(proxies[member])])),
         delays: Object.keys(delays).length > 0 ? delays : undefined,
       }
     }

@@ -69,7 +69,7 @@ export function AppShell({
           )}
 
           <main className="min-h-0 flex-1 overflow-y-auto p-5">
-            <div key={tab} className="page-enter h-full">{children}</div>
+            <div key={tab} className={`page-enter min-h-full pb-5 ${tab === 'logs' ? 'h-full' : ''}`}>{children}</div>
           </main>
         </div>
       </div>

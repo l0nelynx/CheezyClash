@@ -5,6 +5,7 @@ import {
   FileSearch,
   FolderOpen,
   GripVertical,
+  CircleHelp,
   Loader2,
   Pencil,
   Plus,
@@ -68,6 +69,7 @@ export function CustomRulesModal({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -89,6 +91,7 @@ export function CustomRulesModal({
     setProfileIds(null)
     setEditingId(null)
     setDraggingId(null)
+    setHelpOpen(false)
     setError(null)
     setLoadingContext(true)
     void Promise.all([window.cheezy.getCustomRuleContext(), window.cheezy.listProcesses()])
@@ -290,9 +293,21 @@ export function CustomRulesModal({
             <p className="text-xs text-muted-foreground">
               {localRules.length === 0
                 ? t("Enabled rules are added before profile rules.")
-                : `${enabledCount} of ${localRules.length} enabled · highest priority first`}
+                : t("{0} of {1} enabled · highest priority first", { 0: enabledCount, 1: localRules.length })}
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={helpOpen}
+            aria-controls="custom-rules-help"
+            onClick={() => setHelpOpen((value) => !value)}
+          >
+            <CircleHelp className="h-4 w-4" />
+            {t("Help")}
+          </Button>
           <Button
             ref={closeRef}
             type="button"
@@ -304,9 +319,26 @@ export function CustomRulesModal({
           >
             <X className="h-4 w-4" />
           </Button>
+          </div>
         </div>
 
         <div className="space-y-5 overflow-y-auto px-5 py-4">
+          {helpOpen && (
+            <section id="custom-rules-help" className="space-y-3 rounded-xl border border-border bg-muted/40 p-4 text-sm">
+              <h3 className="font-semibold">{t("How to create a rule")}</h3>
+              <ol className="list-decimal space-y-2 pl-5 text-muted-foreground">
+                <li>{t("Choose a rule type and enter its value. Use a domain without https:// or a page path; for an app, use its executable name or full path.")}</li>
+                <li>{t("Choose a policy: DIRECT connects directly, PROXY uses the profile's proxy, BLOCK blocks traffic. You can also choose a specific proxy group.")}</li>
+                <li>{t("Apply the rule to all profiles or select specific ones, then click Add rule. Changes are saved immediately and applied to a running connection.")}</li>
+              </ol>
+              <div className="space-y-1 rounded-lg border border-border bg-background/60 p-3 text-xs">
+                <p><span className="font-medium">PROCESS-NAME · Discord.exe · PROXY</span><br />{t("Route Discord through the profile's proxy.")}</p>
+                <p><span className="font-medium">DOMAIN-SUFFIX · example.com · DIRECT</span><br />{t("Connect directly to example.com and its subdomains.")}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("Rules are checked from top to bottom before profile rules. The first match wins. Drag rules to change priority; use the switch to disable a rule. MATCH catches all remaining traffic.")}</p>
+              <p className="text-xs text-muted-foreground">{t("Custom Rules apply in Rule routing mode. A rule marked Unavailable is skipped for the current profile.")}</p>
+            </section>
+          )}
           <div className="space-y-4 rounded-xl border border-border bg-background/35 p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
@@ -314,12 +346,13 @@ export function CustomRulesModal({
                   {t("Rule type")}{editingId ? t(" (editing)") : ''}
                 </span>
                 <select
+                  id="custom-rule-type"
                   className="field w-full"
                   value={type}
                   disabled={disabled}
                   onChange={(event) => changeType(event.target.value as CustomRuleType)}
                 >
-                  {([t("Domain"), 'IP', t("Ports & inbound"), t("Process"), t("Other")] as const).map(
+                  {(['Process', 'Domain', 'IP', 'Ports & inbound', 'Other'] as const).map(
                     (category) => (
                       <optgroup key={category} label={t(category)}>
                         {CUSTOM_RULE_TYPES.filter(

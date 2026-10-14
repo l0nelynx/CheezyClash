@@ -1,7 +1,7 @@
 {
   "name": "cheezyclash-desktop",
   "productName": "CheezyClash",
-  "version": "1.6.10",
+  "version": "1.6.11",
   "description": "CheezyClash desktop client for Mihomo (Clash.Meta)",
   "main": "./out/main/index.js",
   "homepage": "https://github.com/l0nelynx/CheezyClash",
@@ -40,6 +40,7 @@
     "test:subscription-download": "node scripts/test-subscription-download.mjs",
     "test:traffic-stream": "node scripts/test-traffic-stream.mjs",
     "test:ui": "node scripts/test-ui.mjs",
+    "test:proxy-metadata": "node scripts/test-proxy-metadata.mjs",
     "test:startup": "node scripts/test-startup.mjs",
     "test:sparkline": "node scripts/test-sparkline.mjs",
     "test:xray-mux-config": "node scripts/test-xray-mux-config.mjs",
