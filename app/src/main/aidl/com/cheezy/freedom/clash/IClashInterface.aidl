@@ -2,13 +2,14 @@ package com.cheezy.freedom.clash;
 
 import com.cheezy.freedom.clash.IClashCallback;
 import com.cheezy.freedom.clash.ILogcatCallback;
+import com.cheezy.freedom.clash.IClashStopCallback;
 
 interface IClashInterface {
     void registerCallback(IClashCallback callback);
     void unregisterCallback(IClashCallback callback);
 
     boolean isRunning();
-    void stopVpn();
+    void stopVpn(IClashStopCallback callback);
     oneway void refreshCrashReportingPolicy();
 
     void loadConfig(String path);

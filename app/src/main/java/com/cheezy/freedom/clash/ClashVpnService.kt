@@ -194,8 +194,14 @@ class ClashVpnService : VpnService() {
 
         override fun isRunning(): Boolean = ClashState.running.value
 
-        override fun stopVpn() {
-            requestStop()
+        override fun stopVpn(callback: IClashStopCallback) {
+            // Keep lifecycle requests on main, just like onStartCommand. The caller
+            // retains its binding until teardown (including stopSelf) is complete.
+            scope.launch(Dispatchers.Main.immediate) {
+                requestStop().join()
+                runCatching { callback.onStopped(ClashState.phase.value.ordinal, ClashState.lastError.value) }
+                    .onFailure { Log.w(TAG, "Stop acknowledgement failed", it) }
+            }
         }
 
         override fun loadConfig(path: String) = runBlocking(binderDispatcher) {
@@ -542,7 +548,8 @@ class ClashVpnService : VpnService() {
             }
     }
 
-    private fun requestStop(stopStartId: Int = lastStartId, preserveError: Boolean = false) {
+    @Synchronized
+    private fun requestStop(stopStartId: Int = lastStartId, preserveError: Boolean = false): Job {
         setRequestedRunning(false)
         pendingStopStartId = maxOf(pendingStopStartId, stopStartId)
         trafficJob?.cancel()
@@ -550,14 +557,16 @@ class ClashVpnService : VpnService() {
         startJob?.cancel()
         startJob = null
 
-        if (stopJob?.isActive == true) return
+        stopJob?.takeIf { it.isActive }?.let { return it }
 
         if (!preserveError) ClashState.setPhase(ConnectionPhase.STOPPING)
-        stopJob = scope.launch {
+        val stopping = scope.launch {
             lifecycleMutex.withLock {
                 performStopClash(stopStartId, preserveError)
             }
         }
+        stopJob = stopping
+        return stopping
     }
 
     private suspend fun performStopClash(stopStartId: Int, preserveError: Boolean) {
@@ -772,6 +781,10 @@ class ClashVpnService : VpnService() {
         }
 
         fun start(context: Context) {
+            ClashRemoteManager.startVpn(context)
+        }
+
+        internal fun startNow(context: Context) {
             // Read AC settings + selections + active profile dir in the calling (main) process —
             // its SharedPreferences cache is always up-to-date. The :vpn process has a separate
             // cache that may be stale.
@@ -805,9 +818,7 @@ class ClashVpnService : VpnService() {
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, ClashVpnService::class.java).setAction(ACTION_STOP)
-            )
+            ClashRemoteManager.requestStop(context)
         }
     }
 }

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.MainThread
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -13,14 +14,22 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.github.kr328.clash.core.model.LogMessage
 import com.github.kr328.clash.core.model.ProxyGroup
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import java.io.Closeable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -30,6 +39,10 @@ object ClashRemoteManager {
     private var service: IClashInterface? = null
     private lateinit var appContext: Context
     private var bound = false
+    private var foregroundClient = false
+    private var connectionClients = 0
+    private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val commands = VpnCommandQueue()
     
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -91,7 +104,7 @@ object ClashRemoteManager {
                 if (bound) runCatching { appContext.unbindService(this) }
                 bound = false
             }
-            if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            if (needsConnection()) {
                 bind()
             }
         }
@@ -108,15 +121,83 @@ object ClashRemoteManager {
     }
 
     private val processObserver = object : DefaultLifecycleObserver {
-        override fun onStart(owner: LifecycleOwner) = bind()
-        override fun onStop(owner: LifecycleOwner) = unbind()
+        override fun onStart(owner: LifecycleOwner) {
+            foregroundClient = true
+            bind()
+        }
+
+        override fun onStop(owner: LifecycleOwner) {
+            foregroundClient = false
+            releaseIfUnused()
+        }
     }
 
     fun init(context: Context) {
         appContext = context.applicationContext
         ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
         if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            foregroundClient = true
             bind()
+        }
+    }
+
+    /** Tile listening and in-flight commands also need IPC when no Activity is visible. */
+    @MainThread
+    internal fun acquireConnection(): Closeable {
+        connectionClients++
+        bind()
+        var released = false
+        return Closeable {
+            if (!released) {
+                released = true
+                connectionClients--
+                releaseIfUnused()
+            }
+        }
+    }
+
+    private fun needsConnection() = foregroundClient || connectionClients > 0
+
+    private fun releaseIfUnused() {
+        if (!needsConnection()) unbind()
+    }
+
+    private suspend fun <T> withService(block: suspend (IClashInterface) -> T): T =
+        withContext(Dispatchers.Main.immediate) {
+            val lease = acquireConnection()
+            try {
+                check(bound) { "Could not bind VPN service" }
+                withTimeout(5_000) { connected.first { it } }
+                block(checkNotNull(service) { "VPN service disconnected" })
+            } finally {
+                lease.close()
+            }
+        }
+
+    internal suspend fun isRunningChecked(): Boolean = withService { remote ->
+        withContext(Dispatchers.IO) { remote.isRunning }
+    }
+
+    internal fun startVpn(context: Context) = enqueue(context) {
+        ClashVpnService.startNow(it)
+    }
+
+    internal fun requestStop(context: Context) = enqueue(context) { stopVpn() }
+
+    private fun enqueue(context: Context, command: suspend (Context) -> Unit): kotlinx.coroutines.Job {
+        val app = context.applicationContext
+        return controlScope.launch {
+            try {
+                commands.run { command(app) }
+            } catch (error: TimeoutCancellationException) {
+                Log.e(TAG, "VPN command timed out", error)
+                ClashState.setError("VPN service timed out")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(TAG, "VPN command failed", error)
+                ClashState.setError(error.message ?: "VPN command failed")
+            }
         }
     }
 
@@ -126,7 +207,9 @@ object ClashRemoteManager {
         val intent = Intent(appContext, ClashVpnService::class.java).apply {
             action = "com.cheezy.freedom.clash.IClashInterface"
         }
-        bound = appContext.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        bound = runCatching { appContext.bindService(intent, connection, Context.BIND_AUTO_CREATE) }
+            .onFailure { Log.e(TAG, "Failed to bind VPN service", it) }
+            .getOrDefault(false)
         if (!bound) Log.e(TAG, "Failed to bind VPN service")
     }
 
@@ -208,8 +291,25 @@ object ClashRemoteManager {
         runCatching { service?.isRunning ?: false }.getOrDefault(false)
     }
 
-    suspend fun stopVpn() = withContext(Dispatchers.IO) {
-        runCatching { service?.stopVpn() }
+    suspend fun stopVpn() = withService { remote ->
+        // StateFlow can conflate STOPPING -> IDLE. Use an explicit acknowledgement
+        // so a cached IDLE value can never let a restart overtake native teardown.
+        withTimeout(30_000) {
+            val stopped = CompletableDeferred<Pair<Int, String?>>()
+            withContext(Dispatchers.IO) {
+                remote.stopVpn(object : IClashStopCallback.Stub() {
+                    override fun onStopped(phase: Int, lastError: String?) {
+                        stopped.complete(phase to lastError)
+                    }
+                })
+            }
+            val (phase, lastError) = stopped.await()
+            // The final StateFlow broadcasts might still be pending when the last
+            // binding is released. Apply the acknowledged snapshot before unbinding.
+            ClashState.setRunning(false)
+            ClashState.setError(lastError)
+            ClashState.setPhase(ConnectionPhase.entries.getOrElse(phase) { ConnectionPhase.IDLE })
+        }
     }
 
     suspend fun loadConfigChecked(path: String) = withContext(Dispatchers.IO) {

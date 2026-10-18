@@ -8,32 +8,45 @@ import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.cheezy.freedom.clash.ClashState
+import com.cheezy.freedom.clash.ClashRemoteManager
 import com.cheezy.freedom.clash.ClashVpnService
 import com.cheezy.freedom.clash.ConfigManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.Closeable
 
 class VpnTileService : TileService() {
 
-    private var scope: CoroutineScope? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watchJob: Job? = null
+    private var clickJob: Job? = null
+    private var connection: Closeable? = null
 
     override fun onStartListening() {
         super.onStartListening()
         
-        // Immediately update state when the quick settings panel is opened
-        updateTile(ClashState.running.value)
-
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        watchJob = scope?.launch {
-            ClashState.running.collectLatest { 
-                updateTile(it) 
+        // A TileService does not bring ProcessLifecycleOwner to the foreground.
+        // Keep our own binding instead of displaying the last Activity snapshot.
+        if (connection == null) connection = ClashRemoteManager.acquireConnection()
+        watchJob?.cancel()
+        watchJob = scope.launch {
+            combine(
+                ClashState.running, ClashRemoteManager.connected, ClashState.phase,
+            ) { running, connected, phase ->
+                if (connected && !phase.isBusy) running else null
+            }.collectLatest {
+                updateTile(it)
             }
         }
     }
@@ -41,15 +54,42 @@ class VpnTileService : TileService() {
     override fun onStopListening() {
         watchJob?.cancel()
         watchJob = null
-        scope = null
+        connection?.close()
+        connection = null
         super.onStopListening()
+    }
+
+    override fun onDestroy() {
+        watchJob?.cancel()
+        connection?.close()
+        connection = null
+        scope.cancel()
+        super.onDestroy()
     }
 
     override fun onClick() {
         super.onClick()
 
-        val isRunning = ClashState.running.value
+        if (clickJob?.isActive == true) return
+        clickJob = scope.launch {
+            try {
+                // Query the remote process even if the cached state says "running".
+                val isRunning = ClashRemoteManager.isRunningChecked()
+                if (ClashState.phase.value.isBusy) return@launch
+                handleClick(isRunning)
+            } catch (error: TimeoutCancellationException) {
+                Log.w("VpnTileService", "VPN service connection timed out", error)
+                launchMain()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w("VpnTileService", "Could not query VPN state", error)
+                launchMain()
+            }
+        }
+    }
 
+    private fun handleClick(isRunning: Boolean) {
         if (isRunning) {
             ClashVpnService.stop(this)
         } else {
@@ -102,12 +142,20 @@ class VpnTileService : TileService() {
         }
     }
 
-    private fun updateTile(running: Boolean) {
+    private fun updateTile(running: Boolean?) {
         val tile = qsTile ?: return
         
-        tile.state = if (running) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.state = when (running) {
+            true -> Tile.STATE_ACTIVE
+            false -> Tile.STATE_INACTIVE
+            null -> Tile.STATE_UNAVAILABLE
+        }
         tile.label = getString(R.string.app_name)
-        tile.contentDescription = if (running) "VPN connected" else "VPN disconnected"
+        tile.contentDescription = when (running) {
+            true -> "VPN connected"
+            false -> "VPN disconnected"
+            null -> "VPN state unavailable"
+        }
         
         // Use either the system icon or ours
         tile.icon = Icon.createWithResource(this, R.drawable.ic_tile)
