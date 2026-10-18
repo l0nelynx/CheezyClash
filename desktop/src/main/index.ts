@@ -16,6 +16,8 @@ import {
   restoreControllerAuth,
   reloadActiveConfig,
   getDashboardUrl,
+  hasLifecycleRequest,
+  onCoreStatus,
 } from './core-manager'
 import { mihomoApi } from './mihomo-api'
 import {
@@ -60,6 +62,7 @@ import {
 } from './subscription-updater'
 import { notifyProfilesChanged } from './profile-events'
 import { applyAutoStart, isSystemStartupLaunch, type StartupIdentity } from './startup'
+import { runStartupTasks } from './startup-tasks'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -72,6 +75,14 @@ let pendingDeepLink: string | null = null
 /** Buffered so a cold-start result cannot race ahead of the renderer listener. */
 let pendingDeepLinkResult: DeepLinkResult | null = null
 let deepLinkResultSequence = 0
+let bootReady = false
+let revealRequested = false
+let mainWindowReady = false
+let trayRefreshGeneration = 0
+
+function markStartup(phase: string): void {
+  log(`startup: ${phase} (${Math.round(process.uptime() * 1000)} ms since process start)`)
+}
 
 function resolveAsset(...parts: string[]): string {
   if (app.isPackaged) {
@@ -111,9 +122,9 @@ function loadTrayImage(): Electron.NativeImage {
   return nativeImage.createEmpty()
 }
 
-function createWindow(productName: string, showOnReady = true): void {
+function createWindow(productName: string): void {
   const icon = loadAppIcon()
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 800,
     height: 700,
     minWidth: 800,
@@ -131,31 +142,46 @@ function createWindow(productName: string, showOnReady = true): void {
       sandbox: false,
     },
   })
+  mainWindow = win
+  mainWindowReady = false
 
-  mainWindow.on('ready-to-show', () => {
-    if (showOnReady) mainWindow?.show()
+  win.once('ready-to-show', () => {
+    if (quitting || win.isDestroyed()) return
+    mainWindowReady = true
+    win.show()
+    win.focus()
+    markStartup('window ready')
   })
-  mainWindow.on('maximize', () => {
-    mainWindow?.webContents.send('window:maximized', true)
+  win.on('maximize', () => {
+    win.webContents.send('window:maximized', true)
   })
-  mainWindow.on('unmaximize', () => {
-    mainWindow?.webContents.send('window:maximized', false)
+  win.on('unmaximize', () => {
+    win.webContents.send('window:maximized', false)
   })
-  mainWindow.on('close', (e) => {
+  win.on('close', (e) => {
     if (quitting || process.platform === 'darwin') return
     e.preventDefault()
-    mainWindow?.hide()
+    win.hide()
+  })
+  win.on('closed', () => {
+    if (mainWindow === win) { mainWindow = null; mainWindowReady = false }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
 function revealMainWindow(): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (quitting) return
+  if (!bootReady) { revealRequested = true; return }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow(trayProductName)
+    return
+  }
+  if (!mainWindowReady) return // ready-to-show reveals the window after its first paint.
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.moveTop()
@@ -165,18 +191,27 @@ function revealMainWindow(): void {
 function createTray(productName: string): void {
   trayProductName = productName
   tray = new Tray(loadTrayImage())
+  tray.setToolTip(productName)
+  // Show/Quit must work while the asynchronous connection status is loading.
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `Show ${productName}`, click: revealMainWindow },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { quitting = true; app.quit() } },
+  ]))
   tray.on('double-click', () => {
     revealMainWindow()
   })
   void refreshTrayMenu()
 }
 
-async function refreshTrayMenu(): Promise<void> {
+async function refreshTrayMenu(status?: import('../shared/types').CoreStatus): Promise<void> {
   if (!tray) return
+  const generation = ++trayRefreshGeneration
   let running = false
   let modeLabel = ''
   try {
-    const st = await getStatus()
+    const st = status ?? await getStatus()
+    if (generation !== trayRefreshGeneration || quitting) return
     running = st.running
     modeLabel = st.mode === 'tun' ? 'TUN' : 'Proxy'
     tray.setToolTip(
@@ -185,6 +220,7 @@ async function refreshTrayMenu(): Promise<void> {
         : `${trayProductName} · Disconnected`,
     )
   } catch {
+    if (generation !== trayRefreshGeneration || quitting) return
     tray.setToolTip(trayProductName)
   }
 
@@ -327,7 +363,7 @@ function registerIpc(): void {
   ipcMain.handle('settings:set', async (_e, patch) => {
     const previous = getSettings()
     if (typeof patch.autoStart === 'boolean' && patch.autoStart !== previous.autoStart) {
-      applyAutoStart(app, patch.autoStart, startupIdentity())
+      await applyAutoStart(app, patch.autoStart, startupIdentity())
     }
     const settings = setSettings(patch)
     const st = await getStatus()
@@ -564,18 +600,6 @@ function startupIdentity(): StartupIdentity {
   }
 }
 
-async function runStartupTasks(caps: PrivateCapabilities): Promise<void> {
-  if (caps.supportsAuth) {
-    await syncManagedFromPrivate().catch((e) => log(String(e), 'warn'))
-  }
-  if (!getSettings().autoConnect) return
-  if (!getActiveProfileId()) {
-    log('auto-connect skipped: no active profile', 'warn')
-    return
-  }
-  await connect().catch((e) => log(`auto-connect failed: ${e}`, 'error'))
-}
-
 /** Extract one of our URL schemes from process argv. */
 function findDeepLinkInArgv(argv: string[]): string | null {
   for (const arg of argv) {
@@ -668,7 +692,8 @@ async function handleDeepLink(raw: string): Promise<void> {
 }
 
 function enqueueOrHandleDeepLink(raw: string): void {
-  if (!mainWindow) {
+  revealMainWindow()
+  if (!bootReady) {
     pendingDeepLink = raw
     return
   }
@@ -707,7 +732,8 @@ if (!gotTheLock) {
   app.on('second-instance', (_event, argv) => {
     const link = findDeepLinkInArgv(argv)
     if (link) enqueueOrHandleDeepLink(link)
-    revealMainWindow()
+    // Duplicate scheduled --hidden launches must keep a running client hidden.
+    if (link || !argv.includes('--hidden')) revealMainWindow()
   })
 
   // macOS cold-start / open-url while running
@@ -716,7 +742,10 @@ if (!gotTheLock) {
     enqueueOrHandleDeepLink(url)
   })
 
+  app.on('activate', () => revealMainWindow())
+
   app.whenReady().then(async () => {
+    markStartup('main ready')
     // Hide File/Edit/View application menu
     Menu.setApplicationMenu(null)
 
@@ -744,35 +773,45 @@ if (!gotTheLock) {
     } catch (e) {
       log(`system proxy recovery failed: ${e}`, 'warn')
     }
+    if (quitting) return
 
     if (!corePresent()) {
       log('mihomo binary not found — run npm run fetch-core', 'warn')
     }
 
     const launchHidden = isSystemStartupLaunch(app)
-    try {
-      applyAutoStart(app, getSettings().autoStart, startupIdentity())
-    } catch (e) {
+    // Registration may launch PowerShell; it must not hold up the tray/core/UI.
+    void applyAutoStart(app, getSettings().autoStart, startupIdentity()).catch((e) => {
       log(`startup registration sync failed: ${e}`, 'warn')
-    }
+    })
 
     registerIpc()
-    createWindow(caps.productName, !launchHidden)
     createTray(caps.productName)
+    onCoreStatus(status => { void refreshTrayMenu(status) })
+    bootReady = true
+    markStartup(launchHidden ? 'tray ready (without renderer)' : 'tray ready')
+    if (!launchHidden || revealRequested) revealMainWindow()
 
     // Cold-start deeplink (Windows/Linux put it on argv; macOS may have queued open-url).
     const coldLink = pendingDeepLink ?? findDeepLinkInArgv(process.argv)
     pendingDeepLink = null
-    if (coldLink) void handleDeepLink(coldLink)
+    if (coldLink) {
+      revealMainWindow()
+      void handleDeepLink(coldLink)
+    }
 
-    void runStartupTasks(caps)
+    void runStartupTasks({
+      supportsAuth: caps.supportsAuth,
+      autoConnectEnabled: () => getSettings().autoConnect,
+      activeProfile: getActiveProfileId,
+      canAutoConnect: () => !quitting && !hasLifecycleRequest(),
+      connect: () => connect(),
+      syncSubscriptions: () => quitting ? Promise.resolve() : syncManagedFromPrivate(),
+      mark: markStartup,
+      warn: message => log(message, 'warn'),
+    })
 
     startSubscriptionUpdater()
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow(caps.productName)
-      else revealMainWindow()
-    })
   })
 
   app.on('window-all-closed', () => {

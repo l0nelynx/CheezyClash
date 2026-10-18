@@ -117,6 +117,7 @@
   !endif
   InitPluginsDir
   File /oname=$PLUGINSDIR\cheezy-installer-processes.ps1 "${CHEEZY_INSTALLER_DIR}\installer-processes.ps1"
+  File /oname=$PLUGINSDIR\startup-task.ps1 "${CHEEZY_INSTALLER_DIR}\startup-task.ps1"
   !insertmacro cheezyRunProcessControl Stop
   Pop $0
   ${If} $0 != 0

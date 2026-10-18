@@ -171,6 +171,42 @@ the next start/reload uses the source YAML password. The legacy global
 
 ## Scripts
 
+### Startup and automatic connection
+
+On Windows, **Launch at system startup** uses a Task Scheduler logon task for the
+current user, with no configured delay, password, elevation, idle/network
+prerequisite, or battery restriction. It runs the installed executable with
+`--hidden` at normal process priority. Windows still controls when CPU time is
+available; this does not guarantee starting before every other application.
+The task is scoped to the product, Windows user and executable path. On the first
+launch after upgrading, an enabled legacy Run entry is migrated only after the
+new task is registered and verified. A registration failure leaves the legacy
+entry in place and is logged. Manage this startup preference inside the app;
+scheduled tasks are separate from Windows' ordinary Startup Apps list.
+Disabling startup removes the owned task, and uninstall removes owned tasks for
+that executable across users. Another installation's entries are preserved.
+
+A `--hidden` launch starts the tray and core without creating a BrowserWindow or
+loading React. Opening from the tray, a manual second launch, macOS activation,
+or a deep link creates the window on demand. Repeated `--hidden` launches keep
+the running instance hidden. Proxy recovery still completes before connection
+work starts, and tray status follows core events without renderer polling.
+
+**Connect when the app starts** connects the saved active profile before account
+subscription synchronization. Sync runs afterward without hot-reloading the
+connected core; updated profile data applies on the next explicit reload or
+connection. If there is no saved profile, startup obtains subscriptions first.
+A manual lifecycle action during that wait prevents a late auto-connect.
+The `startup:` log entries record main readiness, tray readiness, first window
+paint, connection readiness and sync completion in milliseconds since process start.
+
+`npm run test:startup` checks scheduler migration/isolation using mocked OS
+boundaries, plus main-process lazy-window behavior and startup ordering.
+Windows-only `npm run test:startup:scheduler` registers a unique temporary task
+pointing to a nonexistent test executable, checks the real Scheduler readback,
+idempotency, uninstall cleanup and disabling, and removes the task in `finally`.
+It never runs the task or changes installed application startup entries.
+
 Windows installers now require administrator rights before running, including
 per-user updates; existing install locations and shortcut identities are retained.
 The helper is registered with Manual startup and is started for TUN on demand.

@@ -131,7 +131,15 @@ function configuredMode(profileId: string | null, requested: ConnectionMode): Co
   return resolveProfileNetwork(profileId, settings).mode
 }
 
+const statusListeners = new Set<(status: CoreStatus) => void>()
+
+export function onCoreStatus(listener: (status: CoreStatus) => void): () => void {
+  statusListeners.add(listener)
+  return () => { statusListeners.delete(listener) }
+}
+
 function broadcast(status: CoreStatus): void {
+  for (const listener of statusListeners) listener(status)
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('core:statusChanged', status)
   }
@@ -441,6 +449,11 @@ async function reconcileLifecycle(
 }
 
 const lifecycle = new LatestWinsCoordinator<LifecycleTarget>(reconcileLifecycle)
+
+/** Startup must not supersede an explicit connect/disconnect/profile request. */
+export function hasLifecycleRequest(): boolean {
+  return lifecycle.desiredTarget !== null
+}
 
 async function requestLifecycle(target: LifecycleTarget): Promise<CoreStatus> {
   await lifecycle.request(target)

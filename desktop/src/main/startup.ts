@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { dirname, isAbsolute, join } from 'path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 export const HIDDEN_LAUNCH_ARG = '--hidden'
 
@@ -33,6 +35,30 @@ export interface StartupRuntime {
   execPath: string
   env: NodeJS.ProcessEnv
 }
+
+export interface WindowsStartupRequest {
+  script: string
+  executable: string
+  identity: StartupIdentity
+  enabled: boolean
+}
+
+export type WindowsStartupRunner = (request: WindowsStartupRequest) => Promise<void>
+const execFileAsync = promisify(execFile)
+
+async function runWindowsStartup(request: WindowsStartupRequest): Promise<void> {
+  await execFileAsync('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', request.script,
+    '-Executable', request.executable,
+    '-AppId', request.identity.appId,
+    '-ProductName', request.identity.productName,
+    '-Action', request.enabled ? 'Enable' : 'Disable',
+  ], { windowsHide: true, timeout: 15_000, encoding: 'utf8' })
+}
+
+// Startup reconciliation and an immediate Settings toggle must finish in order.
+let registrationTail: Promise<void> = Promise.resolve()
 
 function defaultRuntime(): StartupRuntime {
   return {
@@ -95,7 +121,21 @@ export function applyAutoStart(
   enabled: boolean,
   identity: StartupIdentity,
   runtime: StartupRuntime = defaultRuntime(),
-): void {
+  windowsRunner: WindowsStartupRunner = runWindowsStartup,
+): Promise<void> {
+  const work = registrationTail.catch(() => undefined).then(() =>
+    applyAutoStartNow(app, enabled, identity, runtime, windowsRunner))
+  registrationTail = work
+  return work
+}
+
+async function applyAutoStartNow(
+  app: ElectronAppAdapter,
+  enabled: boolean,
+  identity: StartupIdentity,
+  runtime: StartupRuntime,
+  windowsRunner: WindowsStartupRunner,
+): Promise<void> {
   if (!app.isPackaged) {
     if (enabled) throw new Error('Launch at startup is available in the installed app')
     return
@@ -117,16 +157,12 @@ export function applyAutoStart(
   }
 
   if (runtime.platform === 'win32') {
-    const options = { path: runtime.execPath, args: [HIDDEN_LAUNCH_ARG] }
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
+    await windowsRunner({
+      script: join(dirname(runtime.execPath), 'resources', 'startup-task.ps1'),
+      executable: runtime.execPath,
+      identity,
       enabled,
-      name: identity.appId,
-      ...options,
     })
-    const state = app.getLoginItemSettings(options)
-    const active = state.executableWillLaunchAtLogin ?? state.openAtLogin ?? false
-    if (active !== enabled) throw new Error('Windows did not apply the startup preference')
     return
   }
 

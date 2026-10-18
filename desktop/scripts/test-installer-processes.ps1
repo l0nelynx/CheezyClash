@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\..\build\installer-processes.ps1"
+. "$PSScriptRoot\..\build\installer-processes.ps1" -Action Stop -ProductName 'Installer fixture'
+if ($Action -ne 'Stop' -or $ProductName -ne 'Installer fixture') { throw 'Dot-sourced startup functions must preserve installer parameters.' }
 
 function Assert-True($Value, $Message) {
     if (-not $Value) { throw $Message }

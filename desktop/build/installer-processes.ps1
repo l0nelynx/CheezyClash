@@ -5,6 +5,8 @@ param(
     [string]$ProductName = 'CheezyClash'
 )
 
+. (Join-Path $PSScriptRoot 'startup-task.ps1')
+
 # Invoked with -File, not interpolated PowerShell code: spaces, apostrophes and
 # non-ASCII installation paths must remain literal. Dot-sourcing is for tests.
 function Get-InstallerPaths {
@@ -178,7 +180,7 @@ if ($MyInvocation.InvocationName -ne '.') {
         switch ($Action) {
             'Stop' { Stop-InstallerProcesses $allowedPaths }
             'InstallHelper' { Install-InstallerHelper $allowedPaths[2] $ProductName }
-            'RemoveHelper' { Remove-InstallerHelper $allowedPaths[2] }
+            'RemoveHelper' { Remove-StartupTasksForExecutable $allowedPaths[0]; Remove-InstallerHelper $allowedPaths[2] }
             'StartHelper' { Start-OwnedHelper $allowedPaths[2] }
             'StopHelper' { Stop-OwnedHelper $allowedPaths[2] }
             'RepairHelper' { Install-InstallerHelper $allowedPaths[2] $ProductName; Start-OwnedHelper $allowedPaths[2] }

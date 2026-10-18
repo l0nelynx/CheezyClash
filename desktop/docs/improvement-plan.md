@@ -33,6 +33,15 @@
 
 ## Validation
 
+Startup optimization: Windows logon tasks replace Run entries after verified
+migration; hidden launches defer BrowserWindow creation until activation; cached
+profiles connect before account subscription sync. `test:startup` covers mocked
+scheduler boundaries and production main-process startup with OS adapters;
+`test:startup:scheduler` also checks a real temporary task's registration, account
+normalization, settings, idempotency and removal without running it. Startup
+phase timings are logged. Actual sign-out/sign-in latency and a packaged
+old-version upgrade/uninstall still require end-to-end validation.
+
 Type checking, production build and `npm run test:ui` passed. Regression suites passed: auth-gate, deeplink, controller, lifecycle, network-config, custom-rules, subscription-metadata, startup, sparkline, xray-mux-config, profile-races, system-proxy, subscription-download and traffic-stream.
 
 The UI suite uses a temporary Electron profile, mocked IPC and blocked HTTP(S); it does not connect a VPN or modify host proxy settings. Screenshot paths are printed by the runner. Windows proxy restoration remains covered by isolated registry mocks; macOS/Linux restoration remains pending. The bundled-core parity mismatch below remains unresolved, so these checks do not certify the bundled core or a release installer.

@@ -26,6 +26,8 @@ assert.equal(config.appId, 'com.cheezy.freedom.desktop')
 assert.equal(config.executableName, 'CheezyClash')
 assert.equal(config.nsis.shortcutName, 'CheezyClash')
 assert.equal(config.nsis.script, undefined, 'Keep the generated uninstaller/signing pipeline')
+assert.ok(config.extraResources.some(resource=>resource.from==='build/startup-task.ps1' && resource.to==='startup-task.ps1'),'Ship the Task Scheduler script beside helper-control.ps1')
+assert.match(hooks, /File \/oname=\$PLUGINSDIR\\startup-task\.ps1/,'Uninstaller must carry the startup cleanup functions')
 // These deliberately pin the small upstream extension contract. A builder
 // upgrade must fail tests rather than silently reintroducing shortcut removal.
 assert.match(stockUtil, /!macro uninstallOldVersion ROOT_KEY\s+Push "\$\{ROOT_KEY\}"\s+Call uninstallOldVersion\s+!macroend/)

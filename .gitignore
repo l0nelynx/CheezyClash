@@ -37,3 +37,4 @@ desktop/build/**
 !desktop/build/installer.nsh
 !desktop/build/installer-overrides.nsh
 !desktop/build/installer-processes.ps1
+!desktop/build/startup-task.ps1
