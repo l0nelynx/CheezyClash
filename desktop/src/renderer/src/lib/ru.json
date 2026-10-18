@@ -55,6 +55,7 @@
   "Appearance": "Внешний вид",
   "Connect": "Подключить",
   "Disconnect": "Отключить",
+  "Configuration updated. Reconnect to apply.": "Конфигурация обновлена. Переподключитесь, чтобы применить.",
   "Connected": "Подключено",
   "Disconnected": "Отключено",
   "Connecting…": "Подключение…",

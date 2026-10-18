@@ -11,8 +11,9 @@ let failAuth = !preview
 let running = true
 let connectionState = 'live'
 let connectionCalls = 0
+let configUpdateAvailable = false
 const settings = { systemProxy: true, mixedPort:7890, allowLan:false, tunEnabled:false, connectionMode:'proxy', tunStack:'mixed', networkOverrideEnabled:true, tunMtu:1500, autoStart:false, autoConnect:false, xrayMuxEnabled:false, xrayMuxConcurrency:32, xrayMuxMaxConnections:3, xrayMuxMaxDialsPerMinute:3, customRules:[] }
-const status = () => ({running,mode:'proxy',controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false})
+const status = () => ({running,configUpdateAvailable:running && configUpdateAvailable,mode:'proxy',controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false})
 const profile = { id:'fixture', name:'Test subscription', url:'https://example.invalid/private/SECRET_TOKEN', createdAt:1, updatedAt:Date.now(), subscription:{title:'Test subscription', upload:1024,download:2048,total:1000000,expire:0} }
 const names = Array.from({length:1000},(_,i)=>`Server ${String(i).padStart(4,'0')}`)
 const members = Object.fromEntries(names.map((name, index) => [name, {type:index % 2 ? 'trojan' : 'vless',network:index % 2 ? 'tcp' : 'ws',serverDescription:`Location ${index} · streaming and browsing`}]))
@@ -25,7 +26,7 @@ const groups = [
 const logs = Array.from({length:400},(_,i)=>`[${i}] [info] test log ${i}`)
 const api = {
   getStatus: async () => status(),
-  connect: async () => { running=true; return status() }, disconnect: async () => {running=false;return status()},
+  connect: async () => { running=true;configUpdateAvailable=false;return status() }, disconnect: async () => {running=false;return status()},
   getSettings: async () => settings, setSettings: async patch => Object.assign(settings,patch),
   getTraffic: async () => ({up:128,down:1024,upTotal:10240,downTotal:102400}),
   getConnections: async () => {
@@ -62,6 +63,7 @@ contextBridge.exposeInMainWorld('qa',{
   allowAuth: () => {failAuth=false},
   connectionState: value => {connectionState=value},
   connectionCalls: () => connectionCalls,
+  profileConfigUpdate: value => {configUpdateAvailable=value;for(const listener of listeners.get('onProfilesChanged') ?? [])listener()},
   setRunning: value => {running=value;for(const listener of listeners.get('onStatus') ?? [])listener(status())},
   emitLog: line => {logs.push(line);for(const listener of listeners.get('onLog') ?? [])listener(line)},
 })

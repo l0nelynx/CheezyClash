@@ -120,6 +120,8 @@ export interface ProxyGroupInfo {
 
 export interface CoreStatus {
   running: boolean
+  /** The active saved config has a different byte size from the running core's config. */
+  configUpdateAvailable?: boolean
   mode: ConnectionMode
   pid?: number
   controller: string

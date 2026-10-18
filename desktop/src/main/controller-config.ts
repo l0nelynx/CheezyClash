@@ -8,6 +8,8 @@ export interface ControllerConfig {
 
 export interface ControllerRuntime extends ControllerConfig {
   profileId: string
+  /** UTF-8 byte length of the effective YAML actually passed to the core. */
+  configSize?: number
 }
 
 const DEFAULT_UI_URL =

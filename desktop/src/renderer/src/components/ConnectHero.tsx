@@ -1,5 +1,5 @@
 import { useI18n } from '../lib/i18n'
-import { ExternalLink, LifeBuoy, Loader2, Power, Unplug } from 'lucide-react'
+import { ExternalLink, Info, LifeBuoy, Loader2, Power, Unplug } from 'lucide-react'
 import type { CoreStatus, ProfileMeta, TunStatus } from '../../../shared/types'
 import { DownloadRateSparkline } from './DownloadRateSparkline'
 import { formatRate } from '../lib/format'
@@ -140,6 +140,13 @@ export function ConnectHero({
             </Button>
           )}
         </div>
+
+        {running && status?.configUpdateAvailable && (
+          <p role="status" data-testid="config-update-hint" className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+            <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{t("Configuration updated. Reconnect to apply.")}</span>
+          </p>
+        )}
 
         {lastError && <p className="mt-4 text-sm text-destructive">{t(lastError)}</p>}
 

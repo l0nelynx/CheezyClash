@@ -218,7 +218,11 @@ try {
       setAuth: (_host, _port, secret) => { f.clientSecret = secret; },
       getSecret: () => f.clientSecret,
       ping: async () => f.running && f.clientSecret === f.serverSecret,
-      waitReady: async () => { if (f.clientSecret !== f.serverSecret) throw Error('auth mismatch'); },
+      waitReady: async () => {
+        const barrier = f.readiness; f.readiness = null;
+        if (barrier) { barrier.enter(); await barrier.wait; }
+        if (f.clientSecret !== f.serverSecret) throw Error('auth mismatch');
+      },
       putConfigs: async path => { if (f.failPut) throw Error('reload failed'); f.puts.push(path); },
       applySelections: async () => {}, closeAllConnections: async () => {},
     };`,
@@ -241,29 +245,50 @@ try {
   assert.equal(fixture.saved.controllerRuntime.secret, 'legacy-generated')
   assert.equal((await core.getStatus()).secret, 'legacy-generated', 'upgrade must reconnect to the actual running config')
   assert.equal((await core.getStatus()).running, true)
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'legacy helper config has no known byte size until applied')
   await core.connect()
   assert.deepEqual(fixture.spawns, ['profile-A'])
   assert.equal(fixture.saved.controllerRuntime.secret, 'profile-A')
   assert.equal((await core.getStatus()).secret, 'profile-A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false)
+  fixture.documents.B.rules = ['MATCH,REJECT']
+  fixture.rebuild('B')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'an inactive profile update must not show a hint')
 
   fixture.documents.A.secret = 'new-profile-A'
   const path = fixture.rebuild('A') // auto-update without apply
   assert.equal((await core.getStatus()).secret, 'profile-A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, true, 'a background config update differs from the applied core')
   core.restoreControllerAuth() // simulate main-process recovery from persisted snapshot
   assert.equal((await core.getStatus()).secret, 'profile-A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, true, 'UI restart preserves the applied byte size instead of trusting the updated file')
   assert.equal(new URLSearchParams(new URL(await core.getDashboardUrl()).hash.split('?')[1]).get('secret'), 'profile-A')
 
   await core.reloadActiveConfig(path, 'A')
   assert.deepEqual(fixture.spawns, ['profile-A', 'new-profile-A'], 'changed secret must restart')
   assert.equal(fixture.puts.length, 0)
   assert.equal((await core.getStatus()).secret, 'new-profile-A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'restart applies the new config')
+  fixture.documents.A.rules = ['MATCH,DIRECT']
+  fixture.rebuild('A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, true)
   await core.reloadActiveConfig(path, 'A')
   assert.equal(fixture.puts.length, 1, 'unchanged controller must still soft reload')
   assert.equal(fixture.spawns.length, 2)
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'successful live reload advances the baseline')
+  fixture.documents.A.rules = ['MATCH,REJECT']
+  fixture.rebuild('A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'equal-size replacements are intentionally not detected by the byte-size comparison')
+  fixture.documents.A.rules = ['MATCH,REJECT-DROP']
+  fixture.rebuild('A')
   fixture.failPut = true
   await assert.rejects(core.reloadActiveConfig(path, 'A'), /reload failed/)
   assert.equal((await core.getStatus()).secret, 'new-profile-A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, true, 'failed reload must keep the previous applied baseline')
   fixture.failPut = false
+  fixture.documents.A.rules = ['MATCH,DIRECT']
+  fixture.rebuild('A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'returning to the applied config clears the hint without reconnect')
 
   fixture.active = 'B'
   await core.switchProfile('B')
@@ -274,6 +299,7 @@ try {
   assert.ok(!fixture.logs.some(line => line.includes('new-profile-A') || line.includes('profile-A')))
 
   await core.disconnect()
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'a disconnected client never shows pending config')
   await assert.rejects(core.getDashboardUrl(), /Start the VPN/)
   const stoppedCount = fixture.spawns.length
   await core.reloadActiveConfig(fixture.configPath('B'), 'B')
@@ -300,6 +326,30 @@ try {
   assert.equal(fixture.helperStarts, 1, 'helper launch must use the same YAML credentials')
   assert.equal(fixture.clientSecret, '')
   assert.equal((await core.getStatus()).running, true)
+  await core.disconnect()
+
+  // A background update during core startup cannot alter the launch snapshot.
+  let started, finish
+  const startEntered = new Promise(resolve => { started = resolve })
+  const startGate = new Promise(resolve => { finish = resolve })
+  fixture.active = 'A'
+  fixture.documents.A.rules = ['MATCH,DIRECT']
+  fixture.readiness = { enter: started, wait: startGate }
+  const starting = core.connect('proxy', 'cold-start', 'A')
+  await startEntered
+  fixture.documents.A.rules = ['MATCH,REJECT-DROP']
+  fixture.rebuild('A')
+  assert.ok(readFileSync(join(root, 'running-config.yaml'), 'utf8').includes('MATCH,DIRECT'))
+  finish();await starting
+  assert.equal((await core.getStatus()).configUpdateAvailable, true, 'a config arriving during startup remains pending')
+  await core.connect('proxy', 'cold-start', 'A')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false, 'reconnect applies the latest saved YAML')
+  fixture.documents.A.description = 'Москва'
+  await core.connect('proxy', 'cold-start', 'A')
+  const appliedPayload = readFileSync(join(root, 'running-config.yaml'), 'utf8')
+  assert.notEqual(appliedPayload.length, Buffer.byteLength(appliedPayload, 'utf8'))
+  assert.equal(fixture.saved.controllerRuntime.configSize, Buffer.byteLength(appliedPayload, 'utf8'), 'use UTF-8 bytes, not JavaScript character count')
+  assert.equal((await core.getStatus()).configUpdateAvailable, false)
   await core.disconnect()
 
   const profilesSource = readFileSync(join(desktop, 'src/main/profiles.ts'), 'utf8')

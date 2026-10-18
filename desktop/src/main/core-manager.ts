@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { mkdirSync, existsSync, copyFileSync, readFileSync } from 'node:fs'
+import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { join } from 'path'
 import { platform } from 'os'
 import { BrowserWindow } from 'electron'
@@ -88,12 +88,26 @@ export function restoreControllerAuth(): void {
 }
 
 function useControllerConfig(configPath: string, profileId: string): void {
-  const next = { profileId, ...readControllerConfig(readFileSync(configPath, 'utf8')) }
+  const payload = readFileSync(configPath, 'utf8')
+  const next = { profileId, ...readControllerConfig(payload), configSize: Buffer.byteLength(payload, 'utf8') }
   // Persist before spawn so a restarted UI can reconnect to the helper even if
   // a background subscription refresh later rewrites config.yaml without reload.
   store.set('controllerRuntime', next)
   controllerRuntime = next
   mihomoApi.setAuth(CONTROLLER_HOST, CONTROLLER_PORT, next.secret)
+}
+
+function configUpdateAvailable(): boolean {
+  const applied = controllerRuntime
+  if (typeof applied?.configSize !== 'number' || !Number.isSafeInteger(applied.configSize) ||
+      applied.configSize < 0 || applied.profileId !== getActiveProfileId()) return false
+  const path = activeConfigPath()
+  if (!path) return false
+  try {
+    return statSync(path).size !== applied.configSize
+  } catch {
+    return false
+  }
 }
 
 export async function getDashboardUrl(): Promise<string> {
@@ -188,6 +202,7 @@ export async function getStatus(): Promise<CoreStatus> {
   const priv = await privilegesOk(statusMode === 'tun')
   return {
     running,
+    configUpdateAvailable: running && configUpdateAvailable(),
     mode: statusMode,
     pid: child?.pid,
     controller: `${CONTROLLER_HOST}:${CONTROLLER_PORT}`,
@@ -377,18 +392,24 @@ async function reconcileLifecycle(
       : { ...settings, tunEnabled: false, connectionMode: 'proxy' as const }
     : settings
 
-  const configPath =
+  const generatedConfigPath =
     target.preparedConfigPath && effectiveMode === target.mode
       ? target.preparedConfigPath
       : rebuildConfig(profileId, rebuildSettings)
-  if (!existsSync(configPath)) {
+  if (!existsSync(generatedConfigPath)) {
     lastError = 'config rebuild failed'
     throw new Error(lastError)
   }
 
-  broadcastCustomRuleDiagnostics(await validateGeneratedConfig(configPath, profileId))
+  broadcastCustomRuleDiagnostics(await validateGeneratedConfig(generatedConfigPath, profileId))
 
   if (!isCurrent()) return
+  // Background refreshes rebuild the profile's config.yaml. Give the core a
+  // separate snapshot so it cannot read a newer file midway through startup.
+  const payload = readFileSync(generatedConfigPath, 'utf8')
+  mkdirSync(coreHome(), { recursive: true })
+  const configPath = join(coreHome(), 'running-config.yaml')
+  writeFileSync(configPath, payload, { encoding: 'utf8', mode: 0o600 })
   const nextController = readControllerConfig(readFileSync(configPath, 'utf8'))
   if (target.reason === 'live-reload' && effectiveMode === mode &&
       !controllerRequiresRestart(controllerRuntime, profileId, nextController) &&
@@ -398,6 +419,10 @@ async function reconcileLifecycle(
     // applied controller snapshot, not a just-rebuilt YAML or global setting.
     log(`applying config profile=${profileId} reason=live-reload`)
     await mihomoApi.putConfigs(configPath)
+    // Only a successful apply advances the baseline, even if a later lifecycle
+    // request superseded this one while PUT /configs was in flight.
+    controllerRuntime = { profileId, ...nextController, configSize: Buffer.byteLength(payload, 'utf8') }
+    store.set('controllerRuntime', controllerRuntime)
     if (!isCurrent()) return
     await mihomoApi.applySelections(getSelections(profileId))
     if (!isCurrent()) return

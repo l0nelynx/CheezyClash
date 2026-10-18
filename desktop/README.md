@@ -197,6 +197,14 @@ subscription synchronization. Sync runs afterward without hot-reloading the
 connected core; updated profile data applies on the next explicit reload or
 connection. If there is no saved profile, startup obtains subscriptions first.
 A manual lifecycle action during that wait prevents a late auto-connect.
+Home shows **Configuration updated. Reconnect to apply.** below Disconnect when
+the saved active YAML's byte size differs from the configuration passed to the
+running core. Profile-change events refresh this hint immediately. The applied
+UTF-8 byte size persists with the controller snapshot and advances after a
+successful reconnect/live reload; disconnected and inactive profiles do not
+show the hint. This deliberately compares sizes only: equal-size replacements
+are not detected. The core reads a separate `home/running-config.yaml` snapshot
+so a background refresh cannot replace its input while it is starting.
 The `startup:` log entries record main readiness, tray readiness, first window
 paint, connection readiness and sync completion in milliseconds since process start.
 

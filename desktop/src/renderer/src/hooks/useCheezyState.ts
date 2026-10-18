@@ -159,6 +159,8 @@ export function useCheezyState() {
       if (runningRef.current) void loadGroups()
       void window.cheezy.listProfiles().then(setProfiles).catch(() => undefined)
       void window.cheezy.getActiveProfileId().then(setActiveId).catch(() => undefined)
+      // A background refresh may leave the running core on the previous config.
+      void window.cheezy.getStatus().then(setStatus).catch(() => undefined)
     })
     const statusTick = setInterval(() => {
       if (document.visibilityState === 'hidden') return
