@@ -1,5 +1,5 @@
 import { useI18n } from '../lib/i18n'
-import { Home, Info, Layers, ScrollText, Settings, Shield } from 'lucide-react'
+import { Home, Info, Layers, ScrollText, Settings, Shield, Activity } from 'lucide-react'
 import type { CoreStatus } from '../../../shared/types'
 import type { Tab } from '../hooks/useCheezyState'
 import logoUrl from '../assets/logo.svg'
@@ -7,6 +7,7 @@ import logoUrl from '../assets/logo.svg'
 const items: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'proxies', label: 'Proxies', icon: Shield },
+  { id: 'connections', label: 'Connections', icon: Activity },
   { id: 'profiles', label: 'Profiles', icon: Layers },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'logs', label: 'Logs', icon: ScrollText },

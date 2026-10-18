@@ -3,6 +3,7 @@ import type {
   AccessControlRule,
   AppSettings,
   ConnectionMode,
+  ConnectionsSnapshot,
   CoreStatus,
   ProfileMeta,
   ProxyGroupInfo,
@@ -23,6 +24,7 @@ const api = {
   connect: (mode?: ConnectionMode): Promise<CoreStatus> => ipcRenderer.invoke('core:connect', mode),
   disconnect: (): Promise<CoreStatus> => ipcRenderer.invoke('core:disconnect'),
   getTraffic: (): Promise<TrafficSnapshot> => ipcRenderer.invoke('core:traffic'),
+  getConnections: (): Promise<ConnectionsSnapshot> => ipcRenderer.invoke('connections:list'),
   getGroups: (): Promise<ProxyGroupInfo[]> => ipcRenderer.invoke('proxies:groups'),
   selectProxy: (group: string, name: string): Promise<boolean> =>
     ipcRenderer.invoke('proxies:select', group, name),

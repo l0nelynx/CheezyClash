@@ -1,6 +1,6 @@
 import { TrafficStream } from './traffic-stream'
 import { CONTROLLER_HOST, CONTROLLER_PORT } from '../shared/types'
-import type { ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
+import type { ConnectionInfo, ConnectionsSnapshot, ProxyGroupInfo, TrafficSnapshot } from '../shared/types'
 import { readFileSync } from 'fs'
 import { log } from './logger'
 import { readControllerConfig } from './controller-config'
@@ -99,6 +99,11 @@ export class MihomoApi {
 
   async getVersion(): Promise<{ version?: string; meta?: boolean }> {
     return this.request('GET', '/version')
+  }
+
+  async getConnections(): Promise<ConnectionsSnapshot> {
+    const data = await this.request<{ connections: ConnectionInfo[] | null }>('GET', '/connections')
+    return { connections: data.connections ?? [], sampledAt: Date.now() }
   }
 
   async waitReady(timeoutMs = 15_000): Promise<void> {

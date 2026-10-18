@@ -268,6 +268,7 @@ function registerIpc(): void {
     return st
   })
   ipcMain.handle('core:traffic', () => mihomoApi.getTraffic())
+  ipcMain.handle('connections:list', () => mihomoApi.getConnections())
   ipcMain.handle('proxies:groups', async () => {
     const groups = await mihomoApi.getGroups()
     const icons = getProxyGroupIcons()

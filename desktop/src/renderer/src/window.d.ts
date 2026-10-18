@@ -2,6 +2,7 @@ import type {
   AccessControlRule,
   AppSettings,
   ConnectionMode,
+  ConnectionsSnapshot,
   CoreStatus,
   ProfileMeta,
   ProxyGroupInfo,
@@ -21,6 +22,7 @@ export interface CheezyApi {
   connect: (mode?: ConnectionMode) => Promise<CoreStatus>
   disconnect: () => Promise<CoreStatus>
   getTraffic: () => Promise<TrafficSnapshot>
+  getConnections: () => Promise<ConnectionsSnapshot>
   getGroups: () => Promise<ProxyGroupInfo[]>
   selectProxy: (group: string, name: string) => Promise<boolean>
   healthCheck: (group: string) => Promise<Record<string, number>>

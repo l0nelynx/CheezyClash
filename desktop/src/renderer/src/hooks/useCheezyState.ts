@@ -7,7 +7,7 @@ import type {
   TrafficSnapshot,
   TunStatus,
 } from '../../../shared/types'
-export type Tab = 'home' | 'proxies' | 'profiles' | 'settings' | 'logs' | 'about'
+export type Tab = 'home' | 'proxies' | 'connections' | 'profiles' | 'settings' | 'logs' | 'about'
 const DOWN_RATE_HISTORY = 60
 const NOTICE_MS = 4000
 const STATUS_POLL_MS = 20_000

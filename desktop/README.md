@@ -224,6 +224,21 @@ the editor includes a quick guide in English and Russian. Logs support search,
 filtering and redacted export. Implementation
 status and validation limitations are recorded in [the improvement plan](docs/improvement-plan.md).
 
+The **Connections** tab polls the applied Mihomo controller while open, showing
+active destinations, process names, matched rule type/value, the complete route
+from category groups to the final proxy, download/upload speeds, and elapsed time.
+Speeds use byte-counter differences between samples; the first sample shows `—`.
+Search covers hosts, IPs, processes, rules and routes. Optional `process-name`
+grouping persists locally, with collapsible process groups. Connections without
+process metadata appear in **Unknown process**. Controller errors clear stale rows
+and retry automatically; disconnecting clears the list.
+
+After `npm run build`, run `npm run preview:connections` for a separate, interactive
+window with clearly labelled demo data, no external network access, and temporary
+preferences. It does not start the core or change system proxy/TUN settings.
+`npm run test:connections` checks rate calculation and runs isolated Electron UI
+checks for grouping, search, sorting, themes, narrow layouts and connection states.
+
 On Windows, enabling the system proxy saves its previous address, bypass list,
 and enabled state. Disconnect restores these values only while the current
 registry values still match the client's writes. Changes made by another app

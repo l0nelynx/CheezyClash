@@ -1,7 +1,16 @@
-const { contextBridge } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
+const { snapshot } = require('./connections-fixture.cjs')
+const preview = process.argv.includes('--connections-preview')
+if (preview) {
+  localStorage.setItem('cheezy-language', 'ru')
+  localStorage.setItem('cheezy-theme', 'dark')
+  if (!localStorage.getItem('cheezy-connections-grouping')) localStorage.setItem('cheezy-connections-grouping', 'process')
+}
 const listeners = new Map()
-let failAuth = true
+let failAuth = !preview
 let running = true
+let connectionState = 'live'
+let connectionCalls = 0
 const settings = { systemProxy: true, mixedPort:7890, allowLan:false, tunEnabled:false, connectionMode:'proxy', tunStack:'mixed', networkOverrideEnabled:true, tunMtu:1500, autoStart:false, autoConnect:false, xrayMuxEnabled:false, xrayMuxConcurrency:32, xrayMuxMaxConnections:3, xrayMuxMaxDialsPerMinute:3, customRules:[] }
 const status = () => ({running,mode:'proxy',controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false})
 const profile = { id:'fixture', name:'Test subscription', url:'https://example.invalid/private/SECRET_TOKEN', createdAt:1, updatedAt:Date.now(), subscription:{title:'Test subscription', upload:1024,download:2048,total:1000000,expire:0} }
@@ -19,12 +28,17 @@ const api = {
   connect: async () => { running=true; return status() }, disconnect: async () => {running=false;return status()},
   getSettings: async () => settings, setSettings: async patch => Object.assign(settings,patch),
   getTraffic: async () => ({up:128,down:1024,upTotal:10240,downTotal:102400}),
+  getConnections: async () => {
+    connectionCalls++
+    if(connectionState === 'error') throw new Error('Controller unavailable')
+    return connectionState === 'empty' ? {connections:[],sampledAt:Date.now()} : snapshot()
+  },
   getGroups: async () => groups,
   selectProxy: async (group, name) => {groups.find(item=>item.name===group).now=name},
   listProfiles: async () => [profile], getActiveProfileId: async () => profile.id,
   getTunStatus: async () => ({enabled:false,helperInstalled:false,helperRunning:false,privilegesOk:false}),
   getLogs: async () => [...logs],
-  privateCapabilities: async () => {if(failAuth)throw new Error('fixture failure');return {supportsAuth:false,productName:'CheezyClash',deepLinkScheme:'cheezyclash'}},
+  privateCapabilities: async () => {if(failAuth)throw new Error('fixture failure');return {supportsAuth:false,productName:preview ? 'CheezyClash · демо Connections' : 'CheezyClash',deepLinkScheme:'cheezyclash'}},
   privateGetSession: async () => null, consumeDeepLinkResult: async () => null,
   windowIsMaximized: async () => false,
   importProfileUrl: async () => {throw new Error('Import failed for test')},
@@ -33,6 +47,9 @@ const api = {
   listProcesses: async () => [{name:'Discord.exe',pid:100}],
   validateCustomRule: async rule => {if(!rule.payload.trim() && rule.type!=='MATCH')throw new Error('Value is required');return rule.type+','+rule.payload+','+rule.action},
   setCustomRules: async rules => {settings.customRules=rules;return settings},
+  windowMinimize: async () => ipcRenderer.invoke('preview:minimize'),
+  windowMaximizeToggle: async () => ipcRenderer.invoke('preview:maximize'),
+  windowClose: async () => ipcRenderer.invoke('preview:close'),
 }
 for(const name of ['onLog','onStatus','onProfilesChanged','onCustomRuleDiagnostics','onDeepLinkResult','onWindowMaximized']) {
   api[name] = callback => {
@@ -43,5 +60,8 @@ for(const name of ['onLog','onStatus','onProfilesChanged','onCustomRuleDiagnosti
 contextBridge.exposeInMainWorld('cheezy',api)
 contextBridge.exposeInMainWorld('qa',{
   allowAuth: () => {failAuth=false},
+  connectionState: value => {connectionState=value},
+  connectionCalls: () => connectionCalls,
+  setRunning: value => {running=value;for(const listener of listeners.get('onStatus') ?? [])listener(status())},
   emitLog: line => {logs.push(line);for(const listener of listeners.get('onLog') ?? [])listener(line)},
 })

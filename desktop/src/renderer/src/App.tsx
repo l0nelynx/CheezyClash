@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { TitleBar } from './components/TitleBar'
 import { useCheezyState } from './hooks/useCheezyState'
 import { AboutPage } from './pages/AboutPage'
+import { ConnectionsPage } from './pages/ConnectionsPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { LogsPage } from './pages/LogsPage'
@@ -361,6 +362,8 @@ export default function App(): React.JSX.Element {
           <div className="mx-auto max-w-3xl py-12 text-center text-sm text-muted-foreground">
             {t("Loading settings…")}</div>
         ))}
+
+      {tab === 'connections' && <ConnectionsPage running={!!status?.running} />}
 
       {tab === 'logs' && <LogsPage logs={state.logs} />}
 

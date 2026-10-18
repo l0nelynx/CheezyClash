@@ -98,6 +98,23 @@ try {
   }
   const api = new MihomoApi()
   api.setAuth('127.0.0.1', 9090, 'profile-A')
+  const regularFetch = globalThis.fetch
+  const connectionRows = [{ id:'test-connection', chains:['Node','Main'] }]
+  let connectionPayload = connectionRows
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, 'http://127.0.0.1:9090/connections')
+    assert.equal(init.method, 'GET')
+    assert.equal(init.headers.Authorization, 'Bearer profile-A')
+    return Response.json({connections:connectionPayload})
+  }
+  const connectionSample = await api.getConnections()
+  assert.deepEqual(connectionSample.connections, connectionRows)
+  assert.ok(Math.abs(Date.now() - connectionSample.sampledAt) < 1000)
+  connectionPayload = null
+  assert.deepEqual((await api.getConnections()).connections, [])
+  globalThis.fetch = async () => new Response('unavailable', {status:503})
+  await assert.rejects(api.getConnections(), /503/)
+  globalThis.fetch = regularFetch
   await api.getVersion()
   await api.getProxies()
   await api.selectProxy('group', 'proxy')

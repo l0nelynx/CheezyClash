@@ -1,0 +1,93 @@
+const { app, BrowserWindow, ipcMain, session } = require('electron')
+const { join } = require('node:path')
+const { writeFileSync } = require('node:fs')
+const assert = require('node:assert/strict')
+const root = process.argv[2]
+const testing = process.argv.includes('--test')
+app.setPath('userData', join(root, 'user-data'))
+app.whenReady().then(async () => {
+  // The preview uses fixtures only, with external network access disabled.
+  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']}, (_details, callback) => callback({cancel:true}))
+  const win = new BrowserWindow({show:false,width:1200,height:920,minWidth:800,minHeight:560,frame:false,backgroundColor:'#171717',webPreferences:{preload:join(__dirname,'ui-fixture.cjs'),additionalArguments:['--connections-preview'],sandbox:false,contextIsolation:true,backgroundThrottling:false,...(testing ? {offscreen:true} : {})}})
+  ipcMain.handle('preview:minimize', () => win.minimize())
+  ipcMain.handle('preview:maximize', () => {if(win.isMaximized())win.unmaximize();else win.maximize();return win.isMaximized()})
+  ipcMain.handle('preview:close', () => app.quit())
+  const errors = []
+  win.webContents.on('console-message', event => {if(event.level === 'error')errors.push(event.message)})
+  const js = code => win.webContents.executeJavaScript(code)
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
+  const wait = async condition => {
+    for(let i=0;i<100;i++) {if(await js(condition))return;await pause(80)}
+    throw new Error(`Timed out: ${condition}\n${await js('document.body.innerText')}`)
+  }
+  const choose = async (selector,value) => {
+    await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}))})()`)
+    await pause(120)
+  }
+  const search = async value => {
+    await js(`(()=>{const el=document.querySelector('input[aria-label="Поиск соединений"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}))})()`)
+    await pause(120)
+  }
+  const capture = async name => {await pause(200);writeFileSync(join(root,`${name}.png`),(await win.webContents.capturePage()).toPNG())}
+  try {
+    await win.loadFile(join(__dirname,'../out/renderer/index.html'))
+    await wait('document.querySelector(\'button[title="Соединения"]\') !== null')
+    await js('document.querySelector(\'button[title="Соединения"]\').click()')
+    await wait('document.querySelectorAll("[data-connection-id]").length === 8')
+    await wait('document.body.innerText.includes("4.01 MB/s")')
+    await capture('connections-grouped-dark')
+    console.log(`Connections preview screenshots: ${root}`)
+    if (!testing) {
+      win.show();win.focus()
+      console.log('Visible demo window ready (fixture connections; no real network changes).')
+      return
+    }
+    assert.equal(await js('document.querySelectorAll("button[aria-expanded]").length'),5)
+    assert.equal(await js('document.querySelector(\'[data-connection-id="connection-0"] td:nth-child(3)\').getAttribute("aria-label") || document.querySelector(\'[data-connection-id="connection-0"] td:nth-child(3) div\').getAttribute("aria-label")'),'Streaming → Auto → NL · Amsterdam')
+    await js('document.querySelector("button[aria-expanded]").click()')
+    assert.equal(await js('document.querySelectorAll("[data-connection-id]").length'),5)
+    await js('document.querySelector("button[aria-expanded]").click()')
+    await search('Discord.exe')
+    assert.equal(await js('document.querySelectorAll("[data-connection-id]").length'),2)
+    await search('not-a-real-host')
+    await wait('document.body.innerText.includes("Соединения не найдены")')
+    await search('')
+    await choose('select[aria-label="Группировка соединений"]','none')
+    assert.equal(await js('document.querySelectorAll("button[aria-expanded]").length'),0)
+    assert.equal(await js('document.querySelectorAll("[data-connection-id]").length'),8)
+    await capture('connections-flat-dark')
+    await choose('select[aria-label="Сортировка соединений"]','traffic')
+    await wait('document.querySelector("[data-connection-id]").dataset.connectionId === "connection-5"')
+    await js('document.querySelector(\'button[title="Настройки"]\').click()')
+    const calls = await js('window.qa.connectionCalls()')
+    await pause(1300)
+    assert.equal(await js('window.qa.connectionCalls()'),calls,'polling stops when leaving the tab')
+    await choose('select[data-testid="theme"]','light')
+    await js('document.querySelector(\'button[title="Соединения"]\').click()')
+    await wait('document.querySelectorAll("[data-connection-id]").length === 8')
+    assert.equal(await js('document.querySelector(\'select[aria-label="Группировка соединений"]\').value'),'none')
+    await capture('connections-flat-light')
+    win.setSize(800,700)
+    await pause(150)
+    assert.equal(await js('document.documentElement.scrollWidth <= window.innerWidth'),true)
+    assert.equal(await js('document.querySelector("table").getBoundingClientRect().right <= window.innerWidth'),true)
+    await choose('select[aria-label="Группировка соединений"]','process')
+    await capture('connections-grouped-narrow-light')
+    await js('window.qa.connectionState("empty")')
+    await wait('document.body.innerText.includes("Нет активных соединений")')
+    await js('window.qa.connectionState("error")')
+    await wait('document.body.innerText.includes("Не удалось загрузить соединения")')
+    assert.equal(await js('document.querySelectorAll("[data-connection-id]").length'),0)
+    await js('window.qa.connectionState("live")')
+    await wait('document.querySelectorAll("[data-connection-id]").length === 8')
+    await js('window.qa.setRunning(false)')
+    await wait('document.body.innerText.includes("Подключитесь для просмотра соединений")')
+    assert.equal(await js('document.querySelectorAll("[data-connection-id]").length'),0)
+    await js('window.qa.setRunning(true)')
+    await wait('document.querySelectorAll("[data-connection-id]").length === 8')
+    assert.equal(errors.length,0,errors.join('\n'))
+    console.log('Connections UI passed: polling, speed, route, grouping/collapse, persistence, search, sorting, themes, 800px layout, empty/error/recovery/disconnect states')
+    app.exit(0)
+  } catch(error) {console.error(error);await capture('failure');console.log('Screenshots: '+root);app.exit(1)}
+})
+app.on('window-all-closed', () => app.quit())

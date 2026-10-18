@@ -68,6 +68,34 @@ export interface TrafficSnapshot {
   downTotal: number
 }
 
+/** Live tracker fields exposed by Mihomo's GET /connections. */
+export interface ConnectionInfo {
+  id: string
+  metadata: {
+    network?: string
+    type?: string
+    host?: string
+    sourceIP?: string
+    sourcePort?: string
+    destinationIP?: string
+    destinationPort?: string
+    process?: string
+    processPath?: string
+  }
+  upload: number
+  download: number
+  start: string
+  /** Mihomo stores the outbound first, followed by its enclosing groups. */
+  chains: string[]
+  rule: string
+  rulePayload: string
+}
+
+export interface ConnectionsSnapshot {
+  connections: ConnectionInfo[]
+  sampledAt: number
+}
+
 export interface ProxyNodeInfo {
   type?: string
   network?: string
