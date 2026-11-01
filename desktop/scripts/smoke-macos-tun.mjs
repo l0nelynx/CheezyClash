@@ -22,9 +22,9 @@ mkdirSync(join(parent, 'cheezy/home'), { recursive: true })
 const root = realpathSync(join(parent, 'cheezy'))
 const uid = String(process.getuid())
 const id = createHash('sha256').update(root).digest('hex').slice(0, 16)
-const socketPath = `/var/run/cheezy-tun-${uid}.${id}.sock`
 const label = `com.cheezy.tun.${uid}.${id}`
 const systemDir = `/Library/PrivilegedHelperTools/com.cheezy.tun/${uid}.${id}`
+const socketPath = `${systemDir}/control.sock`
 const secret = randomBytes(24).toString('hex')
 const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', timeout: 45000 })
 const sudo = args => run('/usr/bin/sudo', ['-n', ...args])

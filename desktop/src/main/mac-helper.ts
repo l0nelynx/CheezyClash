@@ -26,8 +26,8 @@ function location(): { uid: number; instance: string; root: string; socket: stri
   mkdirSync(userDataRoot(), { recursive: true })
   const root = realpathSync(userDataRoot())
   const instance = createHash('sha256').update(root).digest('hex').slice(0, 16)
-  return { uid, instance, root, socket: `/var/run/cheezy-tun-${uid}.${instance}.sock`,
-    dir: `/Library/PrivilegedHelperTools/com.cheezy.tun/${uid}.${instance}` }
+  const dir = `/Library/PrivilegedHelperTools/com.cheezy.tun/${uid}.${instance}`
+  return { uid, instance, root, socket: `${dir}/control.sock`, dir }
 }
 
 function hash(file: string): string { return createHash('sha256').update(readFileSync(file)).digest('hex') }

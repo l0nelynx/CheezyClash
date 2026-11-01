@@ -119,7 +119,7 @@ SIP или firewall не требуется. Не применяйте эти к
   ID — первые 16 символов SHA256 канонического пути каталога данных.
 - Файлы: `/Library/PrivilegedHelperTools/com.cheezy.tun/<UID>.<ID>/` и
   `/Library/LaunchDaemons/com.cheezy.tun.<UID>.<ID>.plist`.
-- IPC: Unix-сокет `/var/run/cheezy-tun-<UID>.<ID>.sock`, права `0600` и проверка
+- IPC: Unix-сокет `/Library/PrivilegedHelperTools/com.cheezy.tun/<UID>.<ID>/control.sock`, права `0600` и проверка
   UID через `LOCAL_PEERCRED`. Это граница пользователя ОС: без Developer ID
   служба не подтверждает криптографически, что запрос отправлен именно нашим `.app`.
 - API допускает статус, запуск фиксированного ядра, остановку и heartbeat.

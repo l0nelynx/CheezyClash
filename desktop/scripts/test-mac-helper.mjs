@@ -61,7 +61,7 @@ assert.equal(f.calls.length, 0)
 assert.equal(f.dialogs.length, 0, 'Matching service must not prompt again')
 assert.equal(await f.api.startMacCore(), true)
 assert.deepEqual(f.requests.find(r => r.path === '/start').body, { core_hash: hash }, 'No executable, arguments or filesystem paths over IPC')
-assert.match(f.requests[0].socketPath, /^\/var\/run\/cheezy-tun-501\.[a-f0-9]{16}\.sock$/)
+assert.match(f.requests[0].socketPath, /^\/Library\/PrivilegedHelperTools\/com\.cheezy\.tun\/501\.[a-f0-9]{16}\/control\.sock$/)
 await f.api.stopMacCore()
 assert.ok(f.requests.some(r => r.path === '/stop'))
 for (const opts of [{ installed: false }, { mismatch: true }]) {

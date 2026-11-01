@@ -131,10 +131,13 @@ func launchctl(args ...string) error {
 }
 
 func installerLock() (*os.File, error) {
-	if err := trustedPath("/var/run"); err != nil {
-		return nil, err
+	// Keep the lock under our root-owned directory: /var/run may allow group writes.
+	for _, dir := range []string{"/Library/PrivilegedHelperTools", installRoot} {
+		if err := systemDir(dir); err != nil {
+			return nil, err
+		}
 	}
-	fd, err := unix.Open("/var/run/com.cheezy.tun.install.lock", unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	fd, err := unix.Open(installRoot+"/install.lock", unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		return nil, err
 	}

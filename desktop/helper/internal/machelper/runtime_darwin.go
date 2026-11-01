@@ -264,7 +264,7 @@ func serve() error {
 			return fmt.Errorf("installed executable integrity check failed")
 		}
 	}
-	if err := trustedPath("/var/run"); err != nil {
+	if err := trustedPath(m.dir()); err != nil {
 		return err
 	}
 	if st, err := os.Lstat(m.socket()); err == nil {

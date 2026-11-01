@@ -74,3 +74,11 @@ func TestServiceAndSandbox(t *testing.T) {
 		t.Fatal("privileged core must not write user-controlled directories")
 	}
 }
+
+func TestSocketBoundary(t *testing.T) {
+	// Darwin sockaddr_un has 104 bytes, including the terminating NUL.
+	m := Manifest{UID: 2147483647, Instance: "0123456789abcdef"}
+	if m.socket() != m.dir()+"/control.sock" || len(m.socket()) >= 104 {
+		t.Fatalf("socket must stay inside the protected installation and fit sockaddr_un: %s", m.socket())
+	}
+}

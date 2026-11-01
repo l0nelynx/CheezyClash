@@ -36,7 +36,7 @@ func (m Manifest) key() string    { return strconv.Itoa(m.UID) + "." + m.Instanc
 func (m Manifest) dir() string    { return installRoot + "/" + m.key() }
 func (m Manifest) label() string  { return "com.cheezy.tun." + m.key() }
 func (m Manifest) plist() string  { return "/Library/LaunchDaemons/" + m.label() + ".plist" }
-func (m Manifest) socket() string { return "/var/run/cheezy-tun-" + m.key() + ".sock" }
+func (m Manifest) socket() string { return m.dir() + "/control.sock" }
 
 func launchPlist(m Manifest) string {
 	// Identifiers are validated before reaching here; no user-controlled paths in XML.
