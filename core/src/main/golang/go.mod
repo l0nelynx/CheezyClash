@@ -147,4 +147,4 @@ replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20
 
 replace github.com/metacubex/utls => github.com/legiz-ru/prizrak-utls v0.0.0-20261022072945-d5656b84bb52
 
-replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20261101153904-5786b3246fa2
+replace github.com/metacubex/mihomo => github.com/l0nelynx/cheezy-core v0.0.0-20261101170636-56c87a8ff4e7
