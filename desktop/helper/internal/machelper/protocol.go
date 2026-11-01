@@ -64,6 +64,9 @@ func sandboxProfile(m Manifest) string {
 	q := strconv.Quote
 	var b strings.Builder
 	b.WriteString("(version 1)\n(allow default)\n(deny file-read-data)\n(deny file-write*)\n(deny process-exec)\n(deny signal)\n(allow signal (target self))\n")
+	// dyld's shared-cache bootstrap opens the root directory itself.
+	// A literal permits that directory descriptor without permitting its children.
+	b.WriteString("(allow file-read-data (literal \"/\"))\n")
 	for _, dir := range []string{"/System", "/usr/lib", "/usr/share", "/private/var/db/dyld", m.DataRoot, m.dir()} {
 		fmt.Fprintf(&b, "(allow file-read-data (subpath %s))\n", q(dir))
 	}
