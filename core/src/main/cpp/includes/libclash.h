@@ -37,6 +37,8 @@ extern int configureCrashOutput(int fd);
 extern void reset(void);
 extern void forceGc(void);
 extern void suspend(int suspended);
+extern void setPowerSaveMode(int mode);
+extern int queryPowerSaveMode(void);
 
 extern char *queryTunnelState(void);
 extern void  queryNow(uint64_t *upload, uint64_t *download);

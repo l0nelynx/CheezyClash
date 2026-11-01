@@ -7,6 +7,7 @@ import com.github.kr328.clash.core.model.LogMessage
 import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.core.model.ProxyGroup
 import com.github.kr328.clash.core.model.ProxySort
+import com.github.kr328.clash.core.model.PowerSaveMode
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -91,6 +92,11 @@ object Clash {
 
     suspend fun suspendCore(suspended: Boolean) {
         Bridge.nativeSuspend(suspended)
+    }
+
+    /** Reduces periodic work without suspending the tunnel or rejecting new connections. */
+    fun setPowerSaveMode(mode: PowerSaveMode) {
+        Bridge.nativeSetPowerSaveMode(mode.nativeValue)
     }
 
     fun coreVersion(): String = Bridge.nativeCoreVersion()

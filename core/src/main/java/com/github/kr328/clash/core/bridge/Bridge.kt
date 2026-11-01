@@ -16,6 +16,8 @@ object Bridge {
     external fun nativeConfigureCrashOutput(fd: Int): Boolean
     external fun nativeForceGc()
     external fun nativeSuspend(suspend: Boolean)
+    external fun nativeSetPowerSaveMode(mode: Int)
+    external fun nativeQueryPowerSaveMode(): Int
     external fun nativeQueryTunnelState(): String
     external fun nativeQueryTrafficNow(): Long
     external fun nativeQueryTrafficTotal(): Long

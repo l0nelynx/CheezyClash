@@ -57,6 +57,16 @@ Java_com_github_kr328_clash_core_bridge_Bridge_nativeQueryTunnelState(JNIEnv *en
     return new_string(response);
 }
 
+JNIEXPORT void JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeSetPowerSaveMode(JNIEnv *env, jobject thiz, jint mode) {
+    setPowerSaveMode((int) mode);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeQueryPowerSaveMode(JNIEnv *env, jobject thiz) {
+    return (jint) queryPowerSaveMode();
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_github_kr328_clash_core_bridge_Bridge_nativeQueryTrafficNow(JNIEnv *env, jobject thiz) {
     TRACE_METHOD();

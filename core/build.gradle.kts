@@ -76,6 +76,9 @@ val goAbis = listOf(
 val goEntryPkg = "./native"
 val goOutBase = layout.buildDirectory.dir("intermediates/golang")
 val crashTestHooks = providers.gradleProperty("crashTestHooks").orNull == "true"
+// Android-only: desktop sidecars specify their build tags independently.
+val goBuildTags = "foss,with_gvisor,cmfa,no_zerotier,with_powersave" +
+    if (crashTestHooks) ",crash_test_hooks" else ""
 require(!crashTestHooks || gradle.startParameter.taskNames.none {
     it.contains("release", ignoreCase = true) || it.contains("benchmark", ignoreCase = true)
 }) { "Crash test hooks are forbidden in release/benchmark builds" }
@@ -158,6 +161,7 @@ goAbis.forEach { abi ->
         inputs.property("mihomoVersion", providers.provider { readMihomoVersion() })
         inputs.property("nativeSymbolsFormat", 2)
         inputs.property("crashTestHooks", crashTestHooks)
+        inputs.property("goBuildTags", goBuildTags)
         val outDir = goOutBase.map { it.dir(abi.androidAbi) }
         outputs.dir(outDir).withPropertyName("goOut")
 
@@ -180,9 +184,6 @@ goAbis.forEach { abi ->
             environment("GOARCH", abi.goArch)
             abi.goArm?.let { environment("GOARM", it) }
 
-            // CMFA tags: foss + with_gvisor + cmfa. Without them, mihomo will be incomplete.
-            val buildTags = "foss,with_gvisor,cmfa,no_zerotier" + if (crashTestHooks) ",crash_test_hooks" else ""
-
             // Mihomo version compiled into libclash.so. Passed via -X
             // main.mihomoVersion — the Go linker will write the string to native/version.go.
             // Spaces in the value are dangerous (break ldflags parsing), so only
@@ -199,7 +200,7 @@ goAbis.forEach { abi ->
                 "-buildmode=c-shared",
                 "-trimpath",
                 "-ldflags=-B gobuildid -X main.mihomoVersion=$mihomoVersion",
-                "-tags", buildTags,
+                "-tags", goBuildTags,
                 "-o", outFile.get(),
                 goEntryPkg,
             )

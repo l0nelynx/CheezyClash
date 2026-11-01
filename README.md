@@ -33,6 +33,7 @@
 - **LAN Proxy Sharing:** Easily share your proxy connection with other devices in your local network.
 - **Xray-compatible Mux:** Support for **Mux.Cool** multiplexing on VLESS connections without flow.
 - **WAP Mode:** Route traffic through an APN/WAP upstream proxy with automatic or manual configuration.
+- **Android power saving:** The core follows screen state (`active` / `background`) and Doze (`idle`) without suspending VPN traffic. Only Android builds enable `with_powersave`; desktop cores retain their existing behavior.
 - **TUN Access Control:** Block or bypass selected apps in TUN mode.
 - **Remnawave Integration:**
   - HWID transmission on **all platforms** (Android, Windows, macOS, Linux) for [Remnawave Panel](https://github.com/remnawave/panel).
@@ -122,6 +123,7 @@ If you like this project, please give it a **Star** ⭐
 - **Раздача прокси в локальной сети:** Делитесь соединением с другими устройствами в вашей сети.
 - **Xray-совместимый Mux:** Поддержка мультиплексирования **Mux.Cool** для VLESS-соединений без flow.
 - **WAP-режим:** Маршрутизация трафика через APN/WAP upstream proxy с автоматической или ручной настройкой.
+- **Энергосбережение на Android:** Ядро учитывает состояние экрана (`active` / `background`) и Doze (`idle`), сохраняя работу VPN. Флаг `with_powersave` включён только для Android; поведение desktop-ядер не меняется.
 - **Контроль приложений в TUN:** Блокировка или обход прокси для выбранных приложений в TUN-режиме.
 - **Интеграция с Remnawave:**
   - Передача HWID на **всех платформах** (Android, Windows, macOS, Linux) для [Remnawave Panel](https://github.com/remnawave/panel).

@@ -53,7 +53,9 @@ jobs:
 
       - name: Go crash output and tunnel regression tests
         working-directory: core/src/main/golang
-        run: go test ./native/crashoutput ./native/tunnel
+        run: |
+          go test ./native/crashoutput ./native/tunnel
+          go test -tags with_powersave github.com/metacubex/mihomo/component/powersave
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

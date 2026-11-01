@@ -8,6 +8,7 @@ import (
 
 	"cheezy/native/app"
 	"cheezy/native/tunnel"
+	"github.com/metacubex/mihomo/component/powersave"
 )
 
 //export queryTunnelState
@@ -118,4 +119,14 @@ func updateProvider(completable unsafe.Pointer, pType C.c_string, name C.c_strin
 //export suspend
 func suspend(suspended C.int) {
 	tunnel.Suspend(suspended != 0)
+}
+
+//export setPowerSaveMode
+func setPowerSaveMode(mode C.int) {
+	powersave.Set(powersave.Mode(mode))
+}
+
+//export queryPowerSaveMode
+func queryPowerSaveMode() C.int {
+	return C.int(powersave.Current())
 }

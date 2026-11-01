@@ -21,6 +21,7 @@ import com.cheezy.freedom.MainActivity
 import com.cheezy.freedom.R
 import com.cheezy.freedom.VpnTileService
 import com.github.kr328.clash.core.Clash
+import com.github.kr328.clash.core.model.PowerSaveMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,7 @@ class ClashVpnService : VpnService() {
     private var stopJob: Job? = null
     private var trafficJob: Job? = null
     private var logJob: Job? = null
+    private var powerSaveMonitor: PowerSaveMonitor? = null
     @Volatile private var lastStartId: Int = 0
     @Volatile private var pendingStopStartId: Int = 0
 
@@ -299,6 +301,11 @@ class ClashVpnService : VpnService() {
         super.onCreate()
         com.cheezy.freedom.diagnostics.CrashReporting.stage("SERVICE_CREATE")
         ClashCore.init(this)
+        powerSaveMonitor = PowerSaveMonitor(this) { mode ->
+            Clash.setPowerSaveMode(mode)
+            trafficWakeup.trySend(Unit)
+            Log.i(TAG, "Core power-save mode: $mode")
+        }.also { it.start() }
         // Default to the active profile dir from disk; overridden by the start
         // Intent extra / loadConfig(path) during normal operation.
         activeConfigDir = ProfileStore.activeDir(this)
@@ -643,13 +650,15 @@ class ClashVpnService : VpnService() {
             var lastProxyRead = 0L
             var lastProxy: String? = null
             while (isActive) {
-                val hasUi = callbacks.registeredCallbackCount > 0
+                val powerMode = powerSaveMonitor?.mode ?: PowerSaveMode.ACTIVE
+                val hasUi = powerMode == PowerSaveMode.ACTIVE && callbacks.registeredCallbackCount > 0
                 if (hasUi) {
                     val now = runCatching { Clash.queryTrafficNowBytes() }.getOrDefault(0L)
                     ClashState.setTraffic(now)
                 }
                 val elapsed = android.os.SystemClock.elapsedRealtime()
-                if (elapsed - lastProxyRead >= TrafficPollingPolicy.proxyIntervalMillis(hasUi)) {
+                if (powerMode != PowerSaveMode.IDLE &&
+                    elapsed - lastProxyRead >= TrafficPollingPolicy.proxyIntervalMillis(hasUi, powerMode)) {
                     lastProxyRead = elapsed
                     val proxy = runCatching {
                         val first = Clash.queryGroupNames(true).firstOrNull()
@@ -661,7 +670,12 @@ class ClashVpnService : VpnService() {
                         nm.notify(NOTIFICATION_ID, buildNotification(proxy))
                     }
                 }
-                kotlinx.coroutines.withTimeoutOrNull(TrafficPollingPolicy.delayMillis(hasUi)) { trafficWakeup.receive() }
+                val delayMillis = TrafficPollingPolicy.delayMillis(hasUi, powerMode)
+                if (delayMillis == null) {
+                    trafficWakeup.receive()
+                } else {
+                    kotlinx.coroutines.withTimeoutOrNull(delayMillis) { trafficWakeup.receive() }
+                }
             }
         }
     }
@@ -671,6 +685,8 @@ class ClashVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        powerSaveMonitor?.close()
+        powerSaveMonitor = null
         trafficJob?.cancel()
         startJob?.cancel()
         stopJob?.cancel()

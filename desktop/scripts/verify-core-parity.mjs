@@ -16,6 +16,13 @@ const mandatory = [
 ]
 const errors = []
 
+if (!(android.settings['-tags'] || '').split(',').includes('with_powersave')) {
+  errors.push('Android core must be built with with_powersave')
+}
+if ((desktop.settings['-tags'] || '').split(',').includes('with_powersave')) {
+  errors.push('desktop core must be built without with_powersave')
+}
+
 for (const name of mandatory) {
   if (!desktop.modules.has(name)) errors.push(`desktop build is missing mandatory module ${name}`)
   if (!android.modules.has(name)) errors.push(`Android build is missing mandatory module ${name}`)
