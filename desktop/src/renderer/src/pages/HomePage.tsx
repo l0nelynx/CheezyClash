@@ -29,6 +29,7 @@ interface Props {
   onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
+  onConnectProxy?: () => void
   onGoProfiles: () => void
   onSelectServer: (group: string, name: string) => void
 }
@@ -60,6 +61,7 @@ export function HomePage(props: Props): React.JSX.Element {
         onConnect={props.onConnect}
         onDisconnect={props.onDisconnect}
         onEnsureHelper={props.onEnsureHelper}
+        onConnectProxy={props.onConnectProxy}
         onGoProfiles={props.onGoProfiles}
       />
 

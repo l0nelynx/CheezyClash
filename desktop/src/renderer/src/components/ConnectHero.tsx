@@ -21,6 +21,7 @@ interface Props {
   onConnect: () => void
   onDisconnect: () => void
   onEnsureHelper: () => void
+  onConnectProxy?: () => void
   onGoProfiles?: () => void
 }
 
@@ -39,6 +40,7 @@ export function ConnectHero({
   onConnect,
   onDisconnect,
   onEnsureHelper,
+  onConnectProxy,
   onGoProfiles,
 }: Props): React.JSX.Element {
   const { t } = useI18n()
@@ -46,11 +48,15 @@ export function ConnectHero({
   const modeLabel = status?.mode === 'tun' ? 'TUN' : 'Proxy'
   const subscription = activeProfile?.subscription
   const connectedTitle = subscription?.title?.trim() || activeProfile?.name || t("Connected")
-  const lastError = status?.lastError
-    ? status.lastError.includes('no active profile')
+  const error = status?.lastError || tun?.lastError
+  const lastError = error
+    ? error.includes('no active profile')
       ? t("Import or activate a profile first.")
-      : status.lastError
+      : error
     : null
+  const setupLabel = tun?.macSetup === 'approval' ? t('Waiting for permission…')
+    : tun?.macSetup === 'installing' ? t('Setting up TUN…')
+      : tun?.macSetup === 'removing' ? t('Removing TUN service…') : null
 
   return (
     <section className="page-card relative overflow-hidden p-7 sm:p-8">
@@ -67,7 +73,7 @@ export function ConnectHero({
             <div className="mb-3 flex flex-wrap items-center gap-2.5">
               <p className="section-label">{t("Connection")}</p>
               <Badge variant={running ? 'success' : 'secondary'} className="px-2 py-0 text-[10px]">
-                {connectionAction ?? (running ? t("Core running") : t("Disconnected"))}
+                {setupLabel ?? connectionAction ?? (running ? t("Core running") : t("Disconnected"))}
               </Badge>
             </div>
             <h2
@@ -131,7 +137,7 @@ export function ConnectHero({
           ) : !running ? (
             <Button type="button" className="min-w-[140px]" disabled={busy} onClick={onConnect}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-              {connectionAction ?? t("Connect")}
+              {setupLabel ?? connectionAction ?? t("Connect")}
             </Button>
           ) : (
             <Button type="button" variant="destructive" className="min-w-[140px]" disabled={busy} onClick={onDisconnect}>
@@ -139,7 +145,21 @@ export function ConnectHero({
               {connectionAction ?? t("Disconnect")}
             </Button>
           )}
+          {!running && hasProfile && tun?.macSetup && lastError && onConnectProxy && (
+            <Button type="button" variant="outline" disabled={busy} onClick={onConnectProxy}>
+              {t('Connect through Proxy')}
+            </Button>
+          )}
         </div>
+
+        {!running && tun?.enabled && tun?.macSetup && !tun.privilegesOk && (
+          <p role="status" className="mt-3 text-sm text-muted-foreground">
+            {t('On first connection, macOS will ask to install a system service. Connection continues automatically after approval.')}
+          </p>
+        )}
+        {!running && tun?.macSetup && lastError && (
+          <p className="mt-2 text-xs text-muted-foreground">{t('Proxy uses the Desktop network settings and only routes apps that use a proxy.')}</p>
+        )}
 
         {running && status?.configUpdateAvailable && (
           <p role="status" data-testid="config-update-hint" className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
@@ -174,7 +194,7 @@ export function ConnectHero({
               {tun?.privilegesOk ? t("ready") : t("needs setup")}
             </span>
           </span>
-          {!tun?.privilegesOk && tun?.helperSetupAvailable !== false && (
+          {!tun?.privilegesOk && !tun?.macSetup && tun?.helperSetupAvailable !== false && (
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={onEnsureHelper}>
               {t("Install helper")}</Button>
           )}</>}

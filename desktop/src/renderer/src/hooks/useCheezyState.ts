@@ -15,9 +15,8 @@ const TUN_POLL_MS = 30_000
 const GROUPS_POLL_MS = 15_000
 function friendlyError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
-  if (msg.includes('TUN on macOS requires')) {
-    return 'TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.'
-  }
+  const ipcError = msg.match(/^Error invoking remote method '[^']+': Error: ([\s\S]+)$/)
+  if (ipcError) return ipcError[1]
   if (msg.includes('no active profile')) {
     return 'Import or activate a profile first (Profiles tab).'
   }
@@ -49,6 +48,16 @@ export function useCheezyState() {
   const runningRef = useRef(false)
   const tabRef = useRef<Tab>('home')
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!busy) return
+    let pending = false
+    const tick = setInterval(() => {
+      if (pending) return
+      pending = true
+      void window.cheezy.getTunStatus().then(setTun).catch(() => undefined).finally(() => { pending = false })
+    }, 750)
+    return () => clearInterval(tick)
+  }, [busy])
   useEffect(() => {
     tabRef.current = tab
   }, [tab])
@@ -234,6 +243,7 @@ export function useCheezyState() {
         if (opts?.success && result !== null && result !== false) showNotice(opts.success)
         return result !== null && result !== false
       } catch (e) {
+        await refresh({ includeLogs: tabRef.current === 'logs' })
         setError(friendlyError(e))
         return false
       } finally {

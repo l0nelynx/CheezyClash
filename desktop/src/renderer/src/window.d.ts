@@ -40,6 +40,9 @@ export interface CheezyApi {
   setTunEnabled: (enabled: boolean) => Promise<TunStatus>
   setConnectionMode: (mode: ConnectionMode) => Promise<TunStatus>
   ensureHelper: () => Promise<TunStatus>
+  repairHelper: () => Promise<TunStatus>
+  removeHelper: () => Promise<TunStatus>
+  connectThroughProxy: () => Promise<CoreStatus>
   getLogs: () => Promise<string[]>
   listProcesses: () => Promise<{ name: string; pid: number }[]>
   getProxyGroupNames: () => Promise<string[]>

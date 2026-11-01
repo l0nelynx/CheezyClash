@@ -63,6 +63,16 @@ linux:
   category: Network
   artifactName: CheezyClash-linux-${arch}.${ext}
 mac:
+  # Ad-hoc signatures support Apple Silicon without a Developer ID certificate.
+  # This build is not notarized; see docs/macos-install.md for Gatekeeper setup.
+  notarize: false
+  sign:
+    identity: '-'
+    # No Team ID: hardened library validation would reject the ad-hoc bundle.
+    hardenedRuntime: false
+    binaries:
+      - Contents/Resources/core/mihomo
+      - Contents/Resources/helper/cheezy-helper
   icon: build/icon.png
   target:
     - dmg

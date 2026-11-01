@@ -12,8 +12,11 @@ let running = true
 let connectionState = 'live'
 let connectionCalls = 0
 let configUpdateAvailable = false
+let macSetup = null
+let macServiceInstalled = false
 const settings = { systemProxy: true, mixedPort:7890, allowLan:false, tunEnabled:false, connectionMode:'proxy', tunStack:'mixed', networkOverrideEnabled:true, tunMtu:1500, autoStart:false, autoConnect:false, xrayMuxEnabled:false, xrayMuxConcurrency:32, xrayMuxMaxConnections:3, xrayMuxMaxDialsPerMinute:3, customRules:[] }
-const status = () => ({running,configUpdateAvailable:running && configUpdateAvailable,mode:'proxy',controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false})
+const status = () => ({running,configUpdateAvailable:running && configUpdateAvailable,mode:settings.connectionMode,controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false,
+  lastError:macSetup === 'cancelled' ? 'TUN setup was cancelled. Try again or connect through Proxy.' : undefined})
 const profile = { id:'fixture', name:'Test subscription', url:'https://example.invalid/private/SECRET_TOKEN', createdAt:1, updatedAt:Date.now(), subscription:{title:'Test subscription', upload:1024,download:2048,total:1000000,expire:0} }
 const names = Array.from({length:1000},(_,i)=>`Server ${String(i).padStart(4,'0')}`)
 const members = Object.fromEntries(names.map((name, index) => [name, {type:index % 2 ? 'trojan' : 'vless',network:index % 2 ? 'tcp' : 'ws',serverDescription:`Location ${index} · streaming and browsing`}]))
@@ -26,7 +29,13 @@ const groups = [
 const logs = Array.from({length:400},(_,i)=>`[${i}] [info] test log ${i}`)
 const api = {
   getStatus: async () => status(),
-  connect: async () => { running=true;configUpdateAvailable=false;return status() }, disconnect: async () => {running=false;return status()},
+  connect: async () => {
+    if(macSetup) {macSetup='cancelled';running=false;throw new Error('TUN setup was cancelled. Try again or connect through Proxy.')}
+    running=true;configUpdateAvailable=false;return status()
+  }, disconnect: async () => {running=false;return status()},
+  connectThroughProxy: async () => {macSetup='needed';settings.connectionMode='proxy';settings.networkOverrideEnabled=true;running=true;return status()},
+  repairHelper: async () => {macSetup='ready';macServiceInstalled=true;return {}},
+  removeHelper: async () => {macSetup='needed';macServiceInstalled=false;running=false;return {}},
   getSettings: async () => settings, setSettings: async patch => Object.assign(settings,patch),
   getTraffic: async () => ({up:128,down:1024,upTotal:10240,downTotal:102400}),
   getConnections: async () => {
@@ -37,7 +46,8 @@ const api = {
   getGroups: async () => groups,
   selectProxy: async (group, name) => {groups.find(item=>item.name===group).now=name},
   listProfiles: async () => [profile], getActiveProfileId: async () => profile.id,
-  getTunStatus: async () => ({enabled:false,helperInstalled:false,helperRunning:false,privilegesOk:false}),
+  getTunStatus: async () => ({enabled:settings.connectionMode==='tun',helperInstalled:macServiceInstalled,helperRunning:macServiceInstalled,privilegesOk:macServiceInstalled,
+    ...(macSetup ? {macSetup,helperManagementAvailable:true,helperSetupAvailable:true,lastError:status().lastError} : {})}),
   getLogs: async () => [...logs],
   privateCapabilities: async () => {if(failAuth)throw new Error('fixture failure');return {supportsAuth:false,productName:preview ? 'CheezyClash · демо Connections' : 'CheezyClash',deepLinkScheme:'cheezyclash'}},
   privateGetSession: async () => null, consumeDeepLinkResult: async () => null,
@@ -60,6 +70,7 @@ for(const name of ['onLog','onStatus','onProfilesChanged','onCustomRuleDiagnosti
 }
 contextBridge.exposeInMainWorld('cheezy',api)
 contextBridge.exposeInMainWorld('qa',{
+  macTun: () => {macSetup='needed';settings.connectionMode='tun'},
   allowAuth: () => {failAuth=false},
   connectionState: value => {connectionState=value},
   connectionCalls: () => connectionCalls,

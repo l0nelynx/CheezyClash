@@ -1,6 +1,6 @@
 # CheezyClash Desktop
 
-Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows and Linux system helpers.
+Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows, Linux and macOS system helpers.
 
 📚 **Full documentation:** [CheezyClash docs](https://l0nelynx.github.io/CheezyClash-docs/)
 
@@ -8,7 +8,7 @@ Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows 
 
 - Electron + Vite + React + TypeScript + Tailwind
 - **mihomo** sidecar built from the same `core/src/main/golang` go.mod as Android `libclash` (published on `libclash-<hash>` releases — not stock MetaCubeX Alpha)
-- Go **Helper Service** on Windows (FlClashX-style privileges)
+- Go **Helper Service** on Windows, Linux and macOS
 
 ## Quick start
 
@@ -17,7 +17,7 @@ cd desktop
 npm install
 npm run fetch-core   # download sidecar for this OS (same go hash as Android)
 # or: npm run build-core  # local go build when the release asset is missing
-npm run build:helper # Host-platform helper (Windows/Linux TUN)
+npm run build:helper # Host-platform helper (Windows/Linux/macOS TUN)
 npm run dev
 ```
 
@@ -72,6 +72,28 @@ Linux / macOS: `npm run dist:linux` / `npm run dist:mac`. Linux publishes both
 AppImage and `.deb`; install the `.deb` when you need reliable
 `cheezyclash://` desktop integration. A standalone AppImage needs a desktop
 integration tool before the browser can discover its custom-scheme handler.
+
+## macOS installation and TUN
+
+See [macOS installation guide (RU)](docs/macos-install.md) for installing the
+unsigned/ad-hoc-signed app, Gatekeeper's **Open Anyway**, first TUN connection,
+administrator approval, repair and removal. No Apple Developer Program is needed.
+Move the app to `/Applications` before enabling TUN. On first connect the app
+installs a per-user LaunchDaemon through macOS administrator authorization and
+continues connecting. Later core/helper updates require authorization again.
+Cancelling setup leaves the connection off; Proxy is an explicit alternative.
+
+The helper uses a Unix socket with peer-UID validation, root-owned executables
+and a fixed launch command. The privileged core's file access and executable
+launches are restricted with Seatbelt; TUN caches live in protected service
+storage. Custom files must be inside app data and use absolute read paths;
+downloads use relative paths under the service runtime. Native DNS registration
+is enabled when omitted by the profile. Normal exit stops TUN; a lost client
+lease also stops it, and sleep/wake reconnects an active tunnel.
+
+`npm run test:mac-helper` uses mocked OS calls. Native service/TUN verification
+is defined in Desktop CI on macOS; installer prompts and downloaded-DMG
+Gatekeeper behavior still require a clean Mac acceptance test.
 
 ## Linux TUN helper
 

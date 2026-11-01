@@ -22,6 +22,16 @@ function parseVersionParts(version) {
 }
 
 export default async function afterPack(context) {
+  if (context.electronPlatformName === 'darwin') {
+    const appName = `${context.packager.appInfo.productFilename}.app`
+    for (const file of ['core/mihomo', 'helper/cheezy-helper']) {
+      const binary = join(context.appOutDir, appName, 'Contents', 'Resources', file)
+      if (!existsSync(binary) || statSync(binary).size === 0) throw new Error(`macOS package is missing ${file}`)
+      const magic = readFileSync(binary).subarray(0, 4).toString('hex')
+      if (!['cffaedfe', 'feedfacf', 'cafebabe', 'bebafeca', 'cafebabf'].includes(magic)) throw new Error(`macOS package contains a non-Mach-O ${file}`)
+    }
+    return
+  }
   if (context.electronPlatformName !== 'win32') return
   const wintun = join(context.appOutDir, 'resources', 'core', 'wintun.dll')
   if (!existsSync(wintun) || statSync(wintun).size === 0) {

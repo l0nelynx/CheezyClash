@@ -13,7 +13,7 @@ try {
   await assert.rejects(afterPack(context), /missing required wintun/)
   await writeFile(dll, '')
   await assert.rejects(afterPack(context), /missing required wintun/)
-  await afterPack({ electronPlatformName: 'darwin' })
+  await afterPack({ electronPlatformName: 'linux' })
   console.log('Packaging rejects missing/empty Wintun on Windows only')
 } finally {
   await unlink(dll).catch(error => { if (error.code !== 'ENOENT') throw error })

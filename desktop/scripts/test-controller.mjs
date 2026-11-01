@@ -112,6 +112,10 @@ try {
   assert.ok(Math.abs(Date.now() - connectionSample.sampledAt) < 1000)
   connectionPayload = null
   assert.deepEqual((await api.getConnections()).connections, [])
+  globalThis.fetch = async () => Response.json({ tun: { enable: true } })
+  await api.waitTunReady(20)
+  globalThis.fetch = async () => Response.json({ tun: { enable: false } })
+  await assert.rejects(api.waitTunReady(20), /TUN interface did not start/, 'Controller readiness alone must not report TUN success')
   globalThis.fetch = async () => new Response('unavailable', {status:503})
   await assert.rejects(api.getConnections(), /503/)
   globalThis.fetch = regularFetch
@@ -147,6 +151,7 @@ try {
 
   // Real lifecycle coordinator and core-manager; OS start/stop are simulations.
   const fixture = {
+    platform: 'linux', authorized: true, tunReady: true,
     active: 'A', documents: { A: { secret: 'profile-A' }, B: { secret: '' } },
     settings: { ...DEFAULT_SETTINGS, networkOverrideEnabled: true, systemProxy: false },
     saved: { controllerSecret: 'ignored-legacy-global', controllerRuntime: null },
@@ -186,7 +191,7 @@ try {
   const core = await loadModule('core-manager.ts', {
     electron: 'export const BrowserWindow = {getAllWindows: () => []}',
     child_process: `${prelude} export const spawn = (...args) => f.spawn(...args)`,
-    os: 'export const platform = () => "linux"',
+    os: `${prelude} export const platform = () => f.platform`,
     './store': `${prelude}
       export const store = {get: k => f.saved[k], set: (k,v) => f.saved[k] = v};
       export const getSettings = () => f.settings;
@@ -223,6 +228,7 @@ try {
         if (barrier) { barrier.enter(); await barrier.wait; }
         if (f.clientSecret !== f.serverSecret) throw Error('auth mismatch');
       },
+      waitTunReady: async () => { if (!f.tunReady) throw Error('TUN did not start'); },
       putConfigs: async path => { if (f.failPut) throw Error('reload failed'); f.puts.push(path); },
       applySelections: async () => {}, closeAllConnections: async () => {},
     };`,
@@ -234,8 +240,12 @@ try {
       export const queryWindowsService = async () => 'none';
       export const replaceCoreViaHelper = async () => false;
       export const sha256File = () => 'unused';`,
-    './privileges': 'export const authorizeForTun = async () => true; export const privilegesOk = authorizeForTun;',
+    './privileges': `${prelude} export const authorizeForTun = async () => f.authorized; export const privilegesOk = authorizeForTun;`,
     './linux-helper': 'export const linuxHelperError = () => "";',
+    './mac-helper': `export const macHelperError = () => 'TUN setup cancelled';
+      export const macHelperInstalled = () => false; export const macHelperSetupState = () => 'cancelled';
+      export const maintainMacCoreLease = () => {}; export const ensureMacHelper = async () => true;
+      export const removeMacHelper = async () => true;`,
     './system-proxy': 'export const setSystemProxy = async () => {};',
     './logger': `${prelude} export const log = message => f.logs.push(message);`,
   })
@@ -353,6 +363,32 @@ try {
   await core.disconnect()
 
   const profilesSource = readFileSync(join(desktop, 'src/main/profiles.ts'), 'utf8')
+  fixture.platform = 'darwin'
+  fixture.authorized = false
+  fixture.settings.connectionMode = 'tun'
+  fixture.settings.networkOverrideEnabled = true
+  const beforeCancelled = fixture.spawns.length
+  await assert.rejects(core.connect('tun'), /TUN setup cancelled/)
+  assert.equal(fixture.spawns.length, beforeCancelled, 'macOS cancellation must not spawn a proxy fallback')
+  assert.equal((await core.getStatus()).running, false)
+  assert.equal((await core.getTunStatus()).macSetup, 'cancelled')
+  await core.connectThroughProxy()
+  assert.equal((await core.getStatus()).mode, 'proxy', 'Proxy fallback must be an explicit action')
+  assert.equal(fixture.settings.networkOverrideEnabled, true)
+  await core.disconnect()
+  fixture.authorized = true
+  fixture.settings.connectionMode = 'tun'
+  fixture.tunReady = false
+  await assert.rejects(core.connect('tun'), /TUN did not start/)
+  assert.equal(fixture.running, false, 'A responding controller with failed TUN must be stopped')
+  fixture.tunReady = true
+  await core.connect('tun')
+  const beforeResume = fixture.helperStarts
+  await core.resumeMacTun()
+  assert.equal(fixture.helperStarts, beforeResume + 1, 'Resume recreates routes and DNS')
+  await core.disconnect()
+  await core.resumeMacTun()
+  assert.equal(fixture.helperStarts, beforeResume + 1, 'Resume must not reconnect after user disconnected')
   const apiSource = readFileSync(join(desktop, 'src/main/mihomo-api.ts'), 'utf8')
   const indexSource = readFileSync(join(desktop, 'src/main/index.ts'), 'utf8')
   assert.ok(!profilesSource.includes('doc.secret ='))

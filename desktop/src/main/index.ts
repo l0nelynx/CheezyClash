@@ -1,5 +1,5 @@
 import { stopHelperOnExit } from './helper'
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, powerMonitor } from 'electron'
 import { join, basename } from 'path'
 import { existsSync } from 'fs'
 import {
@@ -12,6 +12,9 @@ import {
   switchProfile,
   syncManagedSystemProxy,
   ensureHelperAndStatus,
+  manageMacHelper,
+  connectThroughProxy,
+  resumeMacTun,
   corePresent,
   restoreControllerAuth,
   reloadActiveConfig,
@@ -413,6 +416,9 @@ function registerIpc(): void {
   ipcMain.handle('tun:setEnabled', (_e, enabled: boolean) => setTunEnabled(enabled))
   ipcMain.handle('connection:setMode', (_e, mode: ConnectionMode) => setConnectionMode(mode))
   ipcMain.handle('helper:ensure', () => ensureHelperAndStatus())
+  ipcMain.handle('helper:repair', () => manageMacHelper(false))
+  ipcMain.handle('helper:remove', () => manageMacHelper(true))
+  ipcMain.handle('core:connectProxy', () => connectThroughProxy())
   ipcMain.handle('logs:get', () => getLogs())
 
   ipcMain.handle('processes:list', () => listRunningProcesses())
@@ -745,6 +751,9 @@ if (!gotTheLock) {
   app.on('activate', () => revealMainWindow())
 
   app.whenReady().then(async () => {
+    if (process.platform === 'darwin') {
+      powerMonitor.on('resume', () => { void resumeMacTun().catch(error => log(`TUN resume failed: ${error}`, 'error')) })
+    }
     markStartup('main ready')
     // Hide File/Edit/View application menu
     Menu.setApplicationMenu(null)

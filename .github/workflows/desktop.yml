@@ -1,6 +1,6 @@
 name: Desktop CI
 
-# Push/PR: cheap checks only (no electron-builder).
+# PR: static/unit checks and native macOS TUN smoke tests (no electron-builder).
 # Full installers: release.yml on v* tags, or this workflow via workflow_dispatch.
 # Caching prior dist for tags is a poor fit — release commits almost always bump
 # version, so the package must be rebuilt anyway.
@@ -55,16 +55,49 @@ jobs:
       - name: Build helper
         run: npm run build:helper
       - name: Linux helper protocol and lifecycle
-        run: npm run test:linux-helper && cd helper && go test -race ./...
+        run: npm run test:linux-helper && npm run test:mac-helper && npm run test:mac-package && cd helper && go test -race ./...
       - name: Typecheck
         run: npm run typecheck
       - name: Deep-link matrix / privacy
         run: npm run test:deeplink && npm run test:core-contract && npm run test:controller && npm run test:lifecycle && npm run test:network-config && npm run test:installer && npm run test:ci-resilience
       - name: Build
         run: npm run build
+  mac-tun:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - run: npm ci
+      - run: npm run fetch-core && npm run build:helper
+      - name: Protocol, peer credentials and native sandbox
+        run: |
+          npm run test:mac-helper
+          cd helper
+          go test ./...
+          go test -c -o ../resources/helper/mac-helper-tests ./internal/machelper
+          sudo -n ../resources/helper/mac-helper-tests -test.run '^TestNativeSandbox$' -test.v
+          rm ../resources/helper/mac-helper-tests
+      - name: Real TUN installation, DNS and network restoration
+        run: node scripts/smoke-macos-tun.mjs
+
   package:
     if: github.event_name == 'workflow_dispatch' && inputs.package
-    needs: [check]
+    needs: [check, mac-tun]
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +109,7 @@ jobs:
           - os: macos-latest
             target: mac
             arch: arm64
-          - os: macos-latest
+          - os: macos-15-intel
             target: mac
             arch: x64
     runs-on: ${{ matrix.os }}
@@ -156,7 +189,7 @@ jobs:
           OUT=$(mktemp -d)
           dpkg-deb -x "$DEB" "$OUT"
           grep -R -q 'x-scheme-handler/cheezyclash' "$OUT/usr/share/applications"
-      - name: Validate macOS protocol metadata
+      - name: Validate macOS app and packaged TUN
         if: matrix.target == 'mac'
         shell: bash
         run: |
@@ -164,6 +197,8 @@ jobs:
           test -n "$APP"
           test ! -d "$APP/Contents/Resources/private"
           plutil -p "$APP/Contents/Info.plist" | grep -q 'cheezyclash'
+          codesign --verify --deep --strict "$APP"
+          node scripts/smoke-macos-tun.mjs --app "$APP"
       - name: Upload Windows artifacts
         if: matrix.target == 'win'
         uses: actions/upload-artifact@v4

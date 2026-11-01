@@ -11,7 +11,7 @@ import {
   PlugZap,
   Shuffle,
 } from 'lucide-react'
-import type { AppSettings, ConnectionMode, CoreStatus } from '../../../shared/types'
+import type { AppSettings, ConnectionMode, CoreStatus, TunStatus } from '../../../shared/types'
 import type { PrivateAccountSession } from '../../../shared/private-api'
 import { Switch } from '../components/ui/switch'
 import { Button } from '../components/ui/button'
@@ -32,6 +32,9 @@ interface Props {
   session: PrivateAccountSession | null
   supportsAuth: boolean
   status: CoreStatus | null
+  tun?: TunStatus | null
+  onRepairHelper?: () => void
+  onRemoveHelper?: () => void
   onPatch: (patch: Partial<AppSettings>) => void
   onConnectionMode: (mode: ConnectionMode) => void
   onOpenCustomRules: () => void
@@ -46,6 +49,9 @@ export function SettingsPage({
   session,
   supportsAuth,
   status,
+  tun,
+  onRepairHelper,
+  onRemoveHelper,
   onPatch,
   onConnectionMode,
   onOpenCustomRules,
@@ -145,6 +151,17 @@ export function SettingsPage({
       </SettingsSubpage>
     ) : section === 'connection' ? (
       <SettingsSubpage title={t("Connection")} onBack={() => setSection(null)}>
+        {tun?.helperManagementAvailable && (
+          <div className="space-y-3 rounded-lg border border-surface-border p-4">
+            <p className="text-sm font-medium">{t('TUN service')}</p>
+            <p className="text-sm text-ink-dim">{t('The service is set up when you connect. Repair or removal disconnects TUN and requires administrator approval. Profiles are kept.')}</p>
+            <p className="text-xs text-ink-dim">{tun.helperRunning ? t('Service is available') : tun.helperInstalled ? t('Service is installed but unavailable') : t('Service will be installed on first connection')}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" disabled={busy} onClick={onRepairHelper}>{t('Repair service')}</Button>
+              <Button variant="outline" disabled={busy || !tun.helperInstalled} onClick={onRemoveHelper}>{t('Remove service')}</Button>
+            </div>
+          </div>
+        )}
         <Toggle
           label={t("Override YAML network settings")}
           hint={t("Use the Desktop mode, proxy, TUN, and network values instead of the profile YAML")}

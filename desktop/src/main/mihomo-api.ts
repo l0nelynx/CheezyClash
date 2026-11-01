@@ -127,6 +127,17 @@ export class MihomoApi {
     await this.request('PUT', '/configs?force=true', { payload })
   }
 
+  /** The controller can be ready even when opening the TUN interface failed. */
+  async waitTunReady(timeoutMs = 20000): Promise<void> {
+    const started = Date.now()
+    while (Date.now() - started < timeoutMs) {
+      const config = await this.request<{ tun?: { enable?: boolean } }>('GET', '/configs', undefined, 2000)
+      if (config.tun?.enable === true) return
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+    throw new Error('The TUN interface did not start. Open Logs for details.')
+  }
+
   async patchConfigs(patch: Record<string, unknown>): Promise<void> {
     await this.request('PATCH', '/configs', patch)
   }

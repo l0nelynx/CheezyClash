@@ -124,11 +124,11 @@ jobs:
             target: win
           - os: ubuntu-latest
             target: linux
-          # macos-latest is arm64; build x64 via cross-compile + TARGET_ARCH
+          # Build and exercise each macOS TUN helper on its native architecture.
           - os: macos-latest
             target: mac
             arch: arm64
-          - os: macos-latest
+          - os: macos-15-intel
             target: mac
             arch: x64
     runs-on: ${{ matrix.os }}
@@ -218,7 +218,7 @@ jobs:
           OUT=$(mktemp -d)
           dpkg-deb -x "$DEB" "$OUT"
           grep -R -q 'x-scheme-handler/cheezyclash' "$OUT/usr/share/applications"
-      - name: Validate macOS protocol metadata
+      - name: Validate macOS app and packaged TUN
         if: matrix.target == 'mac'
         shell: bash
         run: |
@@ -226,6 +226,8 @@ jobs:
           test -n "$APP"
           test ! -d "$APP/Contents/Resources/private"
           plutil -p "$APP/Contents/Info.plist" | grep -q 'cheezyclash'
+          codesign --verify --deep --strict "$APP"
+          node scripts/smoke-macos-tun.mjs --app "$APP"
       - name: Upload Windows desktop artifacts
         if: matrix.target == 'win'
         uses: actions/upload-artifact@v4
@@ -309,7 +311,7 @@ jobs:
 
             ### Desktop
             - **Windows:** installer (`.exe`) + portable (`.zip`)
-            - **macOS:** `arm64` and `x64` (`.dmg` / `.zip`)
+            - **macOS:** `arm64` and `x64` (`.dmg` / `.zip`). No Developer ID / notarization: [installation and TUN setup (RU)](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/desktop/docs/macos-install.md).
             - **Linux:** AppImage and Debian package attached
           generate_release_notes: true
           fail_on_unmatched_files: true

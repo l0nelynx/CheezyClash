@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
-import { applyNetworkSettings } from '../src/main/network-config.ts'
+import { applyNetworkSettings as applyNetwork } from '../src/main/network-config.ts'
+const applyNetworkSettings = (doc, settings) => applyNetwork(doc, settings, 'linux')
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/shared/types.ts'
 
 function settings(patch = {}) {
@@ -120,3 +121,16 @@ for (const networkOverrideEnabled of [true, false]) {
 }
 
 console.log('desktop network config tests passed')
+
+for (const networkOverrideEnabled of [true, false]) {
+  const doc = { tun: { enable: true } }
+  applyNetwork(doc, settings({ networkOverrideEnabled, connectionMode: 'tun' }), 'darwin')
+  assert.equal(doc.tun['dns-mode'], 'native', 'macOS must register DNS, including DHCP DNS on the LAN')
+}
+const explicit = { tun: { enable: true, 'dns-mode': 'disabled', device: 'utun42' } }
+applyNetwork(explicit, settings(), 'darwin')
+assert.equal(explicit.tun['dns-mode'], 'disabled', 'Preserve explicit provider DNS settings')
+assert.throws(() => applyNetwork({ tun: { enable: true, device: 'Mihomo' } }, settings(), 'darwin'), /utun/)
+const proxy = {}; applyNetwork(proxy, settings(), 'darwin')
+assert.equal(proxy.tun['dns-mode'], undefined, 'Proxy must not change system DNS')
+console.log('macOS network defaults and explicit profile settings passed')

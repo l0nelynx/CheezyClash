@@ -48,6 +48,9 @@ const api = {
   setConnectionMode: (mode: ConnectionMode): Promise<TunStatus> =>
     ipcRenderer.invoke('connection:setMode', mode),
   ensureHelper: (): Promise<TunStatus> => ipcRenderer.invoke('helper:ensure'),
+  repairHelper: (): Promise<TunStatus> => ipcRenderer.invoke('helper:repair'),
+  removeHelper: (): Promise<TunStatus> => ipcRenderer.invoke('helper:remove'),
+  connectThroughProxy: (): Promise<CoreStatus> => ipcRenderer.invoke('core:connectProxy'),
   getLogs: (): Promise<string[]> => ipcRenderer.invoke('logs:get'),
   listProcesses: (): Promise<{ name: string; pid: number }[]> =>
     ipcRenderer.invoke('processes:list'),

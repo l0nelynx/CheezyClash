@@ -45,6 +45,7 @@ import {
 } from './helper'
 import { authorizeForTun, privilegesOk } from './privileges'
 import { linuxHelperError } from './linux-helper'
+import { ensureMacHelper, macHelperError, macHelperInstalled, macHelperSetupState, maintainMacCoreLease, removeMacHelper } from './mac-helper'
 import { log } from './logger'
 import { LatestWinsCoordinator, type LifecycleTicket } from './lifecycle-coordinator'
 import {
@@ -58,6 +59,7 @@ let child: ChildProcess | null = null
 let mode: ConnectionMode = 'proxy'
 let lastError: string | undefined
 let crashCount = 0
+let helperMaintenance = false
 const intentionalStops = new WeakSet<ChildProcess>()
 let controllerRuntime: ControllerRuntime | null = null
 
@@ -199,6 +201,7 @@ export async function getStatus(): Promise<CoreStatus> {
     // Config validation is reported during rebuild/connect; keep status available.
   }
   if (running && !childAlive()) mode = statusMode
+  if (platform() === 'darwin' && running && !childAlive() && statusMode === 'tun') maintainMacCoreLease()
   const priv = await privilegesOk(statusMode === 'tun')
   return {
     running,
@@ -232,11 +235,13 @@ export async function getTunStatus(): Promise<TunStatus> {
   }
   return {
     enabled: effectiveMode === 'tun',
-    helperInstalled: svc !== 'none' || helperRunning,
+    helperInstalled: svc !== 'none' || helperRunning || (platform() === 'darwin' && macHelperInstalled()),
     helperRunning,
     privilegesOk: await privilegesOk(true),
-    helperSetupAvailable: platform() === 'win32' || platform() === 'linux',
-    lastError,
+    helperSetupAvailable: ['win32', 'linux', 'darwin'].includes(platform()),
+    helperManagementAvailable: platform() === 'darwin',
+    macSetup: platform() === 'darwin' ? macHelperSetupState() : undefined,
+    lastError: lastError || (platform() === 'darwin' && effectiveMode === 'tun' ? macHelperError() : undefined),
   }
 }
 
@@ -296,8 +301,9 @@ async function spawnCoreElevated(configPath: string): Promise<void> {
   ensureWintun()
   const arg = `-d "${home}" -f "${configPath}"`
   const ok = await startCoreByHelper(arg, home, mihomoSafePaths(), configPath)
-  if (!ok) throw new Error(platform() === 'linux' ? linuxHelperError() || 'Linux helper failed to start core' : 'helper failed to start core')
+  if (!ok) throw new Error(platform() === 'darwin' ? macHelperError() : platform() === 'linux' ? linuxHelperError() || 'Linux helper failed to start core' : 'helper failed to start core')
   await mihomoApi.waitReady()
+  if (platform() === 'darwin') await mihomoApi.waitTunReady()
 }
 
 async function cleanupCore(clearProxy: boolean): Promise<void> {
@@ -359,6 +365,7 @@ async function reconcileLifecycle(
     return
   }
 
+  if (helperMaintenance) throw new Error('TUN service maintenance is in progress.')
   lastError = undefined
   const settings = getSettings()
   const profileId = target.profileId
@@ -370,11 +377,18 @@ async function reconcileLifecycle(
   let effectiveMode = configuredMode(profileId, target.mode)
   if (effectiveMode === 'tun') {
     const auth = await authorizeForTun()
+    if (!isCurrent()) return
     if (!auth) {
       lastError = platform() === 'darwin'
-        ? 'TUN on macOS requires a privileged helper. Automatic setup is not available in this version. Enable network overrides and select Proxy mode in Settings.'
+        ? macHelperError() || 'TUN service setup is required.'
         : platform() === 'linux' ? linuxHelperError() || 'Linux TUN requires the system helper' : 'privileges required for TUN'
       log(lastError, 'error')
+      if (platform() === 'darwin') {
+        await cleanupCore(true)
+        if (!isCurrent()) return
+        broadcast(await getStatus())
+        throw new Error(lastError)
+      }
       if (!settings.networkOverrideEnabled) throw new Error(lastError)
       effectiveMode = 'proxy'
       log('falling back to mixed-port proxy mode for this session', 'warn')
@@ -419,6 +433,10 @@ async function reconcileLifecycle(
     // applied controller snapshot, not a just-rebuilt YAML or global setting.
     log(`applying config profile=${profileId} reason=live-reload`)
     await mihomoApi.putConfigs(configPath)
+    if (platform() === 'darwin' && effectiveMode === 'tun') {
+      try { await mihomoApi.waitTunReady() }
+      catch (error) { lastError = String(error); await cleanupCore(true); throw error }
+    }
     // Only a successful apply advances the baseline, even if a later lifecycle
     // request superseded this one while PUT /configs was in flight.
     controllerRuntime = { profileId, ...nextController, configSize: Buffer.byteLength(payload, 'utf8') }
@@ -445,7 +463,7 @@ async function reconcileLifecycle(
     if (helperReady) {
       await spawnCoreElevated(configPath)
     } else {
-      if (effectiveMode === 'tun' && platform() === 'linux') throw new Error('Linux TUN helper became unavailable; reconnect to repair it')
+      if (effectiveMode === 'tun' && ['linux', 'darwin'].includes(platform())) throw new Error('TUN service became unavailable. Reconnect to repair it.')
       await spawnCoreDirect(configPath)
     }
     if (!isCurrent()) return
@@ -490,6 +508,7 @@ export async function connect(
   reason: ConfigApplyReason = 'cold-start',
   profileId: string | null = getActiveProfileId(),
 ): Promise<CoreStatus> {
+  if (helperMaintenance) throw new Error('TUN service maintenance is in progress.')
   const settings = getSettings()
   return requestLifecycle({
     running: true,
@@ -552,12 +571,44 @@ export async function syncManagedSystemProxy(running: boolean): Promise<void> {
 
 export async function ensureHelperAndStatus(): Promise<TunStatus> {
   const ok = await ensureHelper()
+  if (!ok && platform() === 'darwin') {
+    lastError = macHelperError()
+    throw new Error(lastError)
+  }
   if (!ok && platform() === 'linux') {
     lastError = linuxHelperError() || 'Linux TUN helper setup failed'
     throw new Error(lastError)
   }
-  if (ok && platform() === 'linux') lastError = undefined
+  if (ok) lastError = undefined
   return getTunStatus()
+}
+
+export async function manageMacHelper(remove: boolean): Promise<TunStatus> {
+  if (platform() !== 'darwin') throw new Error('This action is only available on macOS')
+  if (helperMaintenance) throw new Error('TUN service maintenance is in progress.')
+  helperMaintenance = true
+  try {
+    await disconnect()
+    const ok = remove ? await removeMacHelper() : await ensureMacHelper(true)
+    lastError = ok ? undefined : macHelperError()
+    if (!ok) throw new Error(lastError)
+    return getTunStatus()
+  } finally { helperMaintenance = false }
+}
+
+/** Explicit user action: Proxy uses the saved Desktop network values. */
+export async function connectThroughProxy(): Promise<CoreStatus> {
+  if (helperMaintenance) throw new Error('TUN service maintenance is in progress.')
+  setSettings({ networkOverrideEnabled: true, connectionMode: 'proxy' })
+  return connect('proxy')
+}
+
+export async function resumeMacTun(): Promise<void> {
+  const target = lifecycle.desiredTarget
+  if (platform() !== 'darwin' || helperMaintenance || !target?.running || lastError ||
+      configuredMode(target.profileId, target.mode) !== 'tun') return
+  log('macOS resumed; reconnecting TUN to refresh interfaces and DNS')
+  await lifecycle.request({ ...target, reason: 'cold-start', preparedConfigPath: undefined })
 }
 
 /** B6 — replace core binary via helper when installed in Program Files. */

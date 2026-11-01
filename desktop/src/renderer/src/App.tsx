@@ -240,7 +240,7 @@ export default function App(): React.JSX.Element {
       tab={tab}
       onTab={setTab}
       status={status}
-      error={t(error)}
+      error={state.tun?.macSetup && tab === 'home' && state.tun.lastError === error ? '' : t(error)}
       notice={t(notice)}
       onClearError={clearError}
       onClearNotice={clearNotice}
@@ -262,6 +262,7 @@ export default function App(): React.JSX.Element {
           onConnect={async () => { setConnectionAction(t("Connecting…")); try { await run(() => window.cheezy.connect(), { success: t("Connected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onDisconnect={async () => { setConnectionAction(t("Disconnecting…")); try { await run(() => window.cheezy.disconnect(), { success: t("Disconnected"), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onEnsureHelper={() => run(() => window.cheezy.ensureHelper(), { scope: 'home' })}
+          onConnectProxy={async () => { setConnectionAction(t('Connecting…')); try { await run(() => window.cheezy.connectThroughProxy(), { success: t('Connected'), scope: 'home' }) } finally { setConnectionAction(null) } }}
           onGoProfiles={() => setTab('profiles')}
           onSelectServer={(group, name) =>
             run(() => window.cheezy.selectProxy(group, name), { scope: 'home' })
@@ -326,6 +327,9 @@ export default function App(): React.JSX.Element {
         (state.settings ? (
           <SettingsPage
             settings={state.settings}
+            tun={state.tun}
+            onRepairHelper={() => run(() => window.cheezy.repairHelper(), { scope: 'settings' })}
+            onRemoveHelper={() => run(() => window.cheezy.removeHelper(), { scope: 'settings' })}
             busy={busy}
             session={session}
             supportsAuth={caps.supportsAuth}

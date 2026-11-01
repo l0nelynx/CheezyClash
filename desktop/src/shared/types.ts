@@ -131,7 +131,11 @@ export interface CoreStatus {
   privilegesOk: boolean
 }
 
+export type MacTunSetup = 'needed' | 'approval' | 'installing' | 'ready' | 'cancelled' | 'error' | 'removing'
+
 export interface TunStatus {
+  macSetup?: MacTunSetup
+  helperManagementAvailable?: boolean
   helperSetupAvailable?: boolean
   enabled: boolean
   helperInstalled: boolean

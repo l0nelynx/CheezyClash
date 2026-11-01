@@ -23,8 +23,8 @@ function fixture({ uid = 501, owner = 501, mode = 0o755, helper = false, platfor
 }
 assert.equal(await fixture().authorizeForTun(), false)
 assert.equal(await fixture({ mode: 0o4755 }).privilegesOk(true), false, 'setuid to a normal user grants no root rights')
-assert.equal(await fixture({ owner: 0, mode: 0o4755 }).authorizeForTun(), true)
-assert.equal(await fixture({ uid: 0 }).authorizeForTun(), true)
+assert.equal(await fixture({ owner: 0, mode: 0o4755 }).authorizeForTun(), false, 'macOS must use its protected service, never legacy setuid')
+assert.equal(await fixture({ uid: 0 }).authorizeForTun(), false, 'Elevated UI must not bypass macOS service setup')
 assert.equal(await fixture({ helper: true }).authorizeForTun(), true)
 assert.equal(await fixture().privilegesOk(false), true)
 console.log('6 privilege scenarios passed (mocked macOS, no elevation)')

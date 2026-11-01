@@ -92,11 +92,21 @@ export function effectiveNetworkFromDocument(
 export function applyNetworkSettings(
   doc: Record<string, unknown>,
   settings: AppSettings,
+  host: string = process.platform,
 ): EffectiveNetworkConfig {
   if (settings.networkOverrideEnabled) {
     applyDesktopOverrides(doc, settings)
   } else {
     applyProfileDefaults(doc)
+  }
+  const tun = doc.tun as Record<string, unknown>
+  if (host === 'darwin' && tun.enable === true) {
+    // macOS defaults to disabled in sing-tun. Register per-interface DNS so LAN
+    // DNS from DHCP does not bypass the TUN resolver; the core removes it on exit.
+    if (!hasOwn(tun, 'dns-mode')) tun['dns-mode'] = 'native'
+    if (typeof tun.device === 'string' && tun.device !== '' && !/^utun\d*$/.test(tun.device)) {
+      throw new Error('The macOS TUN device name must start with utun. Remove tun.device from the profile to use automatic naming.')
+    }
   }
   return effectiveNetworkFromDocument(doc, settings.networkOverrideEnabled)
 }
