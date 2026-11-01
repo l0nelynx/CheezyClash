@@ -94,6 +94,13 @@ jobs:
           rm ../resources/helper/mac-helper-tests
       - name: Real TUN installation, DNS and network restoration
         run: node scripts/smoke-macos-tun.mjs
+      - name: Collect macOS sandbox failure diagnostics
+        if: failure()
+        run: |
+          sudo -n /usr/bin/log show --last 3m --style compact \
+            --predicate 'eventMessage CONTAINS[c] "deny" AND (process == "kernel" OR process == "sandboxd")' | tail -n 100
+          sudo -n find /Library/Logs/DiagnosticReports "$HOME/Library/Logs/DiagnosticReports" \
+            -name 'mihomo*' -type f -mmin -5 -exec head -c 16000 {} \;
 
   package:
     if: github.event_name == 'workflow_dispatch' && inputs.package
