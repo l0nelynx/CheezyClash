@@ -45,6 +45,7 @@ data class Proxy(
         @SerialName("URLTest") URLTest(true),
         @SerialName("LoadBalance") LoadBalance(true),
         @SerialName("Smart") Smart(true),
+        @SerialName("AntiLag") AntiLag(true),
 
         @SerialName("Unknown") Unknown(false);
     }

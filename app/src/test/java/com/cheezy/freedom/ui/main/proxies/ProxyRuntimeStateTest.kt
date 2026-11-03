@@ -2,11 +2,32 @@ package com.cheezy.freedom.ui.main.proxies
 
 import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.core.model.ProxyGroup
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ProxyRuntimeStateTest {
+    @Test
+    fun `selector containing AntiLag stays primary and shows its active node`() {
+        fun decode(raw: String) = Json.decodeFromString(ProxyGroup.serializer(), raw)
+        val snapshot = buildProxyRuntimeSnapshot(
+            groupNames = listOf("FIRST", "SECOND", "GAME"),
+            groupMap = mapOf(
+                "FIRST" to decode("""{"type":"Selector","now":"GAME","proxies":[{"name":"GAME","type":"AntiLag"}]}"""),
+                "SECOND" to decode("""{"type":"Selector","now":"DIRECT","proxies":[{"name":"DIRECT","type":"Direct"}]}"""),
+                "GAME" to decode("""{"type":"AntiLag","now":"node-b","proxies":[{"name":"node-a"},{"name":"node-b"}]}"""),
+            ),
+        )
+
+        val primary = requireNotNull(snapshot.primarySelector)
+        assertEquals("FIRST", primary.name)
+        assertEquals("GAME", primary.now)
+        val nested = primary.proxies.single()
+        assertEquals("AntiLag", nested.type)
+        assertEquals("node-b", nested.activeChild)
+    }
+
     @Test
     fun `first selector skips automatic groups`() {
         val snapshot = buildProxyRuntimeSnapshot(

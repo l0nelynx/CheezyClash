@@ -15,7 +15,7 @@ data class ProxyUiData(
     val activeChild: String? = null
 )
 
-private val SUBGROUP_TYPES = setOf("URLTest", "Fallback", "LoadBalance", "Selector", "Smart")
+private val SUBGROUP_TYPES = setOf("URLTest", "Fallback", "LoadBalance", "Selector", "Smart", "AntiLag")
 
 fun String.isSubgroupType(): Boolean = this in SUBGROUP_TYPES
 
