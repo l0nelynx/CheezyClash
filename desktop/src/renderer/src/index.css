@@ -12,13 +12,13 @@
 */
 :root,
 .dark {
-  --background: oklch(0.13 0 0);
+  --background: #000;
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.18 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.18 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
+  --primary: #f2d65c;
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.24 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -32,7 +32,7 @@
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.65 0 0);
   --radius: 0.75rem;
-  --sidebar: oklch(0.16 0 0);
+  --sidebar: #0a0a0a;
   --sidebar-foreground: oklch(0.92 0 0);
   --sidebar-primary: oklch(0.985 0 0);
   --sidebar-primary-foreground: oklch(0.205 0 0);
@@ -54,7 +54,7 @@
   --brand: var(--primary);
   --brand-dim: oklch(0.85 0 0);
   --brand-soft: oklch(1 0 0 / 10%);
-  --ok: oklch(0.72 0.15 155);
+  --ok: oklch(0.82 0 0);
   --danger: var(--destructive);
 }
 

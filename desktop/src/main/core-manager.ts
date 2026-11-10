@@ -180,6 +180,8 @@ function childAlive(): boolean {
   return child != null && child.exitCode === null && child.signalCode === null
 }
 
+let connectedAt: number | undefined
+
 export async function getStatus(): Promise<CoreStatus> {
   const secret = mihomoApi.getSecret()
   const helperReady = await pingHelper()
@@ -205,6 +207,7 @@ export async function getStatus(): Promise<CoreStatus> {
   const priv = await privilegesOk(statusMode === 'tun')
   return {
     running,
+    connectedAt: running ? connectedAt : undefined,
     configUpdateAvailable: running && configUpdateAvailable(),
     mode: statusMode,
     pid: child?.pid,
@@ -307,6 +310,7 @@ async function spawnCoreElevated(configPath: string): Promise<void> {
 }
 
 async function cleanupCore(clearProxy: boolean): Promise<void> {
+  connectedAt = undefined
   mihomoApi.stopTraffic()
   try {
     await stopCoreByHelper()
@@ -475,6 +479,7 @@ async function reconcileLifecycle(
     }
     if (!isCurrent()) return
     mode = effectiveMode
+    connectedAt = Date.now()
     crashCount = 0
     log(`connected mode=${effectiveMode} profile=${profileId}`)
   } catch (e) {

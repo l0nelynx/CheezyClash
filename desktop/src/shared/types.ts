@@ -68,6 +68,14 @@ export interface TrafficSnapshot {
   downTotal: number
 }
 
+export interface PublicIpSnapshot {
+  state: 'disconnected' | 'pending' | 'ready'
+  ip?: string
+  countryCode?: string
+  provider?: string
+  retryAt?: number
+}
+
 /** Live tracker fields exposed by Mihomo's GET /connections. */
 export interface ConnectionInfo {
   id: string
@@ -119,6 +127,10 @@ export interface ProxyGroupInfo {
 }
 
 export interface CoreStatus {
+  /** Standalone live UI observes a core owned by another client. */
+  readOnly?: boolean
+  /** Unknown when recovering an already-running helper. */
+  connectedAt?: number
   running: boolean
   /** The active saved config has a different byte size from the running core's config. */
   configUpdateAvailable?: boolean

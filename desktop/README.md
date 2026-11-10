@@ -4,6 +4,56 @@ Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows,
 
 📚 **Full documentation:** [CheezyClash docs](https://l0nelynx.github.io/CheezyClash-docs/)
 
+**UX/UI concept:** Run `npm run preview:ux` for the isolated interactive desktop
+mockup. See [design review and renders](design-preview/README.md) for scenarios,
+proposals, and screenshot generation.
+
+The production Home screen now uses compact connection, first-group VPN and
+profile/subscription widgets within the existing 800×700 window (minimum
+800×560). Dark mode has a black background. The power control, session clock and
+Proxy/TUN selector share the graph-backed connection card. Mode changes use the
+existing lifecycle coordinator and require confirmation while connected; a
+provider-controlled mode remains read-only. The clock uses the successful core
+start time and shows an unknown value after recovery of an already-running
+helper instead of inventing a start time. Connection totals are the core's session
+counters. Service availability probes are not implemented in this UI change.
+Logs and About are available from Settings. All existing proxy layouts remain.
+
+The logo-only sidebar can collapse to icons and remembers that preference.
+Its footer shows the installed version and quits through the normal disconnect
+and helper cleanup lifecycle. The connection heading uses `profile-title`, with
+the local profile name as fallback; core status is green when running and red
+on error. Subscription Support uses the provider's existing `support-url`.
+Provider announcements occupy a dismissible card below the connection widget;
+long messages scroll inside that card.
+
+The Connection widget shows the public IP and country flag reported by an
+external provider. Lookups use an isolated Electron session through the applied
+Mihomo HTTP/SOCKS listener (or active TUN if there is no listener), following the
+profile's routing rules. The process-wide cooldown is **60 seconds between
+attempts**, including failures and provider fallback. Reconnects, server changes
+and renderer reloads cannot reset it. Old IP/flag values disappear immediately;
+aborted or late responses cannot restore them. `Retry-After` and ip-api's
+`X-Rl`/`X-Ttl` can extend the wait. Successful results stay cached until the route
+changes; opening Home resumes pending work. A missing country leaves a globe
+instead of an invented flag. No IP or geolocation history is persisted.
+
+Providers are tried in order after a failure, with the same cooldown:
+[IPQuery](https://ipquery.io/developers/api),
+[IPinfo](https://support.ipinfo.io/hc/en-us/articles/30792479436562-What-Is-the-Difference-Between-Using-the-Authenticated-Free-Plan-and-the-Public-API-With-No-Account),
+[SeeIP](https://seeip.org/), [ident.me](https://api.ident.me/), and
+[ip-api](https://ip-api.com/docs/api:json) (its free endpoint uses HTTP).
+`npm run test:public-ip` checks routing, response normalization, cooldown storms,
+stale replies and rate-limit backoff using isolated fixtures, without live API
+calls or changing the system proxy.
+
+After `npm run build`, `npm run test:widgets` checks the real renderer with
+isolated IPC fixtures, including 800×700 fit, 800×560 popover placement,
+search/selection, Escape focus return, mode-change cancellation, sidebar
+persistence, subscription actions, announcements and core status colors. It writes
+screenshots to `design-preview/screenshots/11-client-home-800.png` and related
+files. It never starts a core or changes the system proxy.
+
 ## Stack
 
 - Electron + Vite + React + TypeScript + Tailwind
@@ -11,6 +61,25 @@ Desktop client for Mihomo (Clash.Meta), with Proxy mode and TUN through Windows,
 - Go **Helper Service** on Windows, Linux and macOS
 
 ## Quick start
+
+To inspect the current renderer against an already-running installed client,
+build and launch the separate live UI host (English by default):
+
+```powershell
+npm run build
+npm run preview:live -- --source "$env:APPDATA/CheezyVPN" --language en
+```
+
+Use `--language ru` or Settings → Language for Russian. The source directory is
+read only; UI preferences live in a separate temporary directory. This host reads
+the existing controller's profiles, groups, traffic and connections, and resolves
+public IP through its applied proxy configuration. It never launches, restarts or
+stops the core, changes system proxy settings, or writes the installed client's
+store. Connection/profile mutations remain in the installed client. Closing or
+quitting this window only exits the live UI. A recovered connection's start time
+and the installed client's log history are unavailable in this host.
+Pass `--capture` to save a local screenshot in the temporary UI directory.
+Generated mock/fixture screenshots are ignored by Git and can be regenerated.
 
 ```bash
 cd desktop

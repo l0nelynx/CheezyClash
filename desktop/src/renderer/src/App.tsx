@@ -249,6 +249,8 @@ export default function App(): React.JSX.Element {
       {tab === 'home' && (
         <HomePage
           status={status}
+          settings={state.settings}
+          onConnectionMode={(mode) => run(() => window.cheezy.setConnectionMode(mode), { scope: 'home' })}
           connectionAction={connectionAction ? t(connectionAction) : null}
           tun={state.tun}
           traffic={state.traffic}
@@ -278,7 +280,7 @@ export default function App(): React.JSX.Element {
           onRetry={() => void state.loadGroups()}
           groups={groups}
           latencies={state.latencies}
-          busy={busy}
+          busy={busy || !!status?.readOnly}
           running={!!status?.running}
           testingAll={testingAll}
           testProgress={testProgress}
@@ -295,7 +297,7 @@ export default function App(): React.JSX.Element {
           profiles={state.profiles}
           activeId={state.activeId}
           downloading={downloading}
-          busy={busy}
+          busy={busy || !!status?.readOnly}
           onImportUrl={async (url) => {
             return download(() => window.cheezy.importProfileUrl(url), t("Profile imported"))
           }}
@@ -326,11 +328,12 @@ export default function App(): React.JSX.Element {
       {tab === 'settings' &&
         (state.settings ? (
           <SettingsPage
+            onNavigate={(tab) => setTab(tab)}
             settings={state.settings}
             tun={state.tun}
             onRepairHelper={() => run(() => window.cheezy.repairHelper(), { scope: 'settings' })}
             onRemoveHelper={() => run(() => window.cheezy.removeHelper(), { scope: 'settings' })}
-            busy={busy}
+            busy={busy || !!status?.readOnly}
             session={session}
             supportsAuth={caps.supportsAuth}
             status={status}
@@ -369,9 +372,14 @@ export default function App(): React.JSX.Element {
 
       {tab === 'connections' && <ConnectionsPage running={!!status?.running} />}
 
-      {tab === 'logs' && <LogsPage logs={state.logs} />}
+      {tab === 'logs' && (
+        <div className="flex h-full min-h-0 flex-col gap-2">
+          <Button variant="ghost" className="shrink-0 self-start" onClick={() => setTab('settings')}>{t('Settings')}</Button>
+          <div className="min-h-0 flex-1"><LogsPage logs={state.logs} /></div>
+        </div>
+      )}
 
-      {tab === 'about' && <AboutPage productName={caps.productName} />}
+      {tab === 'about' && <><Button variant="ghost" onClick={() => setTab('settings')}>{t('Settings')}</Button><AboutPage productName={caps.productName} /></>}
       <CustomRulesModal
         open={rulesOpen}
         rules={state.settings?.customRules ?? []}

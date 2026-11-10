@@ -6,6 +6,7 @@ import type {
   CoreStatus,
   ProfileMeta,
   ProxyGroupInfo,
+  PublicIpSnapshot,
   TrafficSnapshot,
   TunStatus,
 } from '../../shared/types'
@@ -18,6 +19,7 @@ import type {
 import type { DeepLinkResult } from '../../shared/deep-link'
 
 export interface CheezyApi {
+  getPublicIp: () => Promise<PublicIpSnapshot>
   getStatus: () => Promise<CoreStatus>
   connect: (mode?: ConnectionMode) => Promise<CoreStatus>
   disconnect: () => Promise<CoreStatus>
@@ -54,6 +56,7 @@ export interface CheezyApi {
   setAccessControlRules: (rules: AccessControlRule[]) => Promise<AppSettings>
   pickExecutable: () => Promise<string | null>
   getAppVersion: () => Promise<string>
+  quitApp: () => Promise<void>
   getCoreVersion: () => Promise<{ version?: string; meta?: boolean }>
   checkUpdate: () => Promise<{
     current: string

@@ -1,82 +1,111 @@
+import { ExternalLink, LifeBuoy } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import { formatBytes } from '../lib/format'
-import type { SubscriptionInfo } from '../../../shared/types'
-
-interface Props {
-  info: SubscriptionInfo
-  lastUpdateTime: number
-}
-
-function formatExpire(unix: number): string {
-  if (unix <= 0) return '—'
-  const d = new Date(unix * 1000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function formatLastUpdate(millis: number): string {
-  if (millis <= 0) return ''
-  const d = new Date(millis)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-export function SubscriptionCard({ info, lastUpdateTime }: Props): React.JSX.Element {
-  const { t } = useI18n()
-  const used = info.upload + info.download
-  const isUnlimited = info.total <= 0
-  const remaining = isUnlimited ? 0 : Math.max(0, info.total - used)
-  const progress = isUnlimited ? 0 : Math.min(1, Math.max(0, used / info.total))
-
-  const nowSec = Math.floor(Date.now() / 1000)
-  const daysLeft = info.expire > 0 ? Math.floor((info.expire - nowSec) / 86400) : -1
-
-  const progressColor =
-    isUnlimited ? 'bg-primary' : progress > 0.9 ? 'bg-danger' : progress > 0.75 ? 'bg-muted-foreground' : 'bg-primary'
-  const progressText =
-    isUnlimited ? 'text-primary' : progress > 0.9 ? 'text-danger' : progress > 0.75 ? 'text-muted-foreground' : 'text-primary'
-  const expireColor =
-    daysLeft < 0
-      ? 'text-muted-foreground'
-      : daysLeft < 3
-        ? 'text-danger font-semibold'
-        : daysLeft < 7
-          ? 'text-muted-foreground font-semibold'
-          : 'text-muted-foreground'
-
+import type { ProfileMeta } from '../../../shared/types'
+import { Button } from './ui/button'
+export function SubscriptionCard({
+  profile,
+  onGoProfiles,
+}: {
+  profile: ProfileMeta | null
+  onGoProfiles: () => void
+}): React.JSX.Element {
+  const { t, language } = useI18n()
+  const info = profile?.subscription
+  const used = info ? info.upload + info.download : 0
+  const limited = !!info && info.total > 0
+  const progress = limited
+    ? Math.max(0, Math.min(100, (used / info.total) * 100))
+    : 0
   return (
-    <section className="page-card h-full px-4 py-3 transition-colors duration-200">
-      {!isUnlimited && (
-        <div className="mb-2.5 h-1 overflow-hidden rounded-full bg-surface-overlay">
-          <div
-            className={`h-full rounded-full transition-all ${progressColor}`}
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-      )}
-
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] text-ink-dim">{t("Used")}</p>
-          <p className={`text-base font-semibold tabular-nums ${progressText}`}>{formatBytes(used)}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] text-ink-dim">{isUnlimited ? t("Limit") : t("Remaining")}</p>
-          <p className="text-base font-semibold tabular-nums text-ink">
-            {isUnlimited ? t("Unlimited") : formatBytes(remaining)}
-          </p>
-        </div>
+    <section
+      className="page-card min-w-0 p-4"
+      data-testid="subscription-widget"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{t('Subscription')}</h2>
+        <button
+          type="button"
+          onClick={onGoProfiles}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          {t('Profiles')}
+        </button>
       </div>
-
-      {(info.expire > 0 || lastUpdateTime > 0) && (
-        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-surface-border/60 pt-2.5">
-          {info.expire > 0 ? (
-            <p className={`text-[11px] ${expireColor}`}>{t("Expires")} {formatExpire(info.expire)}</p>
-          ) : (
-            <span />
+      <p className="truncate text-sm font-medium" title={profile?.name}>
+        {profile?.name || t('No active profile')}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {profile ? t('Active profile') : t('Add a profile to connect')}
+      </p>
+      {info ? (
+        <>
+          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-1">
+            <strong className="text-base font-medium tabular-nums">
+              {formatBytes(used)}
+            </strong>
+            <span className="text-xs text-muted-foreground">
+              {t('Limit')}: {limited ? formatBytes(info.total) : t('Unlimited')}
+            </span>
+          </div>
+          {limited && (
+            <div
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary"
+              role="progressbar"
+              aria-label={t('Used')}
+              aria-valuenow={Math.round(progress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full bg-primary"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           )}
-          {lastUpdateTime > 0 && (
-            <p className="text-right text-[10px] text-ink-dim">{formatLastUpdate(lastUpdateTime)}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t('Expires')}:{' '}
+            <span className="text-foreground">
+              {info.expire > 0
+                ? new Date(info.expire * 1000).toLocaleDateString(language)
+                : '—'}
+            </span>
+          </p>
+          {info.expire > 0 && info.expire * 1000 < Date.now() && (
+            <p className="text-xs text-destructive">
+              {t('Subscription expired')}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {t('No subscription information')}
+        </p>
+      )}
+      {(profile?.url || info?.supportUrl) && (
+        <div className="mt-3 flex flex-wrap gap-1 border-t border-border pt-2">
+          {profile?.url && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => void window.cheezy.openExternal(profile.url!)}
+            >
+              <ExternalLink className="h-3 w-3" />
+              {t('Subscription')}
+            </Button>
+          )}
+          {info?.supportUrl && (
+            <Button
+              data-testid="subscription-support"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => void window.cheezy.openExternal(info.supportUrl!)}
+            >
+              <LifeBuoy className="h-3 w-3" />
+              {t('Support')}
+            </Button>
           )}
         </div>
       )}

@@ -17,7 +17,13 @@ app.whenReady().then(async () => {
     throw new Error(`Timed out: ${condition}\n${await js('document.body.innerText')}`)
   }
   const click = async text => { await js(`Array.from(document.querySelectorAll('button')).find(x=>x.textContent.trim()===${JSON.stringify(text)})?.click()`);await pause() }
-  const nav = async title => {await js(`document.querySelector('button[title=${JSON.stringify(title)}]')?.click()`);await pause()}
+  const nav = async title => {
+    if (['Logs','About','Логи','Журнал','О приложении'].includes(title)) {
+      await js(`document.querySelector('button[title="Settings"],button[title="Настройки"]')?.click()`);await pause()
+      await js(`Array.from(document.querySelectorAll('button')).find(x=>x.textContent.trim()===${JSON.stringify(title)})?.click()`)
+    } else await js(`document.querySelector('button[title=${JSON.stringify(title)}]')?.click()`)
+    await pause()
+  }
   const field = async (selector,value) => {await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}))})()`);await pause()}
   const choose = async (selector,value) => {await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause()}
   const ruleTypes = () => js("Array.from(document.querySelectorAll('#custom-rule-type option'),option=>option.value).sort()")
@@ -43,7 +49,7 @@ app.whenReady().then(async () => {
     await wait("document.querySelector('[data-testid=config-update-hint]') === null")
     await js('window.qa.profileConfigUpdate(true)')
     await wait("document.querySelector('[data-testid=config-update-hint]') !== null")
-    await click('Disconnect');await wait("document.body.innerText.includes('Ready to connect')")
+    await click('Disconnect');await wait("document.querySelector('[data-testid=core-status]')?.dataset.state === 'stopped'")
     assert.equal(await js("document.querySelector('[data-testid=config-update-hint]') !== null"),false)
     await click('Connect');await wait("document.body.innerText.includes('Core running')")
     assert.equal(await js("document.querySelector('[data-testid=config-update-hint]') !== null"),false)
@@ -56,18 +62,18 @@ app.whenReady().then(async () => {
     await wait("document.querySelector('[role=dialog]') === null")
     await nav('Proxies');await click('Main')
     // Group button includes its selected server; click it by aria-expanded instead.
-    await js("document.querySelector('button[aria-expanded]')?.click()")
+    await js("document.querySelector('[data-group-layout] button[aria-expanded]')?.click()")
     await wait("document.querySelector('ul[aria-label=Servers]') !== null")
     assert.ok(await js("document.querySelectorAll('ul[aria-label=Servers] button').length")<=20)
     assert.equal(await js("Array.from(document.querySelectorAll('[role=group][aria-label$=view] button')).every(x=>!x.textContent.trim() && x.getAttribute('aria-label'))"),true)
     for(const group of ['List','Grid']) {
       await layout(group,'List')
       await js("document.querySelector('button[aria-label=\"Expand all groups\"]').click()")
-      await wait("document.querySelectorAll('button[aria-expanded=true]').length === 12")
+      await wait("document.querySelectorAll('[data-group-layout] button[aria-expanded=true]').length === 12")
       await js("document.querySelector('button[aria-label=\"Collapse all groups\"]').click()")
-      await wait("document.querySelectorAll('button[aria-expanded=true]').length === 0 && document.querySelectorAll('ul[aria-label=Servers]').length === 0")
+      await wait("document.querySelectorAll('[data-group-layout] button[aria-expanded=true]').length === 0 && document.querySelectorAll('ul[aria-label=Servers]').length === 0")
     }
-    await js("document.querySelector('button[aria-expanded]')?.click()")
+    await js("document.querySelector('[data-group-layout] button[aria-expanded]')?.click()")
     // All nine combinations must keep long lists virtualized and reach their last server.
     for (const group of ['List','Grid','Carousel']) {
       for (const server of ['List','Large grid','Small grid']) {
@@ -126,7 +132,7 @@ app.whenReady().then(async () => {
     await field('input[aria-label="Search servers"]','0999')
     await wait("document.querySelectorAll('ul[aria-label=Servers] button').length === 1")
     await js("document.querySelector('button[aria-label=\"Collapse all groups\"]').click()")
-    await wait("document.querySelectorAll('button[aria-expanded=true]').length === 0")
+    await wait("document.querySelectorAll('[data-group-layout] button[aria-expanded=true]').length === 0")
     assert.equal(await js("document.querySelector('input[aria-label=\"Search servers\"]').value"),'0999')
     await js("document.querySelector('button[aria-label=\"Expand all groups\"]').click()")
     await wait("document.querySelectorAll('ul[aria-label=Servers] button').length === 1")
@@ -178,7 +184,7 @@ app.whenReady().then(async () => {
     await wait("Array.from(document.querySelectorAll('button')).some(x=>x.textContent.includes('Свои правила: 0'))")
     await nav('Настройки')
     await select('Theme','dark');await capture('settings-ru-dark')
-    await nav('Главная');await wait("document.querySelector('h2')?.textContent === 'Test subscription'");await capture('home-ru-dark')
+    await nav('Главная');await wait("document.querySelector('[data-testid=subscription-widget]')?.textContent.includes('Test subscription')");await capture('home-ru-dark')
     await js('window.qa.profileConfigUpdate(true)')
     await wait("document.querySelector('[data-testid=config-update-hint]')?.textContent.includes('Конфигурация обновлена. Переподключитесь, чтобы применить.')")
     await capture('home-config-update-ru-dark')
@@ -195,13 +201,13 @@ app.whenReady().then(async () => {
     assert.equal(await js("document.querySelector('[data-group-layout]').dataset.groupLayout"),'list')
     await js("document.querySelector('[role=group][aria-label=\"Вид групп\"] button[title=Сетка]')?.click()")
     await js("document.querySelector('[role=group][aria-label=\"Вид прокси\"] button[title=\"Крупная сетка\"]')?.click()")
-    await js("document.querySelector('button[aria-expanded]')?.click()")
+    await js("document.querySelector('[data-group-layout] button[aria-expanded]')?.click()")
     await wait("document.querySelector('ul[data-server-layout=large-grid]') !== null")
     await win.webContents.reload();await wait("document.body.innerText.includes('Не удалось загрузить приложение')")
     await js('window.qa.allowAuth()');await click('Повторить')
     await wait("document.body.innerText.includes('Test subscription')")
     await nav('Серверы');await wait("document.querySelector('[data-group-layout=grid]') !== null")
-    await js("document.querySelector('button[aria-expanded]')?.click()")
+    await js("document.querySelector('[data-group-layout] button[aria-expanded]')?.click()")
     await wait("document.querySelector('ul[data-server-layout=large-grid]') !== null")
     win.setSize(760,650);await pause();await capture('proxies-ru-narrow')
     assert.equal(await js("document.documentElement.scrollWidth <= window.innerWidth"),true)

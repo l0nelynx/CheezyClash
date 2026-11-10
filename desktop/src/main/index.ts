@@ -23,6 +23,7 @@ import {
   onCoreStatus,
 } from './core-manager'
 import { mihomoApi } from './mihomo-api'
+import { getPublicIp, observePublicIpStatus, observePublicIpGroups, beginPublicIpSelection, invalidatePublicIp } from './public-ip'
 import {
   listProfiles,
   getActiveProfileId,
@@ -293,6 +294,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('core:status', async () => {
     const st = await getStatus()
+    observePublicIpStatus(st)
     void refreshTrayMenu()
     return st
   })
@@ -307,9 +309,11 @@ function registerIpc(): void {
     return st
   })
   ipcMain.handle('core:traffic', () => mihomoApi.getTraffic())
+  ipcMain.handle('connection:publicIp', () => getPublicIp())
   ipcMain.handle('connections:list', () => mihomoApi.getConnections())
   ipcMain.handle('proxies:groups', async () => {
     const groups = await mihomoApi.getGroups()
+    observePublicIpGroups(groups)
     const icons = getProxyGroupIcons()
     const metadata = getProxyMetadata()
     return groups.map((g) => {
@@ -319,11 +323,14 @@ function registerIpc(): void {
     })
   })
   ipcMain.handle('proxies:select', async (_e, group: string, name: string) => {
-    await mihomoApi.selectProxy(group, name)
-    setSelection(group, name)
-    // Existing flows keep the old outbound until closed — flush so TUN/proxy pick up the new node.
-    await mihomoApi.closeAllConnections()
-    return true
+    const finish = beginPublicIpSelection()
+    try {
+      await mihomoApi.selectProxy(group, name)
+      setSelection(group, name)
+      // Existing flows keep the old outbound until closed — flush so TUN/proxy pick up the new node.
+      await mihomoApi.closeAllConnections()
+      return true
+    } finally { finish() }
   })
   ipcMain.handle('proxies:health', (_e, group: string) => mihomoApi.healthCheck(group))
   ipcMain.handle('profiles:list', () => listProfiles())
@@ -478,6 +485,12 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
+  ipcMain.handle('app:quit', () => {
+    if (quitting) return
+    quitting = true
+    // Use the same before-quit disconnect/helper cleanup as the tray action.
+    app.quit()
+  })
   ipcMain.handle('core:version', async () => {
     // Prefer Android-style label (fork@pseudo-version) from sidecar metadata /
     // go.mod — same string baked into libclash via -ldflags on mobile.
@@ -796,7 +809,7 @@ if (!gotTheLock) {
 
     registerIpc()
     createTray(caps.productName)
-    onCoreStatus(status => { void refreshTrayMenu(status) })
+    onCoreStatus(status => { observePublicIpStatus(status); void refreshTrayMenu(status) })
     bootReady = true
     markStartup(launchHidden ? 'tray ready (without renderer)' : 'tray ready')
     if (!launchHidden || revealRequested) revealMainWindow()
@@ -834,6 +847,7 @@ if (!gotTheLock) {
     quitCleanupStarted = true
     quitting = true
     stopSubscriptionUpdater()
+    invalidatePublicIp()
     void disconnect()
       .catch((error) => log(`disconnect during exit failed: ${error}`, 'warn'))
       .then(() => stopHelperOnExit())

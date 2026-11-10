@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>CheezyClash — UX preview</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="widgets.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="review-bar">
+    <div class="review-name"><span class="review-dot"></span><strong>CheezyClash</strong><span>Концепт desktop</span><span class="demo-label">Демо-данные</span></div>
+    <div class="review-controls">
+      <label>Сценарий <select id="scenario" aria-label="Сценарий"><option value="connected">Подключено</option><option value="disconnected">Отключено</option><option value="empty">Первый запуск</option><option value="error">Ошибка TUN</option><option value="updated">Профиль обновлён</option></select></label>
+      <button id="theme" class="review-button" aria-label="Переключить тему">Светлая тема</button>
+      <button id="annotations" class="review-button" aria-pressed="false">Что изменилось</button>
+    </div>
+  </div>
+  <div class="app-window">
+    <aside class="sidebar">
+      <div class="brand"><img src="logo.svg" alt=""><div>CheezyClash<span>Desktop</span></div></div>
+      <nav aria-label="Основная навигация" id="navigation"></nav>
+      <div class="sidebar-bottom">
+        <button class="profile-switch" data-page="profiles"><span class="profile-avatar">P</span><span><strong id="sidebar-profile">Personal</strong><small>Активный профиль</small></span><span class="chevron">›</span></button>
+        <div class="sidebar-status"><span class="status-dot"></span><span id="sidebar-status">Подключено</span><small>1.7.3</small></div>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="workspace-header"><span id="breadcrumb">Рабочее пространство / Обзор</span><span class="local-label">Локальный макет</span></header>
+      <main id="content"></main>
+      <footer class="statusbar"><span id="footer-status">TUN активен · По правилам</span><span>Все значения демонстрационные</span></footer>
+    </div>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="quick-proxy" popover="auto" aria-label="Прокси первой группы"></div>
+</body>
+</html>

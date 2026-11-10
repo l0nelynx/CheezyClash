@@ -7,6 +7,7 @@ import type {
   CoreStatus,
   ProfileMeta,
   ProxyGroupInfo,
+  PublicIpSnapshot,
   TrafficSnapshot,
   TunStatus,
 } from '../shared/types'
@@ -24,6 +25,7 @@ const api = {
   connect: (mode?: ConnectionMode): Promise<CoreStatus> => ipcRenderer.invoke('core:connect', mode),
   disconnect: (): Promise<CoreStatus> => ipcRenderer.invoke('core:disconnect'),
   getTraffic: (): Promise<TrafficSnapshot> => ipcRenderer.invoke('core:traffic'),
+  getPublicIp: (): Promise<PublicIpSnapshot> => ipcRenderer.invoke('connection:publicIp'),
   getConnections: (): Promise<ConnectionsSnapshot> => ipcRenderer.invoke('connections:list'),
   getGroups: (): Promise<ProxyGroupInfo[]> => ipcRenderer.invoke('proxies:groups'),
   selectProxy: (group: string, name: string): Promise<boolean> =>
@@ -68,6 +70,7 @@ const api = {
     ipcRenderer.invoke('accessControl:set', rules),
   pickExecutable: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickExecutable'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
+  quitApp: (): Promise<void> => ipcRenderer.invoke('app:quit'),
   getCoreVersion: (): Promise<{ version?: string; meta?: boolean }> =>
     ipcRenderer.invoke('core:version'),
   checkUpdate: (): Promise<{

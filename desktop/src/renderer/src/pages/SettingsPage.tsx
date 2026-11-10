@@ -2,6 +2,8 @@ import { useI18n } from '../lib/i18n'
 import { useEffect, useId, useState } from 'react'
 import {
   ArrowLeft,
+  Info,
+  ScrollText,
   AppWindow,
   ChevronRight,
   ExternalLink,
@@ -27,6 +29,7 @@ import {
 type SettingsSection = 'application' | 'connection' | 'network' | 'xrayMux'
 
 interface Props {
+  onNavigate: (tab: 'logs' | 'about') => void
   settings: AppSettings
   busy: boolean
   session: PrivateAccountSession | null
@@ -45,6 +48,7 @@ interface Props {
 
 export function SettingsPage({
   settings,
+  onNavigate,
   busy,
   session,
   supportsAuth,
@@ -403,6 +407,8 @@ export function SettingsPage({
               trailing={<ExternalLink className="h-4 w-4" />}
               onClick={openDashboard}
             />
+            <MenuRow icon={<ScrollText className="h-4 w-4" />} title={t("Logs")} detail="" onClick={() => onNavigate('logs')} />
+            <MenuRow icon={<Info className="h-4 w-4" />} title={t("About")} detail="" onClick={() => onNavigate('about')} />
             {dashboardError && (
               <p role="alert" className="px-4 text-sm text-destructive">{t(dashboardError)}</p>
             )}

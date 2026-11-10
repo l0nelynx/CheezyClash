@@ -50,6 +50,7 @@ function boot({hidden=true, recovery=false, supportsAuth=true}={}) {
       onCoreStatus:listener=>statusListeners.push(listener),
     },
     './mihomo-api':{},
+    './public-ip':{getPublicIp:async()=>({state:'pending'}),observePublicIpStatus:()=>{},observePublicIpGroups:()=>{},beginPublicIpSelection:()=>()=>{},invalidatePublicIp:()=>{}},
     './profiles':{ensureProfilesRoot:()=>{},migrateOrphanDirs:()=>{},getActiveProfileId:()=> 'saved',importFromUrl:async()=>{calls.push('import');return {id:'imported'}}},
     './store':{getSettings:()=>({autoStart:true,autoConnect:true}),isSystemProxyOwned:()=>recovery},
     './processes':{},
@@ -123,5 +124,19 @@ assert.equal(exiting.trays.length,0,'quit during recovery must not resurrect UI 
 assert.equal(exiting.calls.includes('connect'),false)
 assert.ok(exiting.calls.indexOf('disconnect')<exiting.calls.indexOf('stop-helper'))
 assert.ok(exiting.calls.includes('quit'))
+
+// The renderer Quit action uses the same graceful shutdown as the tray.
+const sidebarExit=boot({hidden:false})
+sidebarExit.ready.resolve();await flush()
+sidebarExit.handlers.get('app:quit')()
+sidebarExit.handlers.get('app:quit')()
+assert.equal(sidebarExit.calls.filter(call=>call==='quit').length,1,'duplicate renderer quit is ignored')
+let exitPrevented=false
+sidebarExit.app.emit('before-quit',{preventDefault:()=>{exitPrevented=true}})
+await flush()
+assert.equal(exitPrevented,true,'cleanup completes before final exit')
+assert.ok(sidebarExit.calls.indexOf('disconnect') < sidebarExit.calls.indexOf('stop-helper'))
+assert.equal(sidebarExit.calls.filter(call=>call==='disconnect').length,1)
+assert.equal(sidebarExit.calls.filter(call=>call==='quit').length,2,'cleanup resumes app.quit')
 
 console.log('Main startup passed: windowless tray, cached connect, deferred registration, live tray status, manual/duplicate activation, deep links, recovery ordering and exit (OS boundaries mocked)')

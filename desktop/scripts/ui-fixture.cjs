@@ -9,14 +9,18 @@ if (preview) {
 const listeners = new Map()
 let failAuth = !preview
 let running = true
+let coreError
+let quitCalls = 0
+const externalUrls = []
+let publicIp = {state:'ready',ip:'203.0.113.42',countryCode:'DE',provider:'test fixture'}
 let connectionState = 'live'
 let connectionCalls = 0
 let configUpdateAvailable = false
 let macSetup = null
 let macServiceInstalled = false
 const settings = { systemProxy: true, mixedPort:7890, allowLan:false, tunEnabled:false, connectionMode:'proxy', tunStack:'mixed', networkOverrideEnabled:true, tunMtu:1500, autoStart:false, autoConnect:false, xrayMuxEnabled:false, xrayMuxConcurrency:32, xrayMuxMaxConnections:3, xrayMuxMaxDialsPerMinute:3, customRules:[] }
-const status = () => ({running,configUpdateAvailable:running && configUpdateAvailable,mode:settings.connectionMode,controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false,
-  lastError:macSetup === 'cancelled' ? 'TUN setup was cancelled. Try again or connect through Proxy.' : undefined})
+const status = () => ({running,connectedAt:running ? Date.now()-3600000 : undefined,configUpdateAvailable:running && configUpdateAvailable,mode:settings.connectionMode,controller:'127.0.0.1:9090',secret:'',helperReady:false,privilegesOk:false,
+  lastError:coreError || (macSetup === 'cancelled' ? 'TUN setup was cancelled. Try again or connect through Proxy.' : undefined)})
 const profile = { id:'fixture', name:'Test subscription', url:'https://example.invalid/private/SECRET_TOKEN', createdAt:1, updatedAt:Date.now(), subscription:{title:'Test subscription', upload:1024,download:2048,total:1000000,expire:0} }
 const names = Array.from({length:1000},(_,i)=>`Server ${String(i).padStart(4,'0')}`)
 const members = Object.fromEntries(names.map((name, index) => [name, {type:index % 2 ? 'trojan' : 'vless',network:index % 2 ? 'tcp' : 'ws',serverDescription:`Location ${index} · streaming and browsing`}]))
@@ -28,6 +32,7 @@ const groups = [
 ]
 const logs = Array.from({length:400},(_,i)=>`[${i}] [info] test log ${i}`)
 const api = {
+  getPublicIp: async () => running ? publicIp : {state:'disconnected'},
   getStatus: async () => status(),
   connect: async () => {
     if(macSetup) {macSetup='cancelled';running=false;throw new Error('TUN setup was cancelled. Try again or connect through Proxy.')}
@@ -53,7 +58,9 @@ const api = {
   privateGetSession: async () => null, consumeDeepLinkResult: async () => null,
   windowIsMaximized: async () => false,
   importProfileUrl: async () => {throw new Error('Import failed for test')},
-  getAppVersion: async () => 'test', getCoreVersion: async () => ({version:'test'}),
+  getAppVersion: async () => require('../package.json').version,
+  quitApp: async () => {quitCalls++},
+  openExternal: async url => {externalUrls.push(url)}, getCoreVersion: async () => ({version:'test'}),
   getCustomRuleContext: async () => ({proxyGroups:['Main'],proxyNames:names,ruleSets:[],subRules:[],profiles:[{id:profile.id,name:profile.name,proxyGroups:['Main'],proxyNames:names,ruleSets:[],subRules:[],profileId:profile.id,resolvedProxyTarget:'Main'}],platform:'windows',activeProfileId:profile.id,profileId:profile.id,resolvedProxyTarget:'Main'}),
   listProcesses: async () => [{name:'Discord.exe',pid:100}],
   validateCustomRule: async rule => {if(!rule.payload.trim() && rule.type!=='MATCH')throw new Error('Value is required');return rule.type+','+rule.payload+','+rule.action},
@@ -70,6 +77,11 @@ for(const name of ['onLog','onStatus','onProfilesChanged','onCustomRuleDiagnosti
 }
 contextBridge.exposeInMainWorld('cheezy',api)
 contextBridge.exposeInMainWorld('qa',{
+  publicIp: value => { publicIp = value },
+  quitCalls: () => quitCalls,
+  externalUrls: () => [...externalUrls],
+  coreError: value => {coreError=value;for(const listener of listeners.get('onStatus') ?? [])listener(status())},
+  profileMetadata: patch => {Object.assign(profile.subscription,patch);for(const listener of listeners.get('onProfilesChanged') ?? [])listener()},
   macTun: () => {macSetup='needed';settings.connectionMode='tun'},
   allowAuth: () => {failAuth=false},
   connectionState: value => {connectionState=value},
