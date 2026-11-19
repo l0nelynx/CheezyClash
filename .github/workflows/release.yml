@@ -162,7 +162,7 @@ jobs:
       - name: Fetch mihomo sidecar
         env:
           TARGET_ARCH: ${{ matrix.arch }}
-        run: npm run fetch-core
+        run: node scripts/test-extract-zip.mjs && npm run fetch-core
       - name: Build helper
         env:
           TARGET_ARCH: ${{ matrix.arch }}

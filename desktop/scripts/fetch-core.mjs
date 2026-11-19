@@ -29,7 +29,7 @@ import { download } from './download.mjs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { platform, arch } from 'os'
-import { execFileSync } from 'child_process'
+import { extractZip } from './extract-zip.mjs'
 import { computeGoHash } from './go-hash.mjs'
 import { readMihomoVersion } from './mihomo-version.mjs'
 import {
@@ -76,12 +76,7 @@ async function fetchWintun() {
   try {
     await download(url, zipPath)
     const tmp = join(outDir, 'wintun-extract')
-    mkdirSync(tmp, { recursive: true })
-    execFileSync(
-      'powershell.exe',
-      ['-NoProfile', '-Command', `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${tmp}'`],
-      { stdio: 'inherit' },
-    )
+    extractZip(zipPath, tmp)
     const archFolder = goarch() === 'arm64' ? 'arm64' : 'amd64'
     const dll = join(tmp, 'wintun', 'bin', archFolder, 'wintun.dll')
     if (existsSync(dll)) {
@@ -97,23 +92,6 @@ async function fetchWintun() {
     }
   } catch (e) {
     throw new Error(`Required Wintun download/install failed: ${e.message || e}`, { cause: e })
-  }
-}
-
-function extractZip(zipPath, extractDir) {
-  mkdirSync(extractDir, { recursive: true })
-  if (goos() === 'windows') {
-    execFileSync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-Command',
-        `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${extractDir}'`,
-      ],
-      { stdio: 'inherit' },
-    )
-  } else {
-    execFileSync('unzip', ['-o', zipPath, '-d', extractDir], { stdio: 'inherit' })
   }
 }
 
