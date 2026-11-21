@@ -87,8 +87,9 @@ app.whenReady().then(async () => {
   for (const channel of ['core:connect','core:disconnect','core:connectProxy','proxies:select','proxies:health',
     'profiles:importUrl','profiles:importFile','profiles:setActive','profiles:update','profiles:delete',
     'settings:set','tun:setEnabled','connection:setMode','helper:ensure','helper:repair','helper:remove',
-    'customRules:set','customRules:validate','accessControl:set','accessControl:validate','app:checkUpdate',
+    'customRules:set','customRules:validate','accessControl:set','accessControl:validate','app:checkUpdate','update:download','update:install','update:showFile',
     'dashboard:open',PRIVATE_IPC.subscriptionSync,PRIVATE_IPC.accountLogout]) handle(channel, blocked)
+  handle('update:state', () => ({ phase: 'manual', current: app.getVersion(), releasesUrl: 'https://github.com/l0nelynx/CheezyClash/releases' }))
   handle('app:quit', () => app.quit())
   handle('window:close', () => win.close())
   handle('window:minimize', () => win.minimize())

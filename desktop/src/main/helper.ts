@@ -239,10 +239,13 @@ async function controlWindowsHelper(action: 'StartHelper' | 'StopHelper' | 'Repa
 }
 
 /** Stop only this installation's registered service, never another portable copy. */
-export async function stopHelperOnExit(): Promise<void> {
+export async function stopHelperOnExit(strict = false): Promise<void> {
   if (platform() !== 'win32') return
   try { await controlWindowsHelper('StopHelper') }
-  catch (error) { log(`helper exit cleanup failed; repair helper permissions: ${error}`, 'warn') }
+  catch (error) {
+    if (strict) throw error
+    log(`helper exit cleanup failed; repair helper permissions: ${error}`, 'warn')
+  }
 }
 
 export async function tryStartExistingService(): Promise<boolean> {

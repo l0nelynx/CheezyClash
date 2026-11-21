@@ -58,6 +58,12 @@ const api = {
   privateGetSession: async () => null, consumeDeepLinkResult: async () => null,
   windowIsMaximized: async () => false,
   importProfileUrl: async () => {throw new Error('Import failed for test')},
+  getUpdateState: async () => ({ phase: 'current', current: require('../package.json').version, releasesUrl: 'https://github.com/l0nelynx/CheezyClash/releases' }),
+  checkUpdate: async () => {
+    const update = { phase: 'ready', current: require('../package.json').version, latest: '1.99.0', format: 'dmg', releasesUrl: 'https://github.com/l0nelynx/CheezyClash/releases' }
+    for (const listener of listeners.get('onUpdate') ?? []) listener(update)
+    return update
+  },
   getAppVersion: async () => require('../package.json').version,
   quitApp: async () => {quitCalls++},
   openExternal: async url => {externalUrls.push(url)}, getCoreVersion: async () => ({version:'test'}),
@@ -69,7 +75,7 @@ const api = {
   windowMaximizeToggle: async () => ipcRenderer.invoke('preview:maximize'),
   windowClose: async () => ipcRenderer.invoke('preview:close'),
 }
-for(const name of ['onLog','onStatus','onProfilesChanged','onCustomRuleDiagnostics','onDeepLinkResult','onWindowMaximized']) {
+for(const name of ['onUpdate','onLog','onStatus','onProfilesChanged','onCustomRuleDiagnostics','onDeepLinkResult','onWindowMaximized']) {
   api[name] = callback => {
     const set = listeners.get(name) ?? new Set();listeners.set(name,set);set.add(callback)
     return () => set.delete(callback)

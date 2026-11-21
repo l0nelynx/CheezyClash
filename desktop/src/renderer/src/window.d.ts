@@ -1,3 +1,4 @@
+import type { DesktopUpdate } from '../../shared/desktop-update'
 import type {
   AccessControlRule,
   AppSettings,
@@ -58,13 +59,12 @@ export interface CheezyApi {
   getAppVersion: () => Promise<string>
   quitApp: () => Promise<void>
   getCoreVersion: () => Promise<{ version?: string; meta?: boolean }>
-  checkUpdate: () => Promise<{
-    current: string
-    latest: string | null
-    updateAvailable: boolean
-    releasesUrl: string
-    error?: string
-  }>
+  checkUpdate: () => Promise<DesktopUpdate>
+  getUpdateState: () => Promise<DesktopUpdate>
+  downloadUpdate: () => Promise<void>
+  installUpdate: () => Promise<void>
+  showUpdateFile: () => Promise<void>
+  onUpdate: (cb: (state: DesktopUpdate) => void) => () => void
   openExternal: (url: string) => Promise<void>
   openDashboard: () => Promise<void>
   onLog: (cb: (line: string) => void) => () => void

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { TitleBar } from './components/TitleBar'
 import { useCheezyState } from './hooks/useCheezyState'
+import type { DesktopUpdate } from '../../shared/desktop-update'
 import { AboutPage } from './pages/AboutPage'
 import { ConnectionsPage } from './pages/ConnectionsPage'
 import { HomePage } from './pages/HomePage'
@@ -36,6 +37,13 @@ export default function App(): React.JSX.Element {
     setGroupLatencies,
     refresh,
   } = state
+  const [update, setUpdate] = useState<DesktopUpdate | null>(null)
+  useEffect(() => {
+    let fresh = true
+    const off = window.cheezy.onUpdate(value => { fresh = false; setUpdate(value) })
+    void window.cheezy.getUpdateState().then(value => { if (fresh) setUpdate(value) })
+    return () => { fresh = false; off() }
+  }, [])
   const [testingAll, setTestingAll] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [connectionAction, setConnectionAction] = useState<string | null>(null)
@@ -246,6 +254,11 @@ export default function App(): React.JSX.Element {
       onClearNotice={clearNotice}
       productName={caps.productName}
     >
+      {tab !== 'about' && update?.phase === 'ready' && (
+        <Button variant="outline" onClick={() => setTab('about')}>
+          {t('Update {version} is ready', { version: update.latest })}
+        </Button>
+      )}
       {tab === 'home' && (
         <HomePage
           status={status}
@@ -379,7 +392,9 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
-      {tab === 'about' && <><Button variant="ghost" onClick={() => setTab('settings')}>{t('Settings')}</Button><AboutPage productName={caps.productName} /></>}
+      {tab === 'about' && <><Button variant="ghost" onClick={() => setTab('settings')}>{t('Settings')}</Button><AboutPage productName={caps.productName} update={update}
+        autoDownload={state.settings?.autoDownloadUpdates ?? true} disabled={!!status?.readOnly}
+        onAutoDownload={enabled => run(() => window.cheezy.setSettings({ autoDownloadUpdates: enabled }), { scope: 'settings' })} /></>}
       <CustomRulesModal
         open={rulesOpen}
         rules={state.settings?.customRules ?? []}

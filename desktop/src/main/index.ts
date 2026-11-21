@@ -1,3 +1,4 @@
+import { registerDesktopUpdates } from './desktop-updates'
 import { stopHelperOnExit } from './helper'
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, powerMonitor } from 'electron'
 import { join, basename } from 'path'
@@ -20,6 +21,7 @@ import {
   reloadActiveConfig,
   getDashboardUrl,
   hasLifecycleRequest,
+  setUpdateInProgress,
   onCoreStatus,
 } from './core-manager'
 import { mihomoApi } from './mihomo-api'
@@ -510,41 +512,30 @@ function registerIpc(): void {
       return { version: 'unknown', source: 'none' }
     }
   })
-  ipcMain.handle('app:checkUpdate', async () => {
-    const caps = getPrivateModule().capabilities()
-    const repo = caps.supportsAuth ? 'l0nelynx/CheezyVPN-Releases' : 'l0nelynx/CheezyClash'
-    const releasesUrl = `https://github.com/${repo}/releases`
-    const current = app.getVersion()
-    try {
-      const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': `${caps.productName}-Desktop`,
-        },
-      })
-      if (!res.ok) {
-        return {
-          current,
-          latest: null,
-          updateAvailable: false,
-          releasesUrl,
-          error: `GitHub ${res.status}`,
-        }
-      }
-      const data = (await res.json()) as { tag_name?: string }
-      const latest = (data.tag_name || '').replace(/^v/i, '')
-      const updateAvailable = !!latest && latest !== current && compareSemver(latest, current) > 0
-      return { current, latest: latest || null, updateAvailable, releasesUrl }
-    } catch (e) {
-      return {
-        current,
-        latest: null,
-        updateAvailable: false,
-        releasesUrl,
-        error: e instanceof Error ? e.message : String(e),
-      }
-    }
-  })
+  let preparingUpdate = false
+  registerDesktopUpdates(async () => {
+    if (quitCleanupStarted) throw new Error('Application is already closing')
+    preparingUpdate = true
+    quitCleanupStarted = true
+    quitting = true
+    setUpdateInProgress(true)
+    stopSubscriptionUpdater()
+    invalidatePublicIp()
+    const status = await disconnect()
+    if (status.running || isSystemProxyOwned()) throw new Error('Could not disconnect the VPN or restore the proxy')
+    await stopHelperOnExit(true)
+  }, () => {
+    if (!preparingUpdate) return
+    preparingUpdate = false
+    quitCleanupStarted = false
+    quitting = false
+    setUpdateInProgress(false)
+    startSubscriptionUpdater()
+    void refreshTrayMenu()
+  }, () => {
+    quitCleanupDone = true
+    app.quit()
+  }, revealMainWindow)
   ipcMain.handle('dashboard:open', async () => {
     const url = await getDashboardUrl()
     try {
@@ -864,18 +855,6 @@ function mkdirSilent(p: string): void {
   } catch {
     /* ignore */
   }
-}
-
-/** Compare dotted versions; positive if a > b. */
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(/[.+-]/).map((x) => parseInt(x, 10) || 0)
-  const pb = b.split(/[.+-]/).map((x) => parseInt(x, 10) || 0)
-  const n = Math.max(pa.length, pb.length)
-  for (let i = 0; i < n; i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0)
-    if (d !== 0) return d
-  }
-  return 0
 }
 
 export function openExternal(url: string): void {

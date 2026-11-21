@@ -3,28 +3,28 @@ import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '../components/ui/button'
 
-interface UpdateInfo {
-  current: string
-  latest: string | null
-  updateAvailable: boolean
-  releasesUrl: string
-  error?: string
-}
+import type { DesktopUpdate } from '../../../shared/desktop-update'
+import { Switch } from '../components/ui/switch'
 
 interface Props {
   productName: string
+  update: DesktopUpdate | null
+  autoDownload: boolean
+  disabled: boolean
+  onAutoDownload: (enabled: boolean) => void
 }
 
-export function AboutPage({ productName }: Props): React.JSX.Element {
+export function AboutPage({ productName, update, autoDownload, disabled, onAutoDownload }: Props): React.JSX.Element {
   const { t } = useI18n()
   const [appVer, setAppVer] = useState('…')
   const [coreVer, setCoreVer] = useState('…')
-  const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const phase = update?.phase
+  const busy = disabled || phase === 'checking' || phase === 'downloading' || phase === 'installing'
+  const manualInstall = update?.format === 'dmg' || update?.format === 'zip'
 
   useEffect(() => {
     void window.cheezy.getAppVersion().then(setAppVer)
     void window.cheezy.getCoreVersion().then((v) => setCoreVer(v.version || 'unknown'))
-    void window.cheezy.checkUpdate().then(setUpdate)
   }, [])
 
   useEffect(() => {
@@ -56,39 +56,38 @@ export function AboutPage({ productName }: Props): React.JSX.Element {
         </div>
         <div className="border-t border-surface-border pt-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-dim">{t("Updates")}</p>
-          {!update && <p className="text-sm text-muted-foreground">{t("Checking…")}</p>}
-          {update?.error && (
-            <p className="text-sm text-muted-foreground">{t("Could not check:")}{' '}{update.error}</p>
-          )}
-          {update && !update.error && !update.updateAvailable && (
-            <p className="text-sm text-ok">{t("You are on the latest version.")}</p>
-          )}
-          {update?.updateAvailable && (
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-ink">
-                {t("Update available:")}{' '}<span className="font-medium text-primary">{update.latest}</span>
-                <span className="text-muted-foreground"> {t("(current")} {update.current})</span>
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void window.cheezy.openExternal(update.releasesUrl)}
-              >
-                {t("Open releases")}<ExternalLink className="h-3.5 w-3.5" />
+          <label className="flex items-center justify-between gap-3 py-2 text-sm">
+            {t('Download updates in the background')}
+            <Switch checked={autoDownload} disabled={disabled} onCheckedChange={onAutoDownload} />
+          </label>
+          <div className="space-y-2 text-sm" role="status">
+            {phase === 'checking' && <p>{t('Checking…')}</p>}
+            {phase === 'current' && <p>{t('You are on the latest version.')}</p>}
+            {update?.latest && <p>{t('Update available:')} {update.latest}</p>}
+            {phase === 'downloading' && <p>{t('Downloading…')} {update?.progress ?? 0}%</p>}
+            {phase === 'installing' && <p>{t('Preparing the update…')}</p>}
+            {update?.error && <p>{update.error}</p>}
+            {phase === 'ready' && <p>{t(update?.format === 'dmg'
+              ? 'Open the DMG, quit the client and drag the app to Applications to replace it.'
+              : update?.format === 'zip' ? 'Quit the client before extracting the ZIP over your portable copy.'
+              : 'Installing will disconnect the VPN and close the client.')}</p>}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void window.cheezy.checkUpdate()}>
+              {t('Check for updates')}
+            </Button>
+            {phase === 'available' && <Button size="sm" onClick={() => void window.cheezy.downloadUpdate()}>{t('Download')}</Button>}
+            {phase === 'ready' && <>
+              <Button size="sm" onClick={() => void window.cheezy.installUpdate()}>
+                {t(update?.format === 'dmg' ? 'Open DMG' : update?.format === 'zip' ? 'Show ZIP' : 'Install update')}
               </Button>
-            </div>
-          )}
-          {update && !update.updateAvailable && !update.error && (
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="mt-1 h-auto px-0 py-1 text-xs"
-              onClick={() => void window.cheezy.openExternal(update.releasesUrl)}
-            >
-              {t("View releases on GitHub")}</Button>
-          )}
+              {manualInstall && <Button size="sm" variant="outline" onClick={() => void window.cheezy.quitApp()}>{t('Quit client')}</Button>}
+              {update?.showFile && <Button size="sm" variant="outline" onClick={() => void window.cheezy.showUpdateFile()}>{t('Show downloaded file')}</Button>}
+            </>}
+            {update && <Button size="sm" variant="link" onClick={() => void window.cheezy.openExternal(update.releasesUrl)}>
+              {t('Open releases')}<ExternalLink className="h-3.5 w-3.5" />
+            </Button>}
+          </div>
         </div>
       </section>
     </div>

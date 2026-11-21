@@ -40,6 +40,7 @@ function boot({hidden=true, recovery=false, supportsAuth=true}={}) {
   const modules={
     electron:{app,BrowserWindow:Window,Tray,Menu:{setApplicationMenu:()=>{},buildFromTemplate:items=>items},nativeImage:{createEmpty:()=>({})},ipcMain:{handle:(key,fn)=>handlers.set(key,fn)},shell:{},dialog:{}},
     fs:{existsSync:()=>false,mkdirSync:()=>{}},
+    './desktop-updates':{registerDesktopUpdates:()=>{}},
     './helper':{stopHelperOnExit:async()=>calls.push('stop-helper')},
     './core-manager':{
       corePresent:()=>true,restoreControllerAuth:()=>calls.push('restore-auth'),hasLifecycleRequest:()=>intent,

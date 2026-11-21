@@ -22,6 +22,7 @@ export interface AppSettings {
   networkOverrideEnabled: boolean
   /** TUN interface MTU used when Desktop network override is enabled. */
   tunMtu: number
+  autoDownloadUpdates: boolean
   autoStart: boolean
   autoConnect: boolean
   xrayMuxEnabled: boolean
@@ -165,6 +166,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tunStack: 'mixed',
   networkOverrideEnabled: false,
   tunMtu: 1500,
+  autoDownloadUpdates: true,
   autoStart: false,
   autoConnect: false,
   xrayMuxEnabled: false,
@@ -192,6 +194,7 @@ export function normalizeSettings(
   }
 
   merged.tunEnabled = merged.connectionMode === 'tun'
+  merged.autoDownloadUpdates = raw.autoDownloadUpdates !== false
   merged.autoStart = raw.autoStart === true
   merged.autoConnect = raw.autoConnect === true
   merged.networkOverrideEnabled = raw.networkOverrideEnabled === true

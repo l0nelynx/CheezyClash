@@ -1,3 +1,4 @@
+import type { DesktopUpdate } from '../shared/desktop-update'
 import { ipcRenderer, contextBridge } from 'electron'
 import type {
   AccessControlRule,
@@ -73,13 +74,16 @@ const api = {
   quitApp: (): Promise<void> => ipcRenderer.invoke('app:quit'),
   getCoreVersion: (): Promise<{ version?: string; meta?: boolean }> =>
     ipcRenderer.invoke('core:version'),
-  checkUpdate: (): Promise<{
-    current: string
-    latest: string | null
-    updateAvailable: boolean
-    releasesUrl: string
-    error?: string
-  }> => ipcRenderer.invoke('app:checkUpdate'),
+  checkUpdate: (): Promise<DesktopUpdate> => ipcRenderer.invoke('app:checkUpdate'),
+  getUpdateState: (): Promise<DesktopUpdate> => ipcRenderer.invoke('update:state'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('update:download'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
+  showUpdateFile: (): Promise<void> => ipcRenderer.invoke('update:showFile'),
+  onUpdate: (cb: (state: DesktopUpdate) => void): (() => void) => {
+    const listener = (_: unknown, state: DesktopUpdate): void => cb(state)
+    ipcRenderer.on('update:changed', listener)
+    return () => ipcRenderer.removeListener('update:changed', listener)
+  },
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   openDashboard: (): Promise<void> => ipcRenderer.invoke('dashboard:open'),
   onLog: (cb: (line: string) => void): (() => void) => {

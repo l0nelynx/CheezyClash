@@ -503,7 +503,13 @@ export function hasLifecycleRequest(): boolean {
   return lifecycle.desiredTarget !== null
 }
 
+let updateInProgress = false
+export function setUpdateInProgress(value: boolean): void {
+  updateInProgress = value
+}
+
 async function requestLifecycle(target: LifecycleTarget): Promise<CoreStatus> {
+  if (updateInProgress && target.running) throw new Error('Desktop update in progress')
   await lifecycle.request(target)
   return getStatus()
 }

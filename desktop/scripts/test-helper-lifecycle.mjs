@@ -79,12 +79,12 @@ const end = index.indexOf('\n  })', begin) + '\n  })'.length
 const handlerSource = index.slice(begin, end)
 let onQuit, finishDisconnect, disconnectCalls = 0, helperStops = 0, quitCalls = 0
 const order = []
-new Function('app', 'stopSubscriptionUpdater', 'disconnect', 'stopHelperOnExit', 'log',
+new Function('app', 'stopSubscriptionUpdater', 'disconnect', 'stopHelperOnExit', 'log', 'invalidatePublicIp',
   'let quitCleanupDone = false, quitCleanupStarted = false, quitting = false;\n' + handlerSource)(
   { on: (_, handler) => { onQuit = handler }, quit: () => { quitCalls++ } },
   () => order.push('updater'),
   () => { disconnectCalls++; order.push('disconnect'); return new Promise(resolve => { finishDisconnect = resolve }) },
-  async () => { helperStops++; order.push('helper') }, () => {},
+  async () => { helperStops++; order.push('helper') }, () => {}, () => {},
 )
 onQuit({ preventDefault() {} }); onQuit({ preventDefault() {} })
 assert.equal(disconnectCalls, 1)
