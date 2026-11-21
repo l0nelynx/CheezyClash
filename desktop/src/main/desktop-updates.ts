@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, net, Notification, shell } from 'electron'
-import type { BaseUpdater } from 'electron-updater'
 import { mkdir, rename, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { join } from 'node:path'
@@ -20,7 +19,6 @@ export function registerDesktopUpdates(prepare: () => Promise<void>, resume: () 
   const current = app.getVersion()
   let state: DesktopUpdate = { current, releasesUrl, phase: 'idle' }
   let selected: UpdateAsset | undefined
-  let native: BaseUpdater | undefined
   let path: string | undefined
   let active: Promise<void> | undefined
   let notified = ''
@@ -77,7 +75,7 @@ export function registerDesktopUpdates(prepare: () => Promise<void>, resume: () 
         } finally { await rm(partial, { force: true }) }
       }
     } else {
-      native = nativeDownloader(asset, state.latest, url, progress)
+      const native = nativeDownloader(asset, state.latest, url, progress)
       if (!(await native.checkForUpdates())?.isUpdateAvailable) throw new Error('Update unavailable for this installation')
       const [downloaded] = await native.downloadUpdate()
       if (!downloaded) throw new Error('Missing downloaded update')
@@ -113,7 +111,6 @@ export function registerDesktopUpdates(prepare: () => Promise<void>, resume: () 
         return
       }
       selected = undefined
-      native = undefined
       path = undefined
       const format = await installationFormat(edition)
       publish({ latest: version, format, showFile: false, progress: undefined })
@@ -141,7 +138,7 @@ export function registerDesktopUpdates(prepare: () => Promise<void>, resume: () 
     publish({ phase: 'installing', error: undefined })
     let preparing = false
     try {
-      const outcome = await installPackage(selected, path, native, async () => {
+      const outcome = await installPackage(selected, path, async () => {
         preparing = true
         await prepare()
       })

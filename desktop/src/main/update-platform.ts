@@ -11,6 +11,8 @@ import type { UpdateFormat } from '../shared/desktop-update'
 import { verifyFile, type Edition, type UpdateAsset } from './update-manifest'
 
 const run = promisify(execFile)
+const powershell = () => join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
+
 export async function installationFormat(edition: Edition): Promise<UpdateFormat | undefined> {
   if (!app.isPackaged) return
   if (process.platform === 'darwin') return 'dmg'
@@ -34,8 +36,7 @@ export async function installationFormat(edition: Edition): Promise<UpdateFormat
       `(Get-ItemProperty -LiteralPath '${hive}:\\Software\\${guid}' -ErrorAction SilentlyContinue).InstallLocation`),
     'exit 0',
   ].join('; ')
-  const ps = join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
-  const { stdout } = await run(ps, ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 10000 })
+  const { stdout } = await run(powershell(), ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 10000 })
   const here = win32.normalize(dirname(process.execPath)).toLowerCase()
   return stdout.split(/\r?\n/).some(p => p && win32.resolve(p.trim()).toLowerCase() === here) ? 'nsis' : 'zip'
 }
@@ -62,7 +63,7 @@ export function nativeDownloader(asset: UpdateAsset, version: string, url: URL, 
   return updater
 }
 
-export async function installPackage(asset: UpdateAsset, path: string, native: BaseUpdater | undefined,
+export async function installPackage(asset: UpdateAsset, path: string,
   prepare: () => Promise<void>): Promise<'opened' | 'quit'> {
   if (asset.format === 'zip') {
     shell.showItemInFolder(path)
@@ -81,7 +82,7 @@ export async function installPackage(asset: UpdateAsset, path: string, native: B
       const staged = join(dir, 'update.AppImage')
       await copyFile(path, staged, constants.COPYFILE_EXCL)
       await verifyFile(staged, asset)
-      await chmod(staged, 0o755)
+      await chmod(staged, (await stat(destination)).mode & 0o777)
       await prepare()
       await rename(staged, destination)
     } finally { await rm(dir, { recursive: true, force: true }) }
@@ -94,7 +95,11 @@ export async function installPackage(asset: UpdateAsset, path: string, native: B
     app.relaunch()
   } else {
     await prepare()
-    if (!native?.install(false, true)) throw new Error('Could not launch the Windows installer')
+    // Wait for ShellExecute to accept the elevated launch. The NSIS wizard then runs independently.
+    // A cancelled UAC prompt rejects here, keeping the verified installer available for retry.
+    await run(powershell(), ['-NoProfile', '-NonInteractive', '-Command',
+      "$ErrorActionPreference = 'Stop'; Start-Process -FilePath $env:CHEEZY_UPDATE_INSTALLER -ArgumentList '--updated','--force-run' -Verb RunAs"],
+      { windowsHide: true, env: { ...process.env, CHEEZY_UPDATE_INSTALLER: path } })
   }
   return 'quit'
 }

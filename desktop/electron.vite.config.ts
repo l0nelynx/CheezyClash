@@ -11,8 +11,11 @@ const reactCompilerBabel = await babel({ presets: [reactCompilerPreset()] })
 
 const edition = JSON.parse(readFileSync(resolve('package.json'), 'utf8')).productName
 if (!['CheezyClash', 'CheezyVPN'].includes(edition)) throw new Error('Unknown desktop edition')
-const publicKey = process.env.DESKTOP_UPDATE_PUBLIC_KEY || ''
-if (publicKey && createPublicKey(publicKey).asymmetricKeyType !== 'ed25519') throw new Error('Expected Ed25519 update key')
+const configuredKey = process.env.DESKTOP_UPDATE_PUBLIC_KEY
+if (configuredKey && !configuredKey.trimStart().startsWith('-----BEGIN PUBLIC KEY-----')) throw new Error('Expected a public update key')
+const key = configuredKey ? createPublicKey(configuredKey) : undefined
+if (key && key.asymmetricKeyType !== 'ed25519') throw new Error('Expected Ed25519 update key')
+const publicKey = key?.export({ type: 'spki', format: 'pem' }).toString() ?? ''
 if (process.env.DESKTOP_UPDATE_RELEASE === 'true' && !publicKey) throw new Error('Missing desktop update public key')
 
 export default defineConfig({

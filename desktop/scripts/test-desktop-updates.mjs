@@ -118,8 +118,9 @@ async function testInstallHandoff() {
   }).outputText
   const calls = []
   let refuseAuthorization = false
-  const execFile = (command, args, done) => {
-    calls.push([command, ...args])
+  const execFile = (command, args, options, callback) => {
+    calls.push(options?.env?.CHEEZY_UPDATE_INSTALLER ?? [command, ...args])
+    const done = callback ?? options
     done(refuseAuthorization ? new Error('Cancelled') : null, '')
   }
   const image = join(scratch, 'installed.AppImage')
@@ -139,21 +140,24 @@ async function testInstallHandoff() {
   await writeFile(downloaded, bytes)
   const asset = { format: 'AppImage', size: bytes.length, sha512: createHash('sha512').update(bytes).digest('base64') }
   const prepare = async () => { calls.push('prepare') }
-  await assert.rejects(api.installPackage(asset, downloaded, undefined, async () => { throw Error('cleanup') }), /cleanup/)
+  await assert.rejects(api.installPackage(asset, downloaded, async () => { throw Error('cleanup') }), /cleanup/)
   assert.equal(await readFile(image, 'utf8'), 'installed app image')
-  assert.equal(await api.installPackage(asset, downloaded, undefined, prepare), 'quit')
+  assert.equal(await api.installPackage(asset, downloaded, prepare), 'quit')
   assert.deepEqual(await readFile(image), bytes)
   assert.deepEqual(calls.splice(0), ['prepare', 'relaunch'])
   asset.format = 'deb'
-  await api.installPackage(asset, downloaded, undefined, prepare)
+  await api.installPackage(asset, downloaded, prepare)
   assert.deepEqual(calls.splice(0), ['prepare', ['/usr/bin/pkexec', '--disable-internal-agent', '/usr/bin/apt-get', '--yes', '--no-remove', 'install', downloaded], 'relaunch'])
   refuseAuthorization = true
-  await assert.rejects(api.installPackage(asset, downloaded, undefined, prepare), /Cancelled/)
+  await assert.rejects(api.installPackage(asset, downloaded, prepare), /Cancelled/)
   assert.ok(!calls.includes('relaunch'))
   calls.length = 0
   asset.format = 'nsis'
-  await api.installPackage(asset, downloaded, { install: () => { calls.push('nsis'); return true } }, prepare)
-  assert.deepEqual(calls, ['prepare', 'nsis'])
+  await assert.rejects(api.installPackage(asset, downloaded, prepare), /Cancelled/)
+  assert.deepEqual(calls.splice(0), ['prepare', downloaded])
+  refuseAuthorization = false
+  assert.equal(await api.installPackage(asset, downloaded, prepare), 'quit')
+  assert.deepEqual(calls, ['prepare', downloaded])
 }
 
 try {

@@ -179,9 +179,9 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ matrix.arch }}" ]; then
-            npm run dist:${{ matrix.target }} -- --${{ matrix.arch }}
+            npm run dist:${{ matrix.target }} -- --publish never --${{ matrix.arch }}
           else
-            npm run dist:${{ matrix.target }}
+            npm run dist:${{ matrix.target }} -- --publish never
           fi
       - name: Validate Windows protocol handler
         if: matrix.target == 'win'
